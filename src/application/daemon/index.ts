@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import type { Config } from "../../core/config";
 import { warmup } from "../../core/markdown/render";
 import { clearDaemonState, writeDaemonState } from "../../core/state";
@@ -6,6 +8,7 @@ import { createSlugRegistry } from "./watch";
 
 export interface DaemonHandle {
   port: number;
+  token: string;
   stop(): void;
   broadcast(event: string, data: unknown): void;
 }
@@ -22,6 +25,7 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
   let server: ReturnType<typeof Bun.serve> | undefined;
   let handle: DaemonHandle | undefined;
   let routes: RoutesHandle | undefined;
+  const token = randomBytes(24).toString("base64url");
 
   const broadcast = (event: string, data: unknown): void => {
     routes?.broadcast(event, data);
@@ -55,6 +59,7 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
   routes = createRoutes({
     config,
     registry,
+    token,
     heartbeatMs: options.heartbeatMs,
     onActivity: () => {
       lastActivity = Date.now();
@@ -71,10 +76,10 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
 
   const port = server.port ?? config.port;
 
-  const daemonHandle: DaemonHandle = { port, stop, broadcast };
+  const daemonHandle: DaemonHandle = { port, token, stop, broadcast };
   handle = daemonHandle;
 
-  writeDaemonState(config.stateFile, process.pid, port);
+  writeDaemonState(config.stateFile, process.pid, port, token);
 
   const tick = Math.max(500, Math.min(30000, Math.floor(config.idleMs / 2)));
   idleTimer = setInterval(() => {

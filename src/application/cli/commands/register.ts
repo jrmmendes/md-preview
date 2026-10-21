@@ -20,5 +20,5 @@ export async function register(
 
   const filePath = input.path === undefined || input.path === "" ? "" : resolve(input.path);
   const daemon = await ensureDaemon(config);
-  return registerDocument(daemon.port, { slug, path: filePath, content: input.content });
+  return registerDocument(daemon.port, { slug, path: filePath, content: input.content }, daemon.token);
 }

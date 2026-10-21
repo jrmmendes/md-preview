@@ -91,13 +91,19 @@ describe("register command", () => {
       expect(body.status).toBe("ok");
       expect(typeof body.version).toBe("string");
 
-      await fetch(`${base}/__shutdown`, { method: "POST" });
+      await fetch(`${base}/__shutdown`, {
+        method: "POST",
+        headers: { "x-mdprv-token": state!.token },
+      });
       expect(await waitUntil(() => readDaemonState(stateFile) === null)).toBe(true);
     } finally {
       const state = readDaemonState(stateFile);
       if (state) {
         try {
-          await fetch(`http://127.0.0.1:${state.port}/__shutdown`, { method: "POST" });
+          await fetch(`http://127.0.0.1:${state.port}/__shutdown`, {
+            method: "POST",
+            headers: { "x-mdprv-token": state.token },
+          });
         } catch {
           /* already gone */
         }

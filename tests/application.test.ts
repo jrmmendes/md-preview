@@ -103,10 +103,15 @@ function makeConfig(stateFile: string, idleMs = 60_000): Config {
   };
 }
 
-async function register(base: string, slug: string, file: string): Promise<void> {
+async function register(
+  base: string,
+  token: string,
+  slug: string,
+  file: string
+): Promise<void> {
   const response = await fetch(`${base}/__register`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-mdprv-token": token },
     body: JSON.stringify({ slug, path: file, content: readFileSync(file, "utf8") }),
   });
   expect(response.ok).toBe(true);
@@ -147,7 +152,7 @@ describe("application daemon SSE", () => {
 
     try {
       expect(readDaemonState(stateFile)?.port).toBe(daemon.port);
-      await register(base, "doc", file);
+      await register(base, daemon.token, "doc", file);
 
       const response = await fetch(`${base}/__events`, { signal: abort.signal });
       expect(response.status).toBe(200);
@@ -169,7 +174,10 @@ describe("application daemon SSE", () => {
       const ping = await reader.next<{ ts: number }>("ping", 2000);
       expect(typeof ping.ts).toBe("number");
 
-      const shutdown = await fetch(`${base}/__shutdown`, { method: "POST" });
+      const shutdown = await fetch(`${base}/__shutdown`, {
+        method: "POST",
+        headers: { "x-mdprv-token": daemon.token },
+      });
       expect(shutdown.ok).toBe(true);
       expect(await waitUntil(() => readDaemonState(stateFile) === null)).toBe(true);
     } finally {
@@ -192,7 +200,7 @@ describe("application daemon SSE", () => {
     let reader: SseReader | undefined;
 
     try {
-      await register(base, "doc", file);
+      await register(base, daemon.token, "doc", file);
       const response = await fetch(`${base}/__events`, { signal: abort.signal });
       reader = new SseReader(response.body!.getReader() as ReadableStreamDefaultReader<Uint8Array>);
       await reader.next<SnapshotEvent>("snapshot");

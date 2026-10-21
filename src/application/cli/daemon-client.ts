@@ -40,7 +40,9 @@ export async function ensureDaemon(config: Config): Promise<DaemonState> {
   }
 
   if (await healthy(config.port)) {
-    return { pid: state?.pid ?? 0, port: config.port };
+    throw new Error(
+      "a daemon is running without a known token; restart it with `md-preview daemon stop`"
+    );
   }
 
   const child = Bun.spawn(daemonArgv(), {
@@ -69,10 +71,14 @@ export interface RegisterPayload {
   content: string;
 }
 
-export async function registerDocument(port: number, payload: RegisterPayload): Promise<string> {
+export async function registerDocument(
+  port: number,
+  payload: RegisterPayload,
+  token: string
+): Promise<string> {
   const res = await fetch(`http://127.0.0.1:${port}/__register`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-mdprv-token": token },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(3000),
   });
@@ -113,6 +119,7 @@ export async function shutdownDaemon(config: Config): Promise<ShutdownResult> {
   try {
     await fetch(`http://127.0.0.1:${state.port}/__shutdown`, {
       method: "POST",
+      headers: { "x-mdprv-token": state.token },
       signal: AbortSignal.timeout(1000),
     });
   } catch {

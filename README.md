@@ -31,6 +31,18 @@ md-preview --version
 
 Only `.md` and `.markdown` files are accepted by the root command. `register` reads Markdown from stdin (piped, not a TTY), never opens a browser, and prints only the final slug on stdout. `--path` is optional: when present it enables file watching and relative images; when absent the content from stdin is authoritative. Failures go to stderr with exit code 1.
 
+## Security model
+
+The daemon is a local service, so it is hardened against other browser tabs and local web pages:
+
+- It binds to `127.0.0.1` and rejects requests whose `Host` header is not a loopback name (`127.0.0.1`, `localhost`, `::1`). This blocks DNS-rebinding attacks.
+- Requests carrying a non-loopback `Origin` are rejected with `403`.
+- State-changing endpoints (`PUT /__register`, `POST /__shutdown`) require a per-daemon token. The token is generated at startup, stored in the state file with mode `0600`, and sent automatically by the CLI. Requests without it get `401`.
+- Rendered pages carry a nonce-based `Content-Security-Policy`. Raw HTML in Markdown still renders, but injected `<script>` tags, inline event handlers and `javascript:` URLs are blocked. External stylesheets, frames, forms and plugins are blocked as well.
+- Relative images are served only from a registered document directory, only for known image extensions, and symlinks are resolved so they cannot escape that directory.
+
+During startup the daemon writes the `{ pid, port, token }` state file. If you delete it while the daemon is running, stop the daemon and start it again; the CLI will not talk to a daemon whose token it does not know.
+
 ## Configuration
 
 | Variable                 | Default                                                    | Description                                        |

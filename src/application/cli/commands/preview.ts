@@ -30,7 +30,7 @@ export async function preview(file: string, config: Config = loadConfig()): Prom
   const content = readFileSync(abs, "utf8");
   const slug = slugFor(abs);
   const daemon = await ensureDaemon(config);
-  const finalSlug = await registerDocument(daemon.port, { slug, path: abs, content });
+  const finalSlug = await registerDocument(daemon.port, { slug, path: abs, content }, daemon.token);
   const url = `http://127.0.0.1:${daemon.port}/${encodeSlug(finalSlug)}`;
 
   if (!openInBrowser(url)) {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -29,13 +29,18 @@ describe("daemon state", () => {
     const dir = tempDir();
     const file = join(dir, "nested", "daemon.json");
 
-    writeDaemonState(file, 1234, 8765);
+    writeDaemonState(file, 1234, 8765, "token-value-1234567890");
     expect(existsSync(file)).toBe(true);
     expect(existsSync(file + ".tmp")).toBe(false);
-    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ pid: 1234, port: 8765 });
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
+      pid: 1234,
+      port: 8765,
+      token: "token-value-1234567890",
+    });
 
     const state: DaemonState | null = readDaemonState(file);
-    expect(state).toEqual({ pid: 1234, port: 8765 });
+    expect(state).toEqual({ pid: 1234, port: 8765, token: "token-value-1234567890" });
 
     clearDaemonState(file);
     expect(existsSync(file)).toBe(false);
@@ -51,10 +56,10 @@ describe("daemon state", () => {
     writeFileSync(file, "{not json");
     expect(readDaemonState(file)).toBeNull();
 
-    writeFileSync(file, JSON.stringify({ pid: -1, port: 8765 }));
+    writeFileSync(file, JSON.stringify({ pid: -1, port: 8765, token: "token-value-1234567890" }));
     expect(readDaemonState(file)).toBeNull();
 
-    writeFileSync(file, JSON.stringify({ pid: 1, port: 0 }));
+    writeFileSync(file, JSON.stringify({ pid: 1, port: 0, token: "token-value-1234567890" }));
     expect(readDaemonState(file)).toBeNull();
   });
 
@@ -62,9 +67,17 @@ describe("daemon state", () => {
     const dir = tempDir();
     const first = join(dir, "first.json");
     const second = join(dir, "second.json");
-    writeDaemonState(first, 10, 9000);
-    writeDaemonState(second, 20, 9001);
-    expect(readDaemonState(first)).toEqual({ pid: 10, port: 9000 });
-    expect(readDaemonState(second)).toEqual({ pid: 20, port: 9001 });
+    writeDaemonState(first, 10, 9000, "first-token-1234567890");
+    writeDaemonState(second, 20, 9001, "second-token-123456789");
+    expect(readDaemonState(first)).toEqual({
+      pid: 10,
+      port: 9000,
+      token: "first-token-1234567890",
+    });
+    expect(readDaemonState(second)).toEqual({
+      pid: 20,
+      port: 9001,
+      token: "second-token-123456789",
+    });
   });
 });

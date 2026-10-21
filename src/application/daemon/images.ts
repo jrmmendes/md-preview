@@ -1,6 +1,7 @@
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 
+import { baseHeaders } from "./headers";
 import type { SlugEntry } from "./watch";
 
 const IMAGE_TYPES: Record<string, string> = {
@@ -17,16 +18,11 @@ const IMAGE_TYPES: Record<string, string> = {
   tiff: "image/tiff",
 };
 
-function headers(contentType: string): Record<string, string> {
-  return {
-    "Content-Type": contentType,
-    "Cache-Control": "no-store",
-    Connection: "close",
-  };
-}
-
 function notFound(): Response {
-  return new Response("not found", { status: 404, headers: headers("text/plain; charset=utf-8") });
+  return new Response("not found", {
+    status: 404,
+    headers: baseHeaders("text/plain; charset=utf-8"),
+  });
 }
 
 export function serveImage(rel: string, slugs: ReadonlyMap<string, SlugEntry>): Response {
@@ -45,7 +41,7 @@ export function serveImage(rel: string, slugs: ReadonlyMap<string, SlugEntry>): 
     return notFound();
   }
   const rest = rel.slice(bestSlug.length).replace(/^\//, "");
-  if (rest === "" || rest.startsWith("/") || rest.includes("..")) {
+  if (rest === "" || rest.startsWith("/") || rest.includes("..") || rest.includes("\0")) {
     return notFound();
   }
   const root = entry.dir;
@@ -58,9 +54,27 @@ export function serveImage(rel: string, slugs: ReadonlyMap<string, SlugEntry>): 
     return notFound();
   }
 
+  let realRoot: string;
+  let realFull: string;
+  try {
+    realRoot = realpathSync(root);
+    realFull = realpathSync(full);
+  } catch {
+    return notFound();
+  }
+  if (realFull !== realRoot && !realFull.startsWith(realRoot + sep)) {
+    return notFound();
+  }
+
+  const ext = extname(realFull).slice(1).toLowerCase();
+  const contentType = IMAGE_TYPES[ext];
+  if (!contentType) {
+    return notFound();
+  }
+
   let isFile = false;
   try {
-    isFile = statSync(full).isFile();
+    isFile = statSync(realFull).isFile();
   } catch {
     isFile = false;
   }
@@ -70,12 +84,11 @@ export function serveImage(rel: string, slugs: ReadonlyMap<string, SlugEntry>): 
 
   let data: Buffer;
   try {
-    data = readFileSync(full);
+    data = readFileSync(realFull);
   } catch {
     return notFound();
   }
-  const ext = extname(full).slice(1).toLowerCase();
   return new Response(data, {
-    headers: headers(IMAGE_TYPES[ext] || "application/octet-stream"),
+    headers: baseHeaders(contentType),
   });
 }

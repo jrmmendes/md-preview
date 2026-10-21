@@ -1,3 +1,4 @@
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 
@@ -10,6 +11,7 @@ import { themeNames } from "../../core/themes/tokens";
 import { VERSION } from "../../core/version";
 import { parseFrontmatter } from "../../core/frontmatter";
 import { mermaidAsset } from "./assets";
+import { baseHeaders, SECURITY_HEADERS } from "./headers";
 import { serveImage } from "./images";
 import { loadShell } from "./shell";
 import type { SlugRegistry } from "./watch";
@@ -21,11 +23,14 @@ const CLIENT_TYPES: Record<string, string> = {
 
 const DEFAULT_HEARTBEAT_MS = 20_000;
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1"]);
+
 type SseController = ReadableStreamDefaultController<Uint8Array>;
 
 export interface RouteDeps {
   config: Config;
   registry: SlugRegistry;
+  token: string;
   onActivity: () => void;
   requestShutdown: () => void;
   heartbeatMs?: number;
@@ -37,12 +42,75 @@ export interface RoutesHandle {
   close(): void;
 }
 
-function baseHeaders(contentType: string): Record<string, string> {
-  return {
-    "Content-Type": contentType,
-    "Cache-Control": "no-store",
-    Connection: "close",
-  };
+function hostnameIsLoopback(authority: string): boolean {
+  let host = authority.trim().toLowerCase();
+  if (host === "") {
+    return false;
+  }
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
+    if (end < 0) {
+      return false;
+    }
+    host = host.slice(1, end);
+  } else {
+    const colon = host.lastIndexOf(":");
+    if (colon >= 0) {
+      host = host.slice(0, colon);
+    }
+  }
+  return LOOPBACK_HOSTS.has(host);
+}
+
+function hostAllowed(req: Request): boolean {
+  const host = req.headers.get("host");
+  return host !== null && hostnameIsLoopback(host);
+}
+
+function originAllowed(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (origin === null) {
+    return true;
+  }
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  return url.protocol === "http:" && hostnameIsLoopback(url.host);
+}
+
+function tokenMatches(req: Request, expected: string): boolean {
+  const given = req.headers.get("x-mdprv-token");
+  if (!given) {
+    return false;
+  }
+  const a = Buffer.from(given, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function contentSecurityPolicy(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https: http:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+function addNonce(shell: string, nonce: string): string {
+  return shell
+    .replace(/<script(?=[\s>])/gi, `<script nonce="${nonce}"`)
+    .replace(/<style(?=[\s>])/gi, `<style nonce="${nonce}"`);
 }
 
 function text(body: string, status = 200): Response {
@@ -187,6 +255,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
         "X-Accel-Buffering": "no",
+        ...SECURITY_HEADERS,
       },
     });
   }
@@ -234,6 +303,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         : "";
     const title = metaTitle || (entry.path ? basename(entry.path) : "Markdown Preview");
     const body = await renderMarkdown(normalizeContent(markdownBody), themeName, slug);
+    const nonce = randomBytes(16).toString("base64");
     return new Response(
       renderPage(
         {
@@ -244,15 +314,21 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
           zoomSensitivity: config.zoomSensitivity,
           meta: data,
         },
-        loadShell()
+        addNonce(loadShell(), nonce)
       ),
       {
-        headers: baseHeaders("text/html; charset=utf-8"),
+        headers: {
+          ...baseHeaders("text/html; charset=utf-8"),
+          "Content-Security-Policy": contentSecurityPolicy(nonce),
+        },
       }
     );
   }
 
   async function handle(req: Request): Promise<Response> {
+    if (!hostAllowed(req) || !originAllowed(req)) {
+      return text("forbidden", 403);
+    }
     deps.onActivity();
     const url = new URL(req.url);
     const route = safeDecode(url.pathname);
@@ -262,9 +338,15 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       return json({ status: "ok", version: VERSION });
     }
     if (method === "PUT" && route === "/__register") {
+      if (!tokenMatches(req, deps.token)) {
+        return text("unauthorized", 401);
+      }
       return registerHandler(req);
     }
     if (method === "POST" && route === "/__shutdown") {
+      if (!tokenMatches(req, deps.token)) {
+        return text("unauthorized", 401);
+      }
       setTimeout(() => {
         deps.requestShutdown();
       }, 50);

@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname } from "node:path";
 
 export interface DaemonState {
@@ -7,22 +6,14 @@ export interface DaemonState {
   port: number;
 }
 
-export function daemonStatePath(): string {
-  if (process.env.MDPRV_STATE) {
-    return process.env.MDPRV_STATE;
-  }
-  const base = process.env.XDG_STATE_HOME || `${homedir()}/.local/state`;
-  return `${base}/md-preview/daemon.json`;
-}
-
 function isPositiveInt(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
-export function readDaemonState(): DaemonState | null {
+export function readDaemonState(file: string): DaemonState | null {
   let data: unknown;
   try {
-    data = JSON.parse(readFileSync(daemonStatePath(), "utf8"));
+    data = JSON.parse(readFileSync(file, "utf8"));
   } catch {
     return null;
   }
@@ -36,17 +27,16 @@ export function readDaemonState(): DaemonState | null {
   return { pid, port };
 }
 
-export function writeDaemonState(pid: number, port: number): void {
-  const file = daemonStatePath();
+export function writeDaemonState(file: string, pid: number, port: number): void {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = file + ".tmp";
   writeFileSync(tmp, JSON.stringify({ pid, port }));
   renameSync(tmp, file);
 }
 
-export function clearDaemonState(): void {
+export function clearDaemonState(file: string): void {
   try {
-    rmSync(daemonStatePath(), { force: true });
+    rmSync(file, { force: true });
   } catch {
     /* ignore */
   }

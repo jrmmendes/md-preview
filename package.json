@@ -9,7 +9,9 @@
   },
   "scripts": {
     "build": "bun run build.ts",
-    "typecheck": "tsc --noEmit"
+    "build:client": "bun run build.ts --client-only",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.ui.json",
+    "test": "bun test"
   },
   "dependencies": {
     "@shikijs/langs": "3.23.0",

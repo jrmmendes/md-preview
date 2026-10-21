@@ -1,20 +1,7 @@
 import { basename } from "node:path";
 
-import {
-  clearDaemonState,
-  daemonStatePath,
-  readDaemonState,
-  type DaemonState,
-} from "./state";
-
-const DEFAULT_PORT = 8765;
-
-export { daemonStatePath } from "./state";
-export type { DaemonState } from "./state";
-
-function portFromEnvironment(): number {
-  return Number(process.env.MDPRV_PORT) || DEFAULT_PORT;
-}
+import { configToEnv, type Config } from "../../core/config";
+import { clearDaemonState, readDaemonState, type DaemonState } from "../../core/state";
 
 export async function healthy(port: number): Promise<boolean> {
   try {
@@ -46,20 +33,19 @@ function daemonArgv(): string[] {
     : [process.execPath, "__serve"];
 }
 
-export async function ensureDaemon(): Promise<DaemonState> {
-  const state = readDaemonState();
+export async function ensureDaemon(config: Config): Promise<DaemonState> {
+  const state = readDaemonState(config.stateFile);
   if (state && pidAlive(state.pid) && (await healthy(state.port))) {
     return state;
   }
 
-  const port = portFromEnvironment();
-  if (await healthy(port)) {
-    return { pid: state?.pid ?? 0, port };
+  if (await healthy(config.port)) {
+    return { pid: state?.pid ?? 0, port: config.port };
   }
 
   const child = Bun.spawn(daemonArgv(), {
     cwd: process.cwd(),
-    env: { ...process.env, MDPRV_STATE: daemonStatePath() },
+    env: configToEnv(config),
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",
@@ -68,13 +54,13 @@ export async function ensureDaemon(): Promise<DaemonState> {
 
   for (let i = 0; i < 50; i++) {
     await Bun.sleep(100);
-    const current = readDaemonState();
+    const current = readDaemonState(config.stateFile);
     if (current && pidAlive(current.pid) && (await healthy(current.port))) {
       return current;
     }
   }
 
-  throw new Error(`daemon did not become ready on 127.0.0.1:${port}`);
+  throw new Error(`daemon did not become ready on 127.0.0.1:${config.port}`);
 }
 
 export interface RegisterPayload {
@@ -83,10 +69,7 @@ export interface RegisterPayload {
   content: string;
 }
 
-export async function registerDocument(
-  port: number,
-  payload: RegisterPayload
-): Promise<string> {
+export async function registerDocument(port: number, payload: RegisterPayload): Promise<string> {
   const res = await fetch(`http://127.0.0.1:${port}/__register`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -116,14 +99,14 @@ async function waitUntilGone(pid: number, timeoutMs: number): Promise<boolean> {
 
 export type ShutdownResult = "stopped" | "not-running" | "stale";
 
-export async function shutdownDaemon(): Promise<ShutdownResult> {
-  const state = readDaemonState();
+export async function shutdownDaemon(config: Config): Promise<ShutdownResult> {
+  const state = readDaemonState(config.stateFile);
   if (!state) {
     return "not-running";
   }
 
   if (!(await healthy(state.port))) {
-    clearDaemonState();
+    clearDaemonState(config.stateFile);
     return "stale";
   }
 
@@ -154,33 +137,6 @@ export async function shutdownDaemon(): Promise<ShutdownResult> {
     await waitUntilGone(state.pid, 1000);
   }
 
-  clearDaemonState();
+  clearDaemonState(config.stateFile);
   return "stopped";
-}
-
-function openers(): string[][] {
-  if (process.platform === "darwin") {
-    return [["open"]];
-  }
-  if (process.platform === "win32") {
-    return [["explorer.exe"]];
-  }
-  return [["xdg-open"], ["open"], ["explorer.exe"]];
-}
-
-export function openInBrowser(url: string): boolean {
-  for (const [command] of openers()) {
-    try {
-      const child = Bun.spawn([command!, url], {
-        stdin: "ignore",
-        stdout: "ignore",
-        stderr: "ignore",
-      });
-      child.unref();
-      return true;
-    } catch {
-      /* try the next opener */
-    }
-  }
-  return false;
 }

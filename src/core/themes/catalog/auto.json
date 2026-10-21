@@ -1,0 +1,9 @@
+{
+  "$schema": "../schema.json",
+  "name": "auto",
+  "kind": "auto",
+  "variants": {
+    "light": "github-light",
+    "dark": "github-dark"
+  }
+}

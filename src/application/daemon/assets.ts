@@ -1,4 +1,4 @@
-import mermaidPath from "../node_modules/mermaid/dist/mermaid.min.js" with { type: "file" };
+import mermaidPath from "../../../node_modules/mermaid/dist/mermaid.min.js" with { type: "file" };
 
 const HEADERS = {
   "Content-Type": "application/javascript; charset=utf-8",

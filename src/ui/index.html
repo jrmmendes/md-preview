@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{mdprv-theme}}" data-loader="{{mdprv-loader}}" data-zoom-sensitivity="{{mdprv-zoom}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>{{mdprv-title}}</title>
+  <style id="mdprv-theme-css">{{mdprv-theme-css}}</style>
+</head>
+<body>
+  <aside class="mdprv-sidebar" id="mdprv-sidebar">
+    <div class="mdprv-sidebar-head">
+      <span class="mdprv-sidebar-title">Preview</span>
+    </div>
+    <nav id="mdprv-toc" class="mdprv-toc" aria-label="Table of contents"></nav>
+  </aside>
+  <button type="button" id="mdprv-settings-toggle" class="mdprv-settings-toggle" aria-label="Preview settings" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+  <div class="mdprv-settings" id="mdprv-settings" hidden>
+    <label class="mdprv-field-label" for="mdprv-theme">Theme</label>
+    <select id="mdprv-theme" class="mdprv-theme" aria-label="Theme">{{mdprv-theme-options}}</select>
+    <label class="mdprv-field-label" for="mdprv-font">Font</label>
+    <div class="mdprv-font-row">
+      <input id="mdprv-font" class="mdprv-input" type="text" list="mdprv-font-list" placeholder="Font family (e.g. Inter)" autocomplete="off" spellcheck="false" aria-label="Font family">
+      <datalist id="mdprv-font-list"></datalist>
+      <div class="mdprv-font-actions">
+        <button type="button" id="mdprv-font-load" class="mdprv-btn">Load system fonts</button>
+        <button type="button" id="mdprv-font-reset" class="mdprv-btn">Reset</button>
+      </div>
+    </div>
+    <label class="mdprv-field-label" for="mdprv-loader">Loader</label>
+    <select id="mdprv-loader" class="mdprv-theme" aria-label="Loading indicator">{{mdprv-loader-options}}</select>
+    <label class="mdprv-field-label" for="mdprv-zoom-sens">Zoom sensitivity (scroll)</label>
+    <input id="mdprv-zoom-sens" class="mdprv-input" type="number" min="1.01" max="3" step="0.05" value="{{mdprv-zoom}}" inputmode="decimal" aria-label="Mermaid zoom scroll sensitivity">
+  </div>
+  <button type="button" id="mdprv-sidebar-toggle" class="mdprv-sidebar-toggle" aria-label="Toggle sidebar" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></svg></button>
+  <aside class="mdprv-history" id="mdprv-history" aria-label="Recent previews">
+    <div class="mdprv-sidebar-head"><span class="mdprv-sidebar-title">Recent</span></div>
+    <ul class="mdprv-history-list" id="mdprv-history-list"></ul>
+  </aside>
+  <button type="button" id="mdprv-history-toggle" class="mdprv-history-toggle" aria-label="Toggle recent previews" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M15 3v18"></path></svg></button>
+  <div class="mdprv-drag mdprv-drag-left" id="mdprv-drag-left" role="separator" aria-orientation="vertical" aria-label="Resize content width (left)"></div>
+  <div class="mdprv-drag mdprv-drag-right" id="mdprv-drag-right" role="separator" aria-orientation="vertical" aria-label="Resize content width (right)"></div>
+  <button type="button" id="mdprv-top" class="mdprv-top" aria-label="Back to top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"></path><path d="M5 12l7-7 7 7"></path></svg></button>
+  <button type="button" id="mdprv-zen-toggle" class="mdprv-zen-toggle" aria-label="Enter zen mode" aria-pressed="false"><svg class="mdprv-icon-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg><svg class="mdprv-icon-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M16 21v-3a2 2 0 0 1 2-2h3"></path></svg></button>
+  <div id="mdprv-loader-overlay" class="mdprv-loader-overlay" aria-hidden="true"><div id="mdprv-loader-spinner" class="mdprv-loader mdprv-loader--{{mdprv-loader}}"></div></div>
+  <div id="mdprv-mermaid-lightbox" class="mdprv-mermaid-lightbox" aria-hidden="true"><button type="button" class="mdprv-mermaid-close" aria-label="Close full screen (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="M6 6l12 12"></path></svg></button><div class="mdprv-mermaid-tools"><button type="button" class="mdprv-mermaid-out" aria-label="Zoom out">&minus;</button><button type="button" class="mdprv-mermaid-reset" aria-label="Reset zoom">100%</button><button type="button" class="mdprv-mermaid-in" aria-label="Zoom in">+</button></div><div class="mdprv-mermaid-stage" id="mdprv-mermaid-stage"></div></div>
+  <article class="markdown-body">{{mdprv-meta}}{{mdprv-body}}</article>
+  <script type="application/json" id="mdprv-data">{{mdprv-data}}</script>
+  <script src="/__assets/mermaid.min.js"></script>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

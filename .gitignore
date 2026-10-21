@@ -1,4 +1,7 @@
 node_modules/
 bin/
+dist/
+.plans/
 *.log
 .DS_Store
+docs/baseline/

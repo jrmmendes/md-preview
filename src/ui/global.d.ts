@@ -10,12 +10,4 @@ interface MermaidApi {
   run(options: { querySelector: string }): Promise<void> | undefined;
 }
 
-interface LocalFont {
-  family?: string;
-}
-
-interface Window {
-  queryLocalFonts?: () => Promise<LocalFont[]>;
-}
-
 declare const mermaid: MermaidApi;

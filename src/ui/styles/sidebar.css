@@ -31,8 +31,6 @@ html.mdprv-zen .mdprv-zen-toggle .mdprv-icon-enter{display:none}
 .mdprv-field-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mdprv-muted);margin:.55rem 0 .3rem}
 .mdprv-field-label:first-child{margin-top:0}
 .mdprv-input{display:block;width:100%;font:inherit;font-size:13px;padding:.3rem .5rem;color:var(--mdprv-fg);background:var(--mdprv-bg);border:1px solid var(--mdprv-border);border-radius:6px}
-.mdprv-font-row{display:flex;flex-direction:column;gap:.35rem}
-.mdprv-font-actions{display:flex;gap:.35rem}
 .mdprv-btn{flex:1;font:inherit;font-size:12px;padding:.3rem .45rem;color:var(--mdprv-fg);background:var(--mdprv-bg);border:1px solid var(--mdprv-border);border-radius:6px;cursor:pointer}
 .mdprv-btn:hover{background:var(--mdprv-code-bg)}
 .mdprv-sidebar-toggle,.mdprv-history-toggle,.mdprv-settings-toggle{position:fixed;z-index:50;display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;padding:0;border:1px solid var(--mdprv-border);border-radius:6px;background:var(--mdprv-bg);color:var(--mdprv-muted);cursor:pointer;transition:opacity var(--mdprv-ui-dur) ease,visibility var(--mdprv-ui-dur) ease,color .15s,background .15s}

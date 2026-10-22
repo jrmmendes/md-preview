@@ -65,12 +65,54 @@ Funcionalidade: Paridade do preview de Markdown
   Cenário: Painel de configurações
     Quando abro o painel pelo ícone de engrenagem
     Então vejo tema, fonte, loader e sensibilidade de scroll
-    Quando altero a fonte e recarrego
-    Então a fonte permanece aplicada
-    Quando clico em "Load system fonts"
-    Então o datalist é preenchido se a API existir
+    E o campo de fonte é um combobox com lista, status e ações Refresh/Reset
+
+  Cenário: Busca e preview de fontes
+    Quando foco o campo de fonte
+    Então a lista mostra as famílias do catálogo com preview "Aa Bb Cc 0123"
+    Quando digito "inter"
+    Então os resultados priorizam igualdade, prefixo, prefixo de palavra, substring e subsequência
+    E o status informa a contagem de resultados
+    Quando digito um termo sem correspondência
+    Então o status informa que não há resultados
+
+  Cenário: Teclado do combobox de fontes
+    Dado o campo de fonte focado
+    Quando pressiono ArrowDown, ArrowUp, Home e End
+    Então a opção ativa acompanha o movimento e aria-activedescendant é atualizado
+    Quando pressiono Enter
+    Então a fonte ativa é aplicada e persistida
+    Quando pressiono Escape ou Tab
+    Então a lista fecha sem alterar a fonte
+
+  Cenário: Reset de fonte
+    Dado uma fonte aplicada
     Quando clico em Reset
-    Então a fonte volta ao padrão
+    Então --mdprv-font é removido, a chave mdprv_font é apagada e o padrão volta
+
+  Cenário: Catálogo de fontes indisponível
+    Dado que fc-list falhou
+    Então o status informa indisponibilidade
+    E as famílias genéricas continuam selecionáveis
+    Quando clico em Refresh
+    Então uma nova tentativa é feita com ?refresh=1
+
+  Cenário: Google Fonts opt-in e offline
+    Quando abro "Load from Google Fonts" e carrego uma família válida
+    Então um link same-origin /__fonts/google?family=... é injetado e a escolha é persistida com source "google"
+    Quando a rede falha ou a família não existe
+    Então um erro explícito aparece, o link é removido e a fonte anterior permanece
+    E o CSP continua sem origens Google
+
+  Cenário: Navegação e loader
+    Quando clico em um item Recent
+    Então o overlay aparece antes do novo conteúdo
+    Quando recarrego com F5
+    Então o overlay aparece
+    Quando uso back/forward (bfcache)
+    Então o overlay não aparece
+    E ele nunca fica preso após o timeout
+    E prefers-reduced-motion desliga animações e transições
 
   Cenário: Opções de tema e loader
     Quando abro o painel de configurações
@@ -168,8 +210,9 @@ Funcionalidade: Paridade do preview de Markdown
 | --- | --- |
 | Temas (tokens, Shiki, Mermaid) | automático claro/escuro, tema fixo, realce de código |
 | Conteúdo | frontmatter/meta card, imagens relativas, GFM, Mermaid |
-| Navegação | sumário, voltar ao topo |
+| Navegação | sumário, voltar ao topo, loader em Recent/F5/back-forward |
 | Painéis | histórico + toggle, sidebar, settings, opções de tema/loader |
+| Fontes | busca/preview, teclado, reset, catálogo indisponível, Google opt-in/offline |
 | Mermaid | lightbox, `architecture-beta` |
 | Código | copiar, realce por tema |
 | Preferências | fonte, loader, sensibilidade, colapso |

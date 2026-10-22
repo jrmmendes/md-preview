@@ -11,7 +11,8 @@ import { themeNames } from "../../core/themes/tokens";
 import { VERSION } from "../../core/version";
 import { parseFrontmatter } from "../../core/frontmatter";
 import { mermaidAsset } from "./assets";
-import { baseHeaders, SECURITY_HEADERS } from "./headers";
+import { createFontCatalog, type FontCatalog } from "./fonts";
+import { baseHeaders, fontAssetHeaders, SECURITY_HEADERS } from "./headers";
 import { serveImage } from "./images";
 import { loadShell } from "./shell";
 import type { SlugRegistry } from "./watch";
@@ -34,6 +35,7 @@ export interface RouteDeps {
   onActivity: () => void;
   requestShutdown: () => void;
   heartbeatMs?: number;
+  fonts?: FontCatalog;
 }
 
 export interface RoutesHandle {
@@ -113,14 +115,29 @@ function addNonce(shell: string, nonce: string): string {
     .replace(/<style(?=[\s>])/gi, `<style nonce="${nonce}"`);
 }
 
-function text(body: string, status = 200): Response {
-  return new Response(body, { status, headers: baseHeaders("text/plain; charset=utf-8") });
+function text(body: string, status = 200, head = false): Response {
+  return new Response(head ? null : body, {
+    status,
+    headers: baseHeaders("text/plain; charset=utf-8"),
+  });
 }
 
-function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), {
+function json(value: unknown, status = 200, head = false): Response {
+  return new Response(head ? null : JSON.stringify(value), {
     status,
     headers: baseHeaders("application/json; charset=utf-8"),
+  });
+}
+
+function css(body: string, head = false): Response {
+  return new Response(head ? null : body, {
+    headers: baseHeaders("text/css; charset=utf-8"),
+  });
+}
+
+function fontFile(data: Uint8Array, head = false): Response {
+  return new Response(head ? null : data, {
+    headers: fontAssetHeaders(),
   });
 }
 
@@ -173,6 +190,7 @@ function serveClientAsset(name: string): Response {
 
 export function createRoutes(deps: RouteDeps): RoutesHandle {
   const { config, registry } = deps;
+  const fonts = deps.fonts ?? createFontCatalog();
   const heartbeatMs = deps.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
   const encoder = new TextEncoder();
   const clients = new Set<SseController>();
@@ -364,6 +382,26 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         return mermaidAsset();
       }
       return serveClientAsset(name);
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__fonts") {
+      const refresh = url.searchParams.get("refresh") === "1";
+      const payload = await fonts.getFonts({ refresh });
+      return json(payload, 200, method === "HEAD");
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__fonts/google") {
+      const result = await fonts.getGoogleCss(url.searchParams.get("family") ?? "");
+      if (!result.ok) {
+        return text(result.message, result.status, method === "HEAD");
+      }
+      return css(result.css, method === "HEAD");
+    }
+    if ((method === "GET" || method === "HEAD") && route.startsWith("/__fonts/file/")) {
+      const hash = route.slice("/__fonts/file/".length);
+      const result = fonts.getFontFile(hash);
+      if (!result.ok) {
+        return text("not found", 404, method === "HEAD");
+      }
+      return fontFile(result.data, method === "HEAD");
     }
 
     if (method === "GET" || method === "HEAD") {

@@ -331,7 +331,7 @@ Cinco escopos, escolhidos por uma pergunta de decisão:
 | snapshot inicial do documento | documento | `core/page.ts` | `Config` + request | `data-*` + JSON (imutável) |
 | preferências do usuário | browser persistente | `ui/prefs.ts` | localStorage → `data-*` | tabela abaixo |
 | estado efêmero de ilha | memória do módulo | `ui/islands/*` | DOM/default | — |
-| reload pendente do loader | sessão | `ui/prefs.ts` | `sessionStorage` | `mdprv_loader_pending` |
+| intenção de navegação/reload do loader | sessão | `ui/prefs.ts` | `sessionStorage` | `mdprv_loader_pending` (`{v,path,ts}`) |
 | `version` (live reload) | processo + cliente | `application/daemon/watch.ts`, `ui/islands/live-reload.ts` | `EventSource` em `/__events` | — |
 | clientes SSE | processo | `application/daemon/routes.ts` | conexão aberta | — |
 
@@ -342,10 +342,10 @@ Cinco escopos, escolhidos por uma pergunta de decisão:
 | `mdprv_theme` | cookie (`SameSite=Lax`, 1 ano) | **sim** | `Config.theme` |
 | `mdprv_width` | localStorage | não | `--mdprv-content-width` (46rem) |
 | `mdprv_loader` | localStorage | não | `Config.loader` |
-| `mdprv_font` | localStorage | não | stack do CSS |
+| `mdprv_font` | localStorage | não | JSON `{v:1,family,source,stack}`; legado string migra para `source:"local"` |
 | `mdprv_zoom_sensitivity` | localStorage | não | `Config.zoomSensitivity` |
 | `mdprv_left_collapsed`, `mdprv_right_collapsed` | localStorage | não | expandido |
-| `mdprv_loader_pending` | sessionStorage | não | ausente |
+| `mdprv_loader_pending` | sessionStorage | não | ausente; JSON `{v:1,path,ts}`, aceita legado `"1"` |
 
 Decisões decorrentes:
 
@@ -392,13 +392,19 @@ Substituir o cookie do tema por um `POST /__theme` foi considerado e **rejeitado
 1. Primeira resposta contém HTML completo, CSS inline e o conteúdo renderizado (sem FOUC, sem fetch de conteúdo).
 2. Leitura funciona sem JS; ilhas são aprimoramento.
 3. Um único artefato distribuível (`bin/md-preview`).
-4. Zero dependência de rede além do próprio daemon.
+4. Zero dependência de rede além do próprio daemon. A exceção é o proxy Google Fonts, contactado pelo daemon **apenas** sob opt-in explícito; o navegador nunca fala com origens externas.
 5. `core/` testável com `bun test` sem browser e sem env global.
 6. Temas são dados: adicionar ou ajustar um tema exige apenas um novo JSON, nunca mudança de código.
 7. Sem polling: atualizações em tempo real só por SSE.
 8. `core/` não importa `application/` nem `ui/`; o shell entra por parâmetro.
 9. Nenhum estado de UI no servidor e nenhum global de janela entre ilhas.
 10. Com uma aba aberta, o daemon não encerra por idle: o heartbeat conta como atividade.
+
+### Exceções controladas
+
+- **Script clássico inline no `<head>`.** É a única exceção ao "JS em módulos tipados" e existe para evitar FOUC: aplica `--mdprv-font`, injeta o `<link>` do Google salvo e marca o loader antes do `<body>`. O script é estático no shell, recebe o nonce do servidor, não avalia dados externos e é coberto por `tests/boot.test.ts` (fonte local, Google, JSON inválido e intenção de navegação). Qualquer lógica nova deve ir para `ui/services/`.
+- **Rede do Google Fonts sob ação explícita.** O fluxo normal continua offline/`self`. Ao carregar uma família pelo painel, ou ao abrir a página com `source:"google"` já persistido, o navegador requisita apenas `/__fonts/google` e `/__fonts/file/<hash>` no mesmo origin; o daemon é quem contacta `fonts.googleapis.com`/`fonts.gstatic.com`. O CSP permanece `font-src 'self' data:` e `connect-src 'self'`, sem origens Google no cliente.
+- **Cache em memória do catálogo.** Fontes do sistema usam TTL de 5 min e `?refresh=1`; CSS do Google usa TTL de 24 h e arquivos `.woff2` são imutáveis por hash. Não há persistência em disco nem estado de UI no servidor.
 
 ## Alternativas consideradas
 

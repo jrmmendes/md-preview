@@ -9,6 +9,22 @@ export interface PageInput {
   meta?: Record<string, unknown>;
 }
 
+export type FontCategory = "sans" | "serif" | "monospace" | "script" | "unknown";
+
+export interface FontInfo {
+  family: string;
+  styles: string[];
+  category: FontCategory;
+}
+
+export interface FontsPayload {
+  available: boolean;
+  source: "system" | "fallback";
+  fonts: FontInfo[];
+  generatedAt: string;
+  total: number;
+}
+
 export interface SlugInfo {
   slug: string;
   path: string;

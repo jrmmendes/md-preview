@@ -1,13 +1,19 @@
 import { describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createDaemon } from "../src/application/daemon";
+import { createFontCatalog, type ExecResult } from "../src/application/daemon/fonts";
 import type { Config } from "../src/core/config";
-import type { SlugInfo, SnapshotEvent, VersionEvent } from "../src/core/contract";
+import type { FontsPayload, SlugInfo, SnapshotEvent, VersionEvent } from "../src/core/contract";
 import { readDaemonState } from "../src/core/state";
 import { VERSION } from "../src/core/version";
+
+function okExec(stdout: string): ExecResult {
+  return { ok: true, code: 0, stdout };
+}
 
 interface ParsedEvent {
   event: string;
@@ -216,6 +222,175 @@ describe("application daemon SSE", () => {
     } finally {
       abort.abort();
       await reader?.cancel();
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+});
+
+describe("application daemon fonts", () => {
+  it("serves the font catalog JSON, caches it and supports refresh and HEAD", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-fonts-"));
+    const stateFile = join(dir, "state", "daemon.json");
+    let calls = 0;
+    const catalog = createFontCatalog({
+      now: () => 1_000,
+      ttlMs: 60_000,
+      exec: async () => {
+        calls += 1;
+        return okExec("Inter\tRegular\t0\nJetBrains Mono\tRegular\t100\n");
+      },
+    });
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50, fontCatalog: catalog });
+    const base = `http://127.0.0.1:${daemon.port}`;
+
+    try {
+      const response = await fetch(`${base}/__fonts`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("application/json");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const body = (await response.json()) as FontsPayload;
+      expect(body).toEqual({
+        available: true,
+        source: "system",
+        fonts: [
+          { family: "Inter", styles: ["Regular"], category: "sans" },
+          { family: "JetBrains Mono", styles: ["Regular"], category: "monospace" },
+        ],
+        generatedAt: new Date(1_000).toISOString(),
+        total: 2,
+      });
+      expect(calls).toBe(1);
+
+      await fetch(`${base}/__fonts`);
+      expect(calls).toBe(1);
+
+      await fetch(`${base}/__fonts?refresh=1`);
+      expect(calls).toBe(2);
+
+      const head = await fetch(`${base}/__fonts`, { method: "HEAD" });
+      expect(head.status).toBe(200);
+      expect(head.headers.get("content-type")).toContain("application/json");
+      expect(head.headers.get("cache-control")).toBe("no-store");
+      expect(await head.text()).toBe("");
+    } finally {
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+
+  it("returns the generic fallback when fc-list is unavailable", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-fonts-fallback-"));
+    const stateFile = join(dir, "state", "daemon.json");
+    const catalog = createFontCatalog({
+      now: () => 0,
+      exec: async () => ({ ok: false, code: 127, stdout: "", error: "fc-list missing" }),
+    });
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50, fontCatalog: catalog });
+    const base = `http://127.0.0.1:${daemon.port}`;
+
+    try {
+      const response = await fetch(`${base}/__fonts`);
+      const body = (await response.json()) as FontsPayload;
+      expect(body.available).toBe(false);
+      expect(body.source).toBe("fallback");
+      expect(body.total).toBeGreaterThan(0);
+      expect(body.fonts.every((font) => font.category !== undefined)).toBe(true);
+    } finally {
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+
+  it("proxies Google CSS and serves cached font files with asset headers", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-fonts-google-"));
+    const stateFile = join(dir, "state", "daemon.json");
+    const fontBytes = new Uint8Array([9, 8, 7, 6]);
+    const hash = createHash("sha256").update(fontBytes).digest("hex");
+    const css =
+      '@font-face{font-family:"Roboto Slab";src:url(https://fonts.gstatic.com/s/roboto-slab/v1/font.woff2) format("woff2");}';
+    const upstream: string[] = [];
+    const catalog = createFontCatalog({
+      now: () => 0,
+      exec: async () => okExec(""),
+      fetch: async (input) => {
+        upstream.push(input);
+        if (input.startsWith("https://fonts.googleapis.com/css2")) {
+          return new Response(css, { status: 200, headers: { "Content-Type": "text/css" } });
+        }
+        if (input === "https://fonts.gstatic.com/s/roboto-slab/v1/font.woff2") {
+          return new Response(fontBytes, { status: 200 });
+        }
+        return new Response("missing", { status: 404 });
+      },
+    });
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50, fontCatalog: catalog });
+    const base = `http://127.0.0.1:${daemon.port}`;
+
+    try {
+      const response = await fetch(`${base}/__fonts/google?family=Roboto+Slab`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("text/css; charset=utf-8");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const body = await response.text();
+      expect(body).toContain(`/__fonts/file/${hash}`);
+      expect(body).not.toContain("fonts.gstatic.com");
+      expect(upstream[0]).toBe(
+        "https://fonts.googleapis.com/css2?family=Roboto%20Slab&display=swap"
+      );
+
+      const headCss = await fetch(`${base}/__fonts/google?family=Roboto+Slab`, {
+        method: "HEAD",
+      });
+      expect(headCss.status).toBe(200);
+      expect(headCss.headers.get("content-type")).toBe("text/css; charset=utf-8");
+      expect(await headCss.text()).toBe("");
+
+      const file = await fetch(`${base}/__fonts/file/${hash}`);
+      expect(file.status).toBe(200);
+      expect(file.headers.get("content-type")).toBe("font/woff2");
+      expect(file.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+      expect(file.headers.get("x-content-type-options")).toBe("nosniff");
+      expect([...new Uint8Array(await file.arrayBuffer())]).toEqual([...fontBytes]);
+
+      const headFile = await fetch(`${base}/__fonts/file/${hash}`, { method: "HEAD" });
+      expect(headFile.status).toBe(200);
+      expect(headFile.headers.get("content-type")).toBe("font/woff2");
+      expect(await headFile.text()).toBe("");
+
+      const unknown = await fetch(`${base}/__fonts/file/${"0".repeat(64)}`);
+      expect(unknown.status).toBe(404);
+
+      const invalid = await fetch(`${base}/__fonts/google?family=Roboto%3Bdrop`);
+      expect(invalid.status).toBe(400);
+    } finally {
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+
+  it("rejects external font URLs and reports upstream failures", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-fonts-errors-"));
+    const stateFile = join(dir, "state", "daemon.json");
+    const catalog = createFontCatalog({
+      now: () => 0,
+      exec: async () => okExec(""),
+      fetch: async (input) => {
+        if (input.startsWith("https://fonts.googleapis.com/css2")) {
+          return new Response('@font-face{src:url(https://evil.test/font.woff2);}', {
+            status: 200,
+          });
+        }
+        return new Response("missing", { status: 404 });
+      },
+    });
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50, fontCatalog: catalog });
+    const base = `http://127.0.0.1:${daemon.port}`;
+
+    try {
+      const response = await fetch(`${base}/__fonts/google?family=Roboto`);
+      expect(response.status).toBe(502);
+    } finally {
       daemon.stop();
       rmSync(dir, { recursive: true, force: true });
     }

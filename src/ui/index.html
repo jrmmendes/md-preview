@@ -6,6 +6,128 @@
   <link rel="icon" href="data:,">
   <title>{{mdprv-title}}</title>
   <style id="mdprv-theme-css">{{mdprv-theme-css}}</style>
+  <script>
+  (function () {
+    var root = document.documentElement;
+    var LOADERS = ["classic", "dots", "bars", "ring", "pulse", "braille"];
+    function local(key) {
+      try { return window.localStorage.getItem(key); } catch (error) { return null; }
+    }
+    function session(key) {
+      try { return window.sessionStorage.getItem(key); } catch (error) { return null; }
+    }
+    function clearSession(key) {
+      try { window.sessionStorage.removeItem(key); } catch (error) { /* ignore */ }
+    }
+    var stored = local("mdprv_loader");
+    if (typeof stored === "string" && LOADERS.indexOf(stored) >= 0) {
+      root.setAttribute("data-loader", stored);
+    }
+
+    var shouldLoad = false;
+    var raw = session("mdprv_loader_pending");
+    if (raw !== null) {
+      clearSession("mdprv_loader_pending");
+      if (raw === "1") {
+        shouldLoad = true;
+      } else {
+        try {
+          var intent = JSON.parse(raw);
+          if (intent && intent.v === 1 && intent.path === location.pathname &&
+              typeof intent.ts === "number" && Date.now() - intent.ts <= 15000) {
+            shouldLoad = true;
+          }
+        } catch (error) { /* malformed intent */ }
+      }
+    }
+
+    if (!shouldLoad) {
+      try {
+        var entries = performance.getEntriesByType("navigation");
+        var navigation = entries && entries[0];
+        if (navigation && navigation.type === "reload") {
+          shouldLoad = true;
+        }
+      } catch (error) { /* navigation timing unavailable */ }
+    }
+
+    if (shouldLoad) {
+      root.setAttribute("data-loading", "1");
+    }
+
+    var DEFAULT_STACK =
+      'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+    var GENERICS = ["system-ui", "sans-serif", "serif", "monospace", "cursive", "fantasy"];
+    function fontFamily(value) {
+      if (typeof value !== "string") {
+        return null;
+      }
+      if (/[\u0000-\u001f\u007f;{}<>"'\\]/.test(value)) {
+        return null;
+      }
+      var family = value.replace(/\s+/g, " ").trim();
+      if (!family || family.length > 128) {
+        return null;
+      }
+      return family;
+    }
+    function stackFor(family, stack) {
+      if (typeof stack === "string" && stack.length <= 512 && stack.trim() !== "" &&
+          !/[\u0000-\u001f\u007f;{}<>\\]/.test(stack)) {
+        return stack.trim();
+      }
+      if (GENERICS.indexOf(family.toLowerCase()) >= 0) {
+        var tokens = [];
+        var parts = DEFAULT_STACK.split(",");
+        for (var i = 0; i < parts.length; i++) {
+          var token = parts[i].trim();
+          if (token && token.toLowerCase() !== family.toLowerCase()) {
+            tokens.push(token);
+          }
+        }
+        return [family].concat(tokens).join(", ");
+      }
+      return '"' + family + '", ' + DEFAULT_STACK;
+    }
+    try {
+      var rawFont = local("mdprv_font");
+      if (rawFont) {
+        var fontFamilyName = null;
+        var fontSource = "local";
+        var fontStackValue = "";
+        var fontText = rawFont.trim();
+        if (fontText.charAt(0) === "{") {
+          try {
+            var fontValue = JSON.parse(fontText);
+            if (fontValue && fontValue.v === 1) {
+              fontFamilyName = fontFamily(fontValue.family);
+              fontSource = fontValue.source === "google" ? "google" : "local";
+              fontStackValue = fontValue.stack;
+            }
+          } catch (error) { /* malformed selection */ }
+        } else {
+          fontFamilyName = fontFamily(fontText);
+        }
+        if (fontFamilyName) {
+          root.style.setProperty("--mdprv-font", stackFor(fontFamilyName, fontStackValue));
+          if (fontSource === "google") {
+            var fontLink = document.createElement("link");
+            fontLink.id = "mdprv-font-google-css";
+            fontLink.rel = "stylesheet";
+            fontLink.href = "/__fonts/google?family=" + encodeURIComponent(fontFamilyName);
+            fontLink.addEventListener("error", function () {
+              root.setAttribute("data-font-missing", "1");
+            });
+            fontLink.addEventListener("load", function () {
+              root.removeAttribute("data-font-missing");
+            });
+            (document.head || root).appendChild(fontLink);
+          }
+        }
+      }
+    } catch (error) { /* font activation must not break boot */ }
+  })();
+  </script>
 </head>
 <body>
   <aside class="mdprv-sidebar" id="mdprv-sidebar">
@@ -19,13 +141,22 @@
     <label class="mdprv-field-label" for="mdprv-theme">Theme</label>
     <select id="mdprv-theme" class="mdprv-theme" aria-label="Theme">{{mdprv-theme-options}}</select>
     <label class="mdprv-field-label" for="mdprv-font">Font</label>
-    <div class="mdprv-font-row">
-      <input id="mdprv-font" class="mdprv-input" type="text" list="mdprv-font-list" placeholder="Font family (e.g. Inter)" autocomplete="off" spellcheck="false" aria-label="Font family">
-      <datalist id="mdprv-font-list"></datalist>
+    <div class="mdprv-font-picker" id="mdprv-font-picker">
+      <input id="mdprv-font" class="mdprv-input" type="text" role="combobox" aria-expanded="false" aria-controls="mdprv-font-list" aria-autocomplete="list" aria-activedescendant="" autocomplete="off" spellcheck="false" placeholder="Search fonts (e.g. Inter)" aria-label="Font family">
+      <ul id="mdprv-font-list" class="mdprv-font-list" role="listbox" aria-label="Available fonts" hidden></ul>
       <div class="mdprv-font-actions">
-        <button type="button" id="mdprv-font-load" class="mdprv-btn">Load system fonts</button>
+        <button type="button" id="mdprv-font-refresh" class="mdprv-btn">Refresh</button>
         <button type="button" id="mdprv-font-reset" class="mdprv-btn">Reset</button>
       </div>
+      <p id="mdprv-font-status" class="mdprv-font-status" role="status" aria-live="polite"></p>
+      <details class="mdprv-font-google" id="mdprv-font-google">
+        <summary>Load from Google Fonts</summary>
+        <div class="mdprv-font-google-row">
+          <input id="mdprv-font-google-family" class="mdprv-input" type="text" placeholder="Family (e.g. Inter)" autocomplete="off" spellcheck="false" aria-label="Google Fonts family">
+          <button type="button" id="mdprv-font-google-load" class="mdprv-btn">Load</button>
+        </div>
+        <p id="mdprv-font-google-error" class="mdprv-font-error" role="alert" hidden></p>
+      </details>
     </div>
     <label class="mdprv-field-label" for="mdprv-loader">Loader</label>
     <select id="mdprv-loader" class="mdprv-theme" aria-label="Loading indicator">{{mdprv-loader-options}}</select>

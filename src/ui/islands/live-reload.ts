@@ -1,3 +1,4 @@
+import { writeLoaderIntent } from "../prefs";
 import { on } from "../services/events";
 
 export function initLiveReload(): void {
@@ -27,6 +28,7 @@ export function initLiveReload(): void {
     }
     if (data.version !== currentVersion) {
       currentVersion = data.version;
+      writeLoaderIntent(location.pathname);
       location.reload();
     }
   });

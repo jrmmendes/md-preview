@@ -1,4 +1,4 @@
-import { getLoaderPending, setLoader, setLoaderPending } from "../prefs";
+import { setLoader } from "../prefs";
 import * as loader from "../services/loader";
 
 export function initLoaderOverlay(): void {
@@ -9,17 +9,18 @@ export function initLoaderOverlay(): void {
     select.addEventListener("change", () => {
       loader.set(select.value);
       setLoader(loader.current());
-      loader.flash(400);
+      loader.preview(400);
     });
   }
 
-  if (getLoaderPending()) {
-    setLoaderPending(false);
-    loader.show();
-    if (document.readyState === "complete") {
-      loader.settle();
-    } else {
-      window.addEventListener("load", () => loader.settle());
-    }
+  if (document.documentElement.getAttribute("data-loading") !== "1") {
+    return;
+  }
+
+  loader.begin();
+  if (document.readyState === "complete") {
+    loader.settle();
+  } else {
+    window.addEventListener("load", () => loader.settle(), { once: true });
   }
 }

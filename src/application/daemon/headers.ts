@@ -12,3 +12,14 @@ export function baseHeaders(contentType: string): Record<string, string> {
     ...SECURITY_HEADERS,
   };
 }
+
+export const FONT_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+export function fontAssetHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "font/woff2",
+    "Cache-Control": FONT_ASSET_CACHE_CONTROL,
+    Connection: "close",
+    ...SECURITY_HEADERS,
+  };
+}

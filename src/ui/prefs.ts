@@ -1,4 +1,28 @@
+import {
+  type LoaderIntent,
+  intentMatches,
+  parseLoaderIntent,
+  serializeLoaderIntent,
+} from "./services/loader-intent";
+import { fontStack, safeStack, sanitizeFamily } from "./services/font-value";
+
 const YEAR_SECONDS = 60 * 60 * 24 * 365;
+
+const FONT_VERSION = 1;
+
+export type FontSource = "local" | "google";
+
+export interface FontSelection {
+  family: string;
+  source: FontSource;
+  stack: string;
+}
+
+export interface FontSelectionInput {
+  family: string;
+  source?: FontSource;
+  stack?: string;
+}
 
 const KEYS = {
   width: "mdprv_width",
@@ -7,7 +31,7 @@ const KEYS = {
   zoom: "mdprv_zoom_sensitivity",
   left: "mdprv_left_collapsed",
   right: "mdprv_right_collapsed",
-  loaderPending: "mdprv_loader_pending",
+  loaderIntent: "mdprv_loader_pending",
 } as const;
 
 const LEGACY_KEYS = {
@@ -165,12 +189,94 @@ export function setLoader(name: string): void {
   localSet(KEYS.loader, name);
 }
 
+function serializeFontSelection(selection: FontSelection): string {
+  return JSON.stringify({
+    v: FONT_VERSION,
+    family: selection.family,
+    source: selection.source,
+    stack: selection.stack,
+  });
+}
+
+function normalizeSelection(value: unknown): FontSelection | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const candidate = value as {
+    v?: unknown;
+    family?: unknown;
+    source?: unknown;
+    stack?: unknown;
+  };
+  if (candidate.v !== FONT_VERSION) {
+    return null;
+  }
+  const family = sanitizeFamily(candidate.family);
+  if (!family) {
+    return null;
+  }
+  const source: FontSource = candidate.source === "google" ? "google" : "local";
+  return { family, source, stack: safeStack(family, candidate.stack) };
+}
+
+export function getFontSelection(): FontSelection | null {
+  const raw = localGet(KEYS.font);
+  if (raw === null || raw.trim() === "") {
+    return null;
+  }
+  const text = raw.trim();
+  if (!text.startsWith("{")) {
+    const family = sanitizeFamily(text);
+    if (!family) {
+      return null;
+    }
+    const migrated: FontSelection = { family, source: "local", stack: fontStack(family) };
+    localSet(KEYS.font, serializeFontSelection(migrated));
+    return migrated;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const selection = normalizeSelection(value);
+  if (selection && serializeFontSelection(selection) !== text) {
+    localSet(KEYS.font, serializeFontSelection(selection));
+  }
+  return selection;
+}
+
+export function setFontSelection(input: FontSelectionInput): FontSelection | null {
+  const family = sanitizeFamily(input.family);
+  if (!family) {
+    return null;
+  }
+  const source: FontSource = input.source === "google" ? "google" : "local";
+  const selection: FontSelection = {
+    family,
+    source,
+    stack: safeStack(family, input.stack),
+  };
+  localSet(KEYS.font, serializeFontSelection(selection));
+  return selection;
+}
+
+export function clearFontSelection(): void {
+  localRemove(KEYS.font);
+}
+
 export function getFont(): string {
-  return localGet(KEYS.font) ?? "";
+  return getFontSelection()?.family ?? "";
 }
 
 export function setFont(font: string): void {
-  localSet(KEYS.font, font.trim());
+  const family = sanitizeFamily(font);
+  if (!family) {
+    clearFontSelection();
+    return;
+  }
+  setFontSelection({ family, source: "local", stack: fontStack(family) });
 }
 
 export function getZoomSensitivity(): number | null {
@@ -196,14 +302,24 @@ export function setCollapsed(side: CollapsedSide, collapsed: boolean): void {
   localSet(side === "left" ? KEYS.left : KEYS.right, collapsed ? "1" : "0");
 }
 
-export function getLoaderPending(): boolean {
-  return sessionGet(KEYS.loaderPending) === "1";
+function currentPath(): string {
+  try {
+    return window.location.pathname;
+  } catch {
+    return "/";
+  }
 }
 
-export function setLoaderPending(pending: boolean): void {
-  if (pending) {
-    sessionSet(KEYS.loaderPending, "1");
-  } else {
-    sessionRemove(KEYS.loaderPending);
-  }
+export function readLoaderIntent(now: number = Date.now()): LoaderIntent | null {
+  return parseLoaderIntent(sessionGet(KEYS.loaderIntent), now, currentPath());
+}
+
+export function writeLoaderIntent(path: string, now: number = Date.now()): void {
+  sessionSet(KEYS.loaderIntent, serializeLoaderIntent(path, now));
+}
+
+export function consumeLoaderIntent(path: string, now: number = Date.now()): boolean {
+  const intent = readLoaderIntent(now);
+  sessionRemove(KEYS.loaderIntent);
+  return intentMatches(intent, path);
 }

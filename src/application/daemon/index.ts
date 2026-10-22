@@ -4,6 +4,7 @@ import type { Config } from "../../core/config";
 import { warmup } from "../../core/markdown/render";
 import { clearDaemonState, writeDaemonState } from "../../core/state";
 import { createRoutes, type RoutesHandle } from "./routes";
+import type { FontCatalog } from "./fonts";
 import { createSlugRegistry } from "./watch";
 
 export interface DaemonHandle {
@@ -16,6 +17,7 @@ export interface DaemonHandle {
 export interface CreateDaemonOptions {
   onStop?: () => void;
   heartbeatMs?: number;
+  fontCatalog?: FontCatalog;
 }
 
 export function createDaemon(config: Config, options: CreateDaemonOptions = {}): DaemonHandle {
@@ -61,6 +63,7 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     registry,
     token,
     heartbeatMs: options.heartbeatMs,
+    fonts: options.fontCatalog,
     onActivity: () => {
       lastActivity = Date.now();
     },

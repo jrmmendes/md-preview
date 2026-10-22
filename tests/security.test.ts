@@ -126,6 +126,14 @@ describe("page content security policy", () => {
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
   });
+
+  it("keeps font-src self-only without Google origins", async () => {
+    const response = await fetch(`${base}/doc`);
+    const csp = response.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("font-src 'self' data:");
+    expect(csp).not.toContain("fonts.googleapis.com");
+    expect(csp).not.toContain("fonts.gstatic.com");
+  });
 });
 
 describe("image serving boundaries", () => {

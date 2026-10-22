@@ -63,10 +63,21 @@ Only the server needs the theme, so it is the only value stored in a cookie. The
 | `mdprv_theme`                                               | cookie         | Theme read by the server on each request |
 | `mdprv_width`                                               | localStorage   | Content width                            |
 | `mdprv_loader`                                              | localStorage   | Loader style                             |
-| `mdprv_font`                                                | localStorage   | Font family                              |
+| `mdprv_font`                                                | localStorage   | Font selection `{ v: 1, family, source, stack }` |
 | `mdprv_zoom_sensitivity`                                    | localStorage   | Mermaid zoom scroll sensitivity          |
 | `mdprv_left_collapsed`, `mdprv_right_collapsed`             | localStorage   | Sidebar/history collapsed state          |
-| `mdprv_loader_pending`                                      | sessionStorage | Loader shown across a theme reload       |
+| `mdprv_loader_pending`                                      | sessionStorage | Loader intent `{ v: 1, path, ts }` for same-tab navigation/reload |
+
+## Fonts
+
+The browser gets the font catalog from the daemon and never enumerates local fonts from the page.
+
+- `GET /__fonts` lists system families discovered with `fc-list` (family, aggregated styles and a best-effort category). It is `no-store`; `?refresh=1` invalidates the in-memory cache (5 minute TTL).
+- If `fc-list` is missing, fails or times out, the payload has `available: false` and only the generic families (`system-ui`, `sans-serif`, `serif`, `monospace`, `cursive`, `fantasy`). The picker keeps them selectable and reports the degraded state.
+- `GET /__fonts/google?family=<Family>` is an opt-in proxy: the daemon fetches the Google `css2` stylesheet, downloads only `https://fonts.gstatic.com` `.woff2` files, and rewrites `@font-face` URLs to `GET /__fonts/file/<sha256>` (immutable cache). Invalid families return `400`; upstream failures return `502`.
+- The page never contacts Google directly. A saved Google selection only adds a same-origin `<link>`; the CSP stays `font-src 'self' data:`.
+- `mdprv_font` stores `{ v: 1, family, source: "local"|"google", stack }`. Legacy plain strings migrate to `source: "local"` with a derived stack. Reset removes the key and `--mdprv-font`.
+- The picker searches the catalog locally (diacritic-insensitive; exact > prefix > word prefix > substring > subsequence, at most 80 results), previews each family with "Aa Bb Cc 0123" and supports combobox keyboard navigation. The inline head script applies the saved stack before the body, so there is no font flash.
 
 ## Development
 
@@ -106,9 +117,9 @@ src/
     index.html    # shell with {{mdprv-*}} tokens
     main.ts       # islands bootstrap
     prefs.ts      # the only browser storage access
-    services/     # loader singleton and SSE events
-    islands/      # layout, TOC, history, settings, Mermaid, copy, live reload
-    styles/       # base, meta, sidebar, mermaid, loader
+    services/     # loader, navigation, font catalog/search, SSE events
+    islands/      # layout, TOC, history, settings, font picker, Mermaid, copy, live reload
+    styles/       # base, meta, sidebar, fonts, mermaid, loader
   types.d.ts
 tests/
 build.ts

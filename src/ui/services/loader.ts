@@ -1,4 +1,5 @@
 import { getLoader } from "../prefs";
+import { createLoaderState, type LoaderState } from "./loader-state";
 
 export const LOADERS = ["classic", "dots", "bars", "ring", "pulse", "braille"] as const;
 
@@ -8,6 +9,8 @@ let overlay: HTMLElement | null = null;
 let spinner: HTMLElement | null = null;
 let select: HTMLSelectElement | null = null;
 let currentName: LoaderName = "classic";
+let state: LoaderState | null = null;
+let watchingPages = false;
 
 export function isLoaderName(value: unknown): value is LoaderName {
   return typeof value === "string" && (LOADERS as readonly string[]).includes(value);
@@ -24,12 +27,57 @@ function refs(): void {
   select = document.getElementById("mdprv-loader") as HTMLSelectElement | null;
 }
 
+function applyVisible(visible: boolean): void {
+  if (!overlay) {
+    refs();
+  }
+  const root = document.documentElement;
+  if (visible) {
+    overlay?.classList.add("mdprv-loader-active");
+    root.setAttribute("data-loading", "1");
+  } else {
+    overlay?.classList.remove("mdprv-loader-active");
+    root.removeAttribute("data-loading");
+  }
+}
+
+function machine(): LoaderState {
+  if (!state) {
+    state = createLoaderState({ onChange: applyVisible });
+  }
+  return state;
+}
+
+export function begin(): void {
+  machine().begin();
+}
+
 export function show(): void {
-  overlay?.classList.add("mdprv-loader-active");
+  begin();
 }
 
 export function hide(): void {
-  overlay?.classList.remove("mdprv-loader-active");
+  machine().hide();
+  applyVisible(false);
+}
+
+export function preview(ms: number): void {
+  machine().preview(ms);
+}
+
+export function settle(): void {
+  const loader = machine();
+  loader.begin();
+  loader.markLoaded();
+  const fonts = document.fonts;
+  if (fonts && fonts.ready) {
+    fonts.ready.then(
+      () => loader.markFontsReady(),
+      () => loader.markFontsReady()
+    );
+  } else {
+    loader.markFontsReady();
+  }
 }
 
 export function set(name: string): void {
@@ -44,36 +92,6 @@ export function set(name: string): void {
   document.documentElement.setAttribute("data-loader", next);
 }
 
-export function flash(ms: number): void {
-  show();
-  window.setTimeout(hide, ms);
-}
-
-export function settle(): void {
-  show();
-  const start = Date.now();
-  const MIN = 180;
-  let finished = false;
-
-  function finish(): void {
-    if (finished) {
-      return;
-    }
-    finished = true;
-    const wait = Math.max(0, MIN - (Date.now() - start));
-    window.setTimeout(() => {
-      window.requestAnimationFrame(hide);
-    }, wait);
-  }
-
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(finish, finish);
-    window.setTimeout(finish, 600);
-  } else {
-    window.setTimeout(finish, 250);
-  }
-}
-
 export function current(): LoaderName {
   return currentName;
 }
@@ -82,4 +100,13 @@ export function init(): void {
   refs();
   const stored = getLoader();
   set(isLoaderName(stored) ? stored : defaultName());
+  if (watchingPages) {
+    return;
+  }
+  watchingPages = true;
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      hide();
+    }
+  });
 }

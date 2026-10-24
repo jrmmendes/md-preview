@@ -7,7 +7,7 @@ import type { SnapshotEvent } from "../../core/contract";
 import { renderPage } from "../../core/page";
 import { normalizeContent, renderMarkdown } from "../../core/markdown/render";
 import { resolveThemeName } from "../../core/themes/resolve";
-import { themeNames } from "../../core/themes/tokens";
+import type { ThemeStore } from "../../core/themes/store";
 import { VERSION } from "../../core/version";
 import { parseFrontmatter } from "../../core/frontmatter";
 import { mermaidAsset } from "./assets";
@@ -30,6 +30,7 @@ type SseController = ReadableStreamDefaultController<Uint8Array>;
 
 export interface RouteDeps {
   config: Config;
+  themes: ThemeStore;
   registry: SlugRegistry;
   token: string;
   onActivity: () => void;
@@ -189,7 +190,7 @@ function serveClientAsset(name: string): Response {
 }
 
 export function createRoutes(deps: RouteDeps): RoutesHandle {
-  const { config, registry } = deps;
+  const { config, registry, themes } = deps;
   const fonts = deps.fonts ?? createFontCatalog();
   const heartbeatMs = deps.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
   const encoder = new TextEncoder();
@@ -312,7 +313,8 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     const themeName = resolveThemeName(
       url.searchParams.get("theme"),
       cookieValue(req.headers.get("cookie"), "mdprv_theme"),
-      config.theme
+      config.theme,
+      themes
     );
     const { data, body: markdownBody } = parseFrontmatter(content);
     const metaTitle =
@@ -332,7 +334,8 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
           zoomSensitivity: config.zoomSensitivity,
           meta: data,
         },
-        addNonce(loadShell(), nonce)
+        addNonce(loadShell(), nonce),
+        themes
       ),
       {
         headers: {
@@ -374,7 +377,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       return openStream(req);
     }
     if ((method === "GET" || method === "HEAD") && route === "/__themes") {
-      return json({ themes: themeNames() });
+      return json({ themes: themes.names(), errors: themes.errors() }, 200, method === "HEAD");
     }
     if ((method === "GET" || method === "HEAD") && route.startsWith("/__assets/")) {
       const name = route.slice("/__assets/".length);

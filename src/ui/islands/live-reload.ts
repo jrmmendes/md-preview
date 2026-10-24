@@ -18,6 +18,15 @@ export function initLiveReload(): void {
     ready = true;
   });
 
+  on("themes", (data) => {
+    const active = document.documentElement.getAttribute("data-theme") ?? "auto";
+    if (!data.changed.includes(active) && !data.changed.includes("auto")) {
+      return;
+    }
+    writeLoaderIntent(location.pathname);
+    location.reload();
+  });
+
   on("version", (data) => {
     if (!ready || data.slug !== slug) {
       return;

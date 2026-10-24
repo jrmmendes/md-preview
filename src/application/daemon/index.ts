@@ -1,8 +1,12 @@
 import { randomBytes } from "node:crypto";
 
 import type { Config } from "../../core/config";
+import { themesDir } from "../../core/config-file";
 import { warmup } from "../../core/markdown/render";
 import { clearDaemonState, writeDaemonState } from "../../core/state";
+import { getThemeStore, setThemeStore } from "../../core/themes/index";
+import { seedThemes as seedThemeFiles } from "../../core/themes/seed";
+import { createThemeStore, type ThemeStore } from "../../core/themes/store";
 import { createRoutes, type RoutesHandle } from "./routes";
 import type { FontCatalog } from "./fonts";
 import { createSlugRegistry } from "./watch";
@@ -18,6 +22,7 @@ export interface CreateDaemonOptions {
   onStop?: () => void;
   heartbeatMs?: number;
   fontCatalog?: FontCatalog;
+  themeStore?: ThemeStore;
 }
 
 export function createDaemon(config: Config, options: CreateDaemonOptions = {}): DaemonHandle {
@@ -29,9 +34,27 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
   let routes: RoutesHandle | undefined;
   const token = randomBytes(24).toString("base64url");
 
+  if (!options.themeStore && config.seedThemes) {
+    seedThemeFiles({
+      dir: themesDir(config.configDir),
+      logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+    });
+  }
+
   const broadcast = (event: string, data: unknown): void => {
     routes?.broadcast(event, data);
   };
+
+  const themeStore =
+    options.themeStore ??
+    createThemeStore({
+      dir: themesDir(config.configDir),
+      watch: true,
+      logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+      onChange: (change) => broadcast("themes", change),
+    });
+  setThemeStore(themeStore);
+
 
   const registry = createSlugRegistry({
     onVersion: (slug, version) => broadcast("version", { slug, version }),
@@ -49,6 +72,12 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     }
     routes?.close();
     registry.close();
+    if (!options.themeStore) {
+      themeStore.close();
+      if (getThemeStore() === themeStore) {
+        setThemeStore(null);
+      }
+    }
     clearDaemonState(config.stateFile);
     try {
       server?.stop(true);
@@ -60,6 +89,7 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
 
   routes = createRoutes({
     config,
+    themes: themeStore,
     registry,
     token,
     heartbeatMs: options.heartbeatMs,

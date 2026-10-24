@@ -56,6 +56,8 @@ describe("renderPage", () => {
   it("includes theme CSS and the Mermaid payload", () => {
     const html = renderPage(input({ themeName: "nord" }), SHELL);
     expect(html).toContain("--mdprv-bg:#2e3440");
+    expect(html).toContain("--mdprv-radius-md:6px");
+    expect(html).toContain("--mdprv-font-stack:");
     expect(html).toContain('"mermaid"');
     expect(html).toContain('"light"');
     expect(html).toContain('"dark"');

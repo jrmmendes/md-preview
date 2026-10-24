@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://md-preview.local/config.schema.json",
+  "title": "md-preview config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "theme": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "idle": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "loader": {
+      "enum": ["classic", "dots", "bars", "ring", "pulse", "braille"]
+    },
+    "zoomSensitivity": {
+      "type": "number",
+      "exclusiveMinimum": 1,
+      "maximum": 3
+    },
+    "seedThemes": {
+      "type": "boolean"
+    }
+  }
+}

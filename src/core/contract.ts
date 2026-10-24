@@ -42,3 +42,10 @@ export interface VersionEvent {
 }
 
 export type SlugsEvent = SlugInfo[];
+
+export interface ThemesEvent {
+  names: string[];
+  changed: string[];
+  version: number;
+}
+

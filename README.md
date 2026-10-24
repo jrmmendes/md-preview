@@ -45,14 +45,110 @@ During startup the daemon writes the `{ pid, port, token }` state file. If you d
 
 ## Configuration
 
+Configuration is centralized in `${XDG_CONFIG_HOME:-~/.config}/md-preview/`:
+
+```text
+~/.config/md-preview/
+  config.json
+  config.schema.json
+  themes/
+    auto.json
+    nord.json
+    ...
+    theme.schema.json
+```
+
+`MDPRV_CONFIG_DIR` overrides that whole directory (useful for portable installs and tests); it is not a second legacy location. `config.json` is optional and is never created implicitly. `md-preview config init` creates it (and its editor schema) without overwriting an existing file.
+
+```json
+{
+  "$schema": "./config.schema.json",
+  "theme": "auto",
+  "port": 8766,
+  "idle": 15,
+  "loader": "classic",
+  "zoomSensitivity": 1.1,
+  "seedThemes": true
+}
+```
+
+Precedence for every option is `defaults < config.json < MDPRV_*`. Invalid JSON is reported once and defaults are used; unknown keys are ignored with a warning. `?theme=` and the `mdprv_theme` cookie still select a theme per request and win over the configured theme.
+
 | Variable                 | Default                                                    | Description                                        |
 | ------------------------ | ---------------------------------------------------------- | -------------------------------------------------- |
-| `MDPRV_PORT`             | `8765`                                                     | Port for the local daemon                          |
+| `MDPRV_CONFIG_DIR`       | `${XDG_CONFIG_HOME:-~/.config}/md-preview`                 | Configuration root                                 |
+| `MDPRV_PORT`             | `8766`                                                     | Port for the local daemon                          |
 | `MDPRV_IDLE`             | `15`                                                       | Idle timeout in minutes before the daemon exits    |
 | `MDPRV_THEME`            | `auto`                                                     | Default theme (`auto` follows the OS color scheme) |
 | `MDPRV_LOADER`           | `classic`                                                  | Page loader style                                  |
 | `MDPRV_ZOOM_SENSITIVITY` | `1.1`                                                      | Zoom step multiplier                               |
+| `MDPRV_SEED_THEMES`      | `1`                                                        | Seed missing builtin themes at daemon startup      |
 | `MDPRV_STATE`            | `${XDG_STATE_HOME:-~/.local/state}/md-preview/daemon.json` | Daemon state file                                  |
+
+## Themes
+
+Themes are `theme.json` files with `schemaVersion: 1` in `~/.config/md-preview/themes/<name>.json`. The file name is the theme name and must match `^[a-z0-9][a-z0-9-]{0,63}$`. A user theme with the same name as a builtin overrides it in memory; the builtin file and the user file are never rewritten. Delete the user file to return to the builtin.
+
+```json
+{
+  "$schema": "./theme.schema.json",
+  "schemaVersion": 1,
+  "name": "nord",
+  "kind": "dark",
+  "colors": {
+    "background": "#2e3440",
+    "surface": "#3b4252",
+    "text": "#d8dee9",
+    "muted": "#7b88a1",
+    "border": "#4c566a",
+    "accent": "#88c0d0",
+    "code-bg": "#3b4252",
+    "quote": "#7b88a1"
+  },
+  "radii": { "sm": 5, "md": 6, "lg": 8, "xl": 12 },
+  "typography": {
+    "family": "system-ui",
+    "stack": "system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+    "base-size": 17
+  },
+  "layout": { "content-width": "46rem", "sidebar-width": "16rem" },
+  "effects": { "shadow-panel": "0 8px 28px rgba(0,0,0,.28)" },
+  "shiki": { "light": "nord", "dark": "nord" },
+  "mermaid": { "theme": "neutral", "overrides": {} }
+}
+```
+
+- Required fixed-theme colors: `background`, `surface`, `text`, `muted`, `border`, `accent`, `code-bg`, `quote`. Optional colors (`surface-raised`, `border-strong`, `accent-fg`, `link`, `code-fg`, `danger`, `warning`, `success`, `info`, `selection`) are derived from those when omitted.
+- Optional groups (`radii`, `typography`, `layout`, `effects`) fall back to the documented defaults.
+- `kind: "auto"` only accepts `variants.light` and `variants.dark`, resolved after the builtin/user merge.
+- `shiki.light`/`shiki.dark` must be one of `github-light`, `github-dark`, `dracula`, `nord`, `solarized-dark`, `solarized-light`, `gruvbox-dark-medium`, `gruvbox-light-medium`.
+- Values are validated against CSS injection and unsafe lengths; invalid files are ignored with an error and the builtin remains available.
+- Editing a theme file triggers an SSE `themes` event; the tab reloads when the current theme (or `auto`) changed. There is no in-place CSS hot reload.
+
+Builtin themes are packaged in `themes/` at the repository root and embedded in the compiled binary. On startup the daemon seeds missing files into the config directory when `seedThemes` is true; existing files are never overwritten and symlinks are ignored.
+
+Commands:
+
+```sh
+md-preview doc.md --theme nord    # validate the theme and open with ?theme=nord
+md-preview theme list [--json]    # builtin and user themes with their source
+md-preview theme validate FILE    # validate one theme.json file
+md-preview theme path             # print the config and themes directories
+md-preview theme seed             # create themes/ and seed missing builtins
+md-preview config init            # create config.json without overwriting
+```
+
+### Breaking change: legacy theme files
+
+This release intentionally does **not** read or migrate `.md-preview`, `~/.md-preview`, `./.md-preview` or themes in the current directory.
+
+| Previous | Now |
+| --- | --- |
+| `MDPRV_THEME=nord` | Keep it as a runtime override, or write `"theme": "nord"` in `config.json`. |
+| Theme JSON in a legacy folder | Move it manually to `~/.config/md-preview/themes/<name>.json`. |
+| Unversioned theme (`tokens`) | Convert to `schemaVersion: 1` with a `colors` object; `md-preview theme validate` reports what is missing. |
+
+No legacy file is deleted or overwritten.
 
 ## Browser state
 
@@ -112,7 +208,7 @@ src/
     slug.ts
     state.ts
     markdown/     # markdown-it + Shiki
-    themes/       # JSON catalog, tokens, CSS and Mermaid payload
+    themes/       # theme contract, store, CSS and Mermaid payload (builtins live in ../themes)
   ui/
     index.html    # shell with {{mdprv-*}} tokens
     main.ts       # islands bootstrap
@@ -126,4 +222,6 @@ build.ts
 build.sh
 ```
 
-`bin/md-preview` remains a single distributable artifact; `dist/client` is generated at build time and is not required at runtime.
+`bin/md-preview` remains a single distributable artifact; `dist/client` is generated at build time and is not required at runtime. Builtin themes are imported statically and embedded in the binary, so `themes/` does not need to exist at runtime.
+
+`package.json` is still `private: true`. When it becomes publishable, `files` already limits the package to `bin/`, `themes/`, `dist/client/` and `README.md`, and `prepack` runs the build so both artifacts are present.

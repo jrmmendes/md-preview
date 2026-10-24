@@ -1,14 +1,19 @@
 {
-  "$schema": "../schema.json",
+  "$schema": "./theme.schema.json",
+  "schemaVersion": 1,
   "name": "dracula",
   "kind": "dark",
-  "tokens": {
-    "bg": "#282a36",
-    "fg": "#f8f8f2",
+  "colors": {
+    "background": "#282a36",
+    "surface": "#21222c",
+    "text": "#f8f8f2",
     "muted": "#6272a4",
-    "link": "#8be9fd",
     "border": "#44475a",
+    "accent": "#8be9fd",
+    "accent-fg": "#282a36",
+    "link": "#8be9fd",
     "code-bg": "#21222c",
+    "code-fg": "#f8f8f2",
     "quote": "#6272a4"
   },
   "shiki": {

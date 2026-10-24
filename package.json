@@ -7,11 +7,18 @@
   "bin": {
     "md-preview": "./bin/md-preview"
   },
+  "files": [
+    "bin/",
+    "themes/",
+    "dist/client/",
+    "README.md"
+  ],
   "scripts": {
     "build": "bun run build.ts",
     "build:client": "bun run build.ts --client-only",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.ui.json",
-    "test": "bun test"
+    "test": "bun test",
+    "prepack": "bun run build"
   },
   "dependencies": {
     "@shikijs/langs": "3.23.0",

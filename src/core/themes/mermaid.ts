@@ -1,4 +1,5 @@
-import type { FixedTheme, MermaidThemeName, ResolvedTheme, Tokens } from "./tokens";
+import type { MermaidThemeName } from "./constants";
+import type { FixedTheme, ResolvedTheme, ThemeColors } from "./types";
 
 export interface MermaidConfig {
   theme: MermaidThemeName;
@@ -10,22 +11,22 @@ export interface MermaidPayload {
   dark: MermaidConfig;
 }
 
-export function defaultMermaidVariables(tokens: Tokens): Record<string, string> {
+export function defaultMermaidVariables(colors: ThemeColors): Record<string, string> {
   return {
-    background: tokens.bg,
-    primaryColor: tokens["code-bg"],
-    mainBkg: tokens["code-bg"],
-    primaryTextColor: tokens.fg,
-    textColor: tokens.fg,
-    titleColor: tokens.fg,
-    lineColor: tokens.link,
-    nodeBorder: tokens.link,
-    primaryBorderColor: tokens.link,
-    clusterBorder: tokens.border,
-    secondaryColor: tokens.muted,
-    tertiaryColor: tokens.bg,
-    clusterBkg: tokens.bg,
-    edgeLabelBackground: tokens.bg,
+    background: colors.background,
+    primaryColor: colors["code-bg"],
+    mainBkg: colors.surface,
+    primaryTextColor: colors.text,
+    textColor: colors.text,
+    titleColor: colors.text,
+    lineColor: colors.link,
+    nodeBorder: colors.accent,
+    primaryBorderColor: colors.accent,
+    clusterBorder: colors.border,
+    secondaryColor: colors.muted,
+    tertiaryColor: colors.background,
+    clusterBkg: colors.background,
+    edgeLabelBackground: colors.background,
   };
 }
 
@@ -33,7 +34,7 @@ export function mermaidConfig(theme: FixedTheme): MermaidConfig {
   return {
     theme: theme.mermaid.theme,
     themeVariables: {
-      ...defaultMermaidVariables(theme.tokens),
+      ...defaultMermaidVariables(theme.colors),
       ...theme.mermaid.overrides,
     },
   };

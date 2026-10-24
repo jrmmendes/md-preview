@@ -18,7 +18,7 @@ import solarizedLight from "@shikijs/themes/solarized-light";
 import gruvboxDark from "@shikijs/themes/gruvbox-dark-medium";
 import gruvboxLight from "@shikijs/themes/gruvbox-light-medium";
 
-import { getTheme, shikiThemeNames } from "../themes/tokens";
+import { getTheme, shikiThemeNames } from "../themes/index";
 
 export const LANGS = [javascript, typescript, json, lua, bash, html, css, markdown, python];
 

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { createDaemon, type DaemonHandle } from "../src/application/daemon";
 import type { Config } from "../src/core/config";
@@ -23,6 +23,8 @@ function config(stateFile: string): Config {
     theme: "auto",
     loader: "classic",
     zoomSensitivity: 1.1,
+    configDir: join(dirname(stateFile), ".."),
+    seedThemes: false,
   };
 }
 

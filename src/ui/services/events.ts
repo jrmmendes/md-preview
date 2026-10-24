@@ -1,21 +1,23 @@
-import type { SlugsEvent, SnapshotEvent, VersionEvent } from "../../core/contract";
+import type { SlugsEvent, SnapshotEvent, ThemesEvent, VersionEvent } from "../../core/contract";
 
 export interface EventMap {
   snapshot: SnapshotEvent;
   version: VersionEvent;
   slugs: SlugsEvent;
+  themes: ThemesEvent;
   ping: { ts: number };
 }
 
 type EventType = keyof EventMap;
 type Handler<K extends EventType> = (data: EventMap[K]) => void;
 
-const TYPES: EventType[] = ["snapshot", "version", "slugs", "ping"];
+const TYPES: EventType[] = ["snapshot", "version", "slugs", "themes", "ping"];
 
 const handlers: { [K in EventType]: Set<Handler<K>> } = {
   snapshot: new Set(),
   version: new Set(),
   slugs: new Set(),
+  themes: new Set(),
   ping: new Set(),
 };
 

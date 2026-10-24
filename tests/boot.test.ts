@@ -128,13 +128,19 @@ interface BootOptions {
   local?: Record<string, string>;
   session?: Record<string, string>;
   navigationType?: string;
+  themeStack?: string;
 }
 
 function boot(options: BootOptions = {}) {
   const document = new FakeDocument();
   const localStorage = storage(options.local);
   const sessionStorage = storage(options.session);
-  const window = { localStorage, sessionStorage };
+  const window: Record<string, unknown> = { localStorage, sessionStorage };
+  if (options.themeStack !== undefined) {
+    window.getComputedStyle = () => ({
+      getPropertyValue: (name: string) => (name === "--mdprv-font-stack" ? options.themeStack : ""),
+    });
+  }
   const location = { pathname: "/docs/a", href: "http://localhost/docs/a" };
   const performance = {
     getEntriesByType: () => [{ type: options.navigationType ?? "navigate" }],
@@ -170,6 +176,31 @@ describe("boot inline script", () => {
       '"Inter", system-ui, sans-serif'
     );
     expect(document.head.children).toHaveLength(0);
+  });
+
+  it("does not duplicate the default font stack in the inline script", () => {
+    expect(SHELL).not.toContain('"Segoe UI"');
+    expect(SHELL).toContain("--mdprv-font-stack");
+  });
+
+  it("falls back to the theme stack for a family without a stored stack", () => {
+    const { document } = boot({
+      local: { mdprv_font: "Inter" },
+      themeStack: '"Theme Sans", system-ui, sans-serif',
+    });
+    expect(document.documentElement.style.getPropertyValue("--mdprv-font")).toBe(
+      '"Inter", "Theme Sans", system-ui, sans-serif'
+    );
+  });
+
+  it("keeps the generic family first when using the theme stack", () => {
+    const { document } = boot({
+      local: { mdprv_font: "serif" },
+      themeStack: '"Theme Sans", system-ui, sans-serif',
+    });
+    expect(document.documentElement.style.getPropertyValue("--mdprv-font")).toBe(
+      'serif, "Theme Sans", system-ui, sans-serif'
+    );
   });
 
   it("migrates a legacy font string to a local stack", () => {

@@ -1,5 +1,6 @@
 {
-  "$schema": "../schema.json",
+  "$schema": "./theme.schema.json",
+  "schemaVersion": 1,
   "name": "auto",
   "kind": "auto",
   "variants": {

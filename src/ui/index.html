@@ -55,8 +55,6 @@
       root.setAttribute("data-loading", "1");
     }
 
-    var DEFAULT_STACK =
-      'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
     var GENERICS = ["system-ui", "sans-serif", "serif", "monospace", "cursive", "fantasy"];
     function fontFamily(value) {
       if (typeof value !== "string") {
@@ -71,14 +69,27 @@
       }
       return family;
     }
+    function themeStack() {
+      try {
+        if (window.getComputedStyle) {
+          var value = window.getComputedStyle(root).getPropertyValue("--mdprv-font-stack");
+          value = (value || "").trim();
+          if (value && value.length <= 512 && !/[\u0000-\u001f\u007f;{}<>\\]/.test(value)) {
+            return value;
+          }
+        }
+      } catch (error) { /* theme stack unavailable */ }
+      return "system-ui, sans-serif";
+    }
     function stackFor(family, stack) {
       if (typeof stack === "string" && stack.length <= 512 && stack.trim() !== "" &&
           !/[\u0000-\u001f\u007f;{}<>\\]/.test(stack)) {
         return stack.trim();
       }
+      var base = themeStack();
       if (GENERICS.indexOf(family.toLowerCase()) >= 0) {
         var tokens = [];
-        var parts = DEFAULT_STACK.split(",");
+        var parts = base.split(",");
         for (var i = 0; i < parts.length; i++) {
           var token = parts[i].trim();
           if (token && token.toLowerCase() !== family.toLowerCase()) {
@@ -87,7 +98,7 @@
         }
         return [family].concat(tokens).join(", ");
       }
-      return '"' + family + '", ' + DEFAULT_STACK;
+      return '"' + family + '", ' + base;
     }
     try {
       var rawFont = local("mdprv_font");

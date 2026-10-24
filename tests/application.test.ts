@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { createDaemon } from "../src/application/daemon";
 import { createFontCatalog, type ExecResult } from "../src/application/daemon/fonts";
@@ -106,6 +106,8 @@ function makeConfig(stateFile: string, idleMs = 60_000): Config {
     theme: "auto",
     loader: "classic",
     zoomSensitivity: 1.1,
+    configDir: join(dirname(stateFile), ".."),
+    seedThemes: false,
   };
 }
 
@@ -391,6 +393,74 @@ describe("application daemon fonts", () => {
       const response = await fetch(`${base}/__fonts/google?family=Roboto`);
       expect(response.status).toBe(502);
     } finally {
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+});
+
+describe("application daemon themes", () => {
+  it("seeds builtins, serves /__themes, reloads user themes and emits SSE", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-theme-daemon-"));
+    const file = join(dir, "doc.md");
+    const stateFile = join(dir, "state", "daemon.json");
+    const configDir = join(dir, "config");
+    writeFileSync(file, "# Theme\n");
+    const config = { ...makeConfig(stateFile), configDir, seedThemes: true };
+    const daemon = createDaemon(config, { heartbeatMs: 50 });
+    const base = `http://127.0.0.1:${daemon.port}`;
+    const abort = new AbortController();
+    let reader: SseReader | undefined;
+
+    try {
+      const initial = await (await fetch(`${base}/__themes`)).json() as {
+        themes: string[];
+        errors: unknown[];
+      };
+      expect(initial.themes).toHaveLength(9);
+      expect(initial.themes[0]).toBe("auto");
+      expect(initial.errors).toEqual([]);
+
+      await register(base, daemon.token, "doc", file);
+      const events = await fetch(`${base}/__events`, { signal: abort.signal });
+      reader = new SseReader(events.body!.getReader() as ReadableStreamDefaultReader<Uint8Array>);
+      await reader.next<SnapshotEvent>("snapshot");
+
+      const theme = {
+        schemaVersion: 1,
+        name: "custom",
+        kind: "dark",
+        colors: {
+          background: "#010203",
+          surface: "#111111",
+          text: "#ffffff",
+          muted: "#888888",
+          border: "#333333",
+          accent: "#00aaff",
+          "code-bg": "#161616",
+          quote: "#888888",
+        },
+        shiki: { light: "nord", dark: "nord" },
+        mermaid: { theme: "dark", overrides: {} },
+      };
+      writeFileSync(join(configDir, "themes", "custom.json"), JSON.stringify(theme));
+
+      const change = await reader.next<{ names: string[]; changed: string[]; version: number }>(
+        "themes"
+      );
+      expect(change.changed).toContain("custom");
+      expect(change.names).toContain("custom");
+      expect(change.version).toBeGreaterThan(0);
+
+      const listed = await (await fetch(`${base}/__themes`)).json() as { themes: string[] };
+      expect(listed.themes).toContain("custom");
+
+      const page = await (await fetch(`${base}/doc?theme=custom`)).text();
+      expect(page).toContain("--mdprv-bg:#010203");
+      expect(page).toContain('data-theme="custom"');
+    } finally {
+      abort.abort();
+      await reader?.cancel();
       daemon.stop();
       rmSync(dir, { recursive: true, force: true });
     }

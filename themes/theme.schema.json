@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://md-preview.local/theme.schema.json",
+  "title": "md-preview theme",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "kind"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "name": {
+      "$ref": "#/$defs/themeName"
+    },
+    "kind": {
+      "enum": ["auto", "light", "dark"]
+    },
+    "variants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["light", "dark"],
+      "properties": {
+        "light": {
+          "$ref": "#/$defs/themeName"
+        },
+        "dark": {
+          "$ref": "#/$defs/themeName"
+        }
+      }
+    },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "background",
+        "surface",
+        "text",
+        "muted",
+        "border",
+        "accent",
+        "code-bg",
+        "quote"
+      ],
+      "properties": {
+        "background": { "$ref": "#/$defs/color" },
+        "surface": { "$ref": "#/$defs/color" },
+        "surface-raised": { "$ref": "#/$defs/color" },
+        "text": { "$ref": "#/$defs/color" },
+        "muted": { "$ref": "#/$defs/color" },
+        "border": { "$ref": "#/$defs/color" },
+        "border-strong": { "$ref": "#/$defs/color" },
+        "accent": { "$ref": "#/$defs/color" },
+        "accent-fg": { "$ref": "#/$defs/color" },
+        "link": { "$ref": "#/$defs/color" },
+        "code-bg": { "$ref": "#/$defs/color" },
+        "code-fg": { "$ref": "#/$defs/color" },
+        "quote": { "$ref": "#/$defs/color" },
+        "danger": { "$ref": "#/$defs/color" },
+        "warning": { "$ref": "#/$defs/color" },
+        "success": { "$ref": "#/$defs/color" },
+        "info": { "$ref": "#/$defs/color" },
+        "selection": { "$ref": "#/$defs/color" }
+      }
+    },
+    "radii": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "none": { "$ref": "#/$defs/radius" },
+        "sm": { "$ref": "#/$defs/radiusSmall" },
+        "md": { "$ref": "#/$defs/radiusSmall" },
+        "lg": { "$ref": "#/$defs/radiusSmall" },
+        "xl": { "$ref": "#/$defs/radiusSmall" },
+        "pill": { "$ref": "#/$defs/radius" },
+        "circle": { "$ref": "#/$defs/radius" }
+      }
+    },
+    "typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "stack": { "$ref": "#/$defs/stack" },
+        "mono-stack": { "$ref": "#/$defs/stack" },
+        "base-size": { "type": "number", "minimum": 8, "maximum": 96 },
+        "ui-size": { "type": "number", "minimum": 8, "maximum": 32 },
+        "small-size": { "type": "number", "minimum": 8, "maximum": 24 },
+        "line-height": { "type": "number", "minimum": 0.8, "maximum": 3 },
+        "heading-line-height": { "type": "number", "minimum": 0.8, "maximum": 3 },
+        "code-line-height": { "type": "number", "minimum": 0.8, "maximum": 3 },
+        "weight-normal": { "type": "integer", "minimum": 100, "maximum": 900 },
+        "weight-bold": { "type": "integer", "minimum": 100, "maximum": 900 }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "content-width": { "$ref": "#/$defs/length" },
+        "sidebar-width": { "$ref": "#/$defs/length" },
+        "scroll-offset": { "$ref": "#/$defs/length" },
+        "article-padding-y": { "$ref": "#/$defs/length" },
+        "article-padding-x": { "$ref": "#/$defs/length" },
+        "article-padding-bottom": { "$ref": "#/$defs/length" },
+        "control-height": { "$ref": "#/$defs/length" },
+        "code-padding": { "$ref": "#/$defs/length" },
+        "table-cell-padding": { "$ref": "#/$defs/padding" }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shadow-panel": { "type": "string", "maxLength": 200 },
+        "overlay": { "$ref": "#/$defs/color" },
+        "blur": { "$ref": "#/$defs/length" },
+        "duration-fast": { "$ref": "#/$defs/duration" },
+        "duration-ui": { "$ref": "#/$defs/duration" },
+        "easing": { "type": "string", "minLength": 1 }
+      }
+    },
+    "shiki": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["light", "dark"],
+      "properties": {
+        "light": { "$ref": "#/$defs/shikiTheme" },
+        "dark": { "$ref": "#/$defs/shikiTheme" }
+      }
+    },
+    "mermaid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["theme", "overrides"],
+      "properties": {
+        "theme": {
+          "enum": ["default", "neutral", "dark", "forest", "base"]
+        },
+        "overrides": {
+          "type": "object",
+          "maxProperties": 512,
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "const": "auto" } },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["variants"],
+        "not": {
+          "anyOf": [
+            { "required": ["colors"] },
+            { "required": ["radii"] },
+            { "required": ["typography"] },
+            { "required": ["layout"] },
+            { "required": ["effects"] },
+            { "required": ["shiki"] },
+            { "required": ["mermaid"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "enum": ["light", "dark"] } },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["colors", "shiki", "mermaid"],
+        "not": { "required": ["variants"] }
+      }
+    }
+  ],
+  "$defs": {
+    "themeName": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "color": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(transparent|#[0-9a-fA-F]{3,8}|(rgba?|hsla?)\\([0-9.%\\s,/+-]+\\))$"
+    },
+    "radius": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9999
+    },
+    "radiusSmall": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 32
+    },
+    "stack": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "length": {
+      "type": "string",
+      "pattern": "^(0|\\d*\\.?\\d+)(px|rem|em|%|ch|vw|vh)$"
+    },
+    "padding": {
+      "type": "string",
+      "pattern": "^(0|\\d*\\.?\\d+)(px|rem|em|%|ch|vw|vh)(\\s+(0|\\d*\\.?\\d+)(px|rem|em|%|ch|vw|vh)){0,3}$"
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^\\d*\\.?\\d+(ms|s)$"
+    },
+    "shikiTheme": {
+      "enum": [
+        "github-light",
+        "github-dark",
+        "dracula",
+        "nord",
+        "solarized-dark",
+        "solarized-light",
+        "gruvbox-dark-medium",
+        "gruvbox-light-medium"
+      ]
+    }
+  }
+}

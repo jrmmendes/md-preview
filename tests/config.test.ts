@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import {
   DEFAULT_IDLE,
   DEFAULT_LOADER,
   DEFAULT_PORT,
+  DEFAULT_SEED_THEMES,
   DEFAULT_ZOOM_SENSITIVITY,
   LOADERS,
   configToEnv,
@@ -13,52 +15,79 @@ import {
   resolveStateFile,
   resolveZoomSensitivity,
 } from "../src/core/config";
+import { resolveConfigDir } from "../src/core/config-file";
+
+const CONFIG_DIR = join(tmpdir(), `mdprv-config-test-${process.pid}`);
+const OPTIONS = { configDir: CONFIG_DIR };
 
 describe("loadConfig", () => {
   it("uses defaults for an empty environment", () => {
-    const config = loadConfig({});
+    const config = loadConfig({}, OPTIONS);
     expect(config.port).toBe(DEFAULT_PORT);
     expect(config.idleMs).toBe(DEFAULT_IDLE * 60 * 1000);
     expect(config.theme).toBe("auto");
     expect(config.loader).toBe(DEFAULT_LOADER);
     expect(config.zoomSensitivity).toBe(DEFAULT_ZOOM_SENSITIVITY);
     expect(config.stateFile.endsWith("md-preview/daemon.json")).toBe(true);
+    expect(config.configDir).toBe(resolve(CONFIG_DIR));
+    expect(config.seedThemes).toBe(DEFAULT_SEED_THEMES);
   });
 
   it("reads every MDPRV_* variable", () => {
-    const config = loadConfig({
-      MDPRV_PORT: "9001",
-      MDPRV_IDLE: "3",
-      MDPRV_STATE: "/tmp/mdprv/daemon.json",
-      MDPRV_THEME: "nord",
-      MDPRV_LOADER: "braille",
-      MDPRV_ZOOM_SENSITIVITY: "1.5",
-    });
+    const config = loadConfig(
+      {
+        MDPRV_PORT: "9001",
+        MDPRV_IDLE: "3",
+        MDPRV_STATE: "/tmp/mdprv/daemon.json",
+        MDPRV_THEME: "nord",
+        MDPRV_LOADER: "braille",
+        MDPRV_ZOOM_SENSITIVITY: "1.5",
+        MDPRV_SEED_THEMES: "0",
+      },
+      OPTIONS
+    );
     expect(config.port).toBe(9001);
     expect(config.idleMs).toBe(3 * 60 * 1000);
     expect(config.stateFile).toBe("/tmp/mdprv/daemon.json");
     expect(config.theme).toBe("nord");
     expect(config.loader).toBe("braille");
     expect(config.zoomSensitivity).toBe(1.5);
+    expect(config.seedThemes).toBe(false);
   });
 
   it("accepts port 0 for an ephemeral port", () => {
-    expect(loadConfig({ MDPRV_PORT: "0" }).port).toBe(0);
+    expect(loadConfig({ MDPRV_PORT: "0" }, OPTIONS).port).toBe(0);
   });
 
   it("falls back on invalid loader, zoom and idle values", () => {
-    const config = loadConfig({
-      MDPRV_LOADER: "nope",
-      MDPRV_ZOOM_SENSITIVITY: "0.5",
-      MDPRV_IDLE: "-2",
-    });
+    const config = loadConfig(
+      {
+        MDPRV_LOADER: "nope",
+        MDPRV_ZOOM_SENSITIVITY: "0.5",
+        MDPRV_IDLE: "-2",
+      },
+      OPTIONS
+    );
     expect(config.loader).toBe(DEFAULT_LOADER);
     expect(config.zoomSensitivity).toBe(DEFAULT_ZOOM_SENSITIVITY);
     expect(config.idleMs).toBe(DEFAULT_IDLE * 60 * 1000);
   });
 
-  it("falls back to auto for an unknown theme", () => {
-    expect(loadConfig({ MDPRV_THEME: "does-not-exist" }).theme).toBe("auto");
+  it("falls back to auto for an invalid theme name", () => {
+    expect(loadConfig({ MDPRV_THEME: "Not A Theme" }, OPTIONS).theme).toBe("auto");
+    expect(loadConfig({ MDPRV_THEME: "does-not-exist" }, OPTIONS).theme).toBe("does-not-exist");
+  });
+});
+
+describe("resolveConfigDir", () => {
+  it("prefers MDPRV_CONFIG_DIR", () => {
+    expect(resolveConfigDir({ MDPRV_CONFIG_DIR: "/tmp/portable" })).toBe("/tmp/portable");
+  });
+
+  it("uses XDG_CONFIG_HOME when available", () => {
+    expect(resolveConfigDir({ XDG_CONFIG_HOME: "/tmp/xdg" })).toBe(
+      resolve("/tmp/xdg", "md-preview")
+    );
   });
 });
 
@@ -98,14 +127,17 @@ describe("resolvers", () => {
 
 describe("configToEnv", () => {
   it("preserves the base environment and overwrites MDPRV values", () => {
-    const config = loadConfig({
-      MDPRV_PORT: "9001",
-      MDPRV_IDLE: "3",
-      MDPRV_STATE: "/tmp/mdprv/daemon.json",
-      MDPRV_THEME: "nord",
-      MDPRV_LOADER: "ring",
-      MDPRV_ZOOM_SENSITIVITY: "1.4",
-    });
+    const config = loadConfig(
+      {
+        MDPRV_PORT: "9001",
+        MDPRV_IDLE: "3",
+        MDPRV_STATE: "/tmp/mdprv/daemon.json",
+        MDPRV_THEME: "nord",
+        MDPRV_LOADER: "ring",
+        MDPRV_ZOOM_SENSITIVITY: "1.4",
+      },
+      OPTIONS
+    );
     const env = configToEnv(config, { PATH: "/bin", MDPRV_THEME: "old", EMPTY: undefined });
     expect(env.PATH).toBe("/bin");
     expect(env.MDPRV_PORT).toBe("9001");
@@ -114,6 +146,8 @@ describe("configToEnv", () => {
     expect(env.MDPRV_THEME).toBe("nord");
     expect(env.MDPRV_LOADER).toBe("ring");
     expect(env.MDPRV_ZOOM_SENSITIVITY).toBe("1.4");
+    expect(env.MDPRV_CONFIG_DIR).toBe(config.configDir);
+    expect(env.MDPRV_SEED_THEMES).toBe("1");
     expect("EMPTY" in env).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 
-import { preview } from "./commands/preview";
+import { preview, previewPipe } from "./commands/preview";
 import { register } from "./commands/register";
 import { daemonStart, daemonStatus, daemonStop } from "./commands/daemon";
 import { serve } from "./commands/serve";
@@ -17,13 +17,40 @@ const program = new Command();
 
 program
   .name("md-preview")
-  .description("Preview Markdown files in the default browser")
+  .description("Register Markdown files in a local preview daemon")
   .version(VERSION)
-  .argument("<file>", "markdown file (.md or .markdown)")
+  .argument("[files...]", "Markdown files (.md, .markdown or .mdc)")
   .option("--theme <name>", "theme for this preview")
-  .action(async (file: string, options: { theme?: string }) => {
-    await preview(file, { theme: options.theme });
-  });
+  .option("--open-browser", "open the first file in the default browser after registering")
+  .option("--pipe", "read Markdown from stdin and register it as a temporary file")
+  .action(
+    async (
+      files: string[] = [],
+      options: { theme?: string; openBrowser?: boolean; pipe?: boolean } = {}
+    ) => {
+      const previewOptions = {
+        theme: options.theme,
+        openBrowser: options.openBrowser === true,
+      };
+
+      if (options.pipe) {
+        if (files.length > 0) {
+          fail("--pipe cannot be combined with file arguments");
+        }
+        if (process.stdin.isTTY) {
+          fail("--pipe requires piped stdin (received a TTY)");
+        }
+        const content = await Bun.stdin.text();
+        await previewPipe(content, previewOptions);
+        return;
+      }
+
+      if (files.length === 0) {
+        fail("missing file argument (or use --pipe)");
+      }
+      await preview(files, previewOptions);
+    }
+  );
 
 const daemon = program.command("daemon").description("Manage the preview daemon");
 daemon

@@ -367,12 +367,13 @@ Smoke com daemon (a fixture já cobre inline code, tabela, código e Mermaid):
 
 ```sh
 ./bin/md-preview daemon start
-./bin/md-preview docs/fixtures/reference.md --theme <name>
+./bin/md-preview docs/fixtures/reference.md --theme <name> --open-browser
 ./bin/md-preview daemon status
 ./bin/md-preview daemon stop
 ```
 
-O comando imprime a URL e ela já contém `?theme=<name>`. `?theme=` vence cookie e
+Sem `--open-browser` o comando apenas registra o arquivo e imprime a URL; com a
+flag, ele abre o navegador uma única vez. A URL impressa já contém `?theme=<name>`. `?theme=` vence cookie e
 configuração; use a mesma URL para reabrir sem reiniciar o daemon. Confirme:
 
 - `theme list` mostra o nome com `builtin` ou `user` e nenhum aviso para ele;
@@ -429,7 +430,7 @@ Derivação real (claro → escuro):
 - [ ] `bun test`
 - [ ] `bun run typecheck`
 - [ ] `bun run build` (builtin)
-- [ ] `./bin/md-preview docs/fixtures/reference.md --theme <name>` em claro e escuro
+- [ ] `./bin/md-preview docs/fixtures/reference.md --theme <name> --open-browser` em claro e escuro
 - [ ] Screenshots conferidos: inline code, bloco, tabela, citação, link, Mermaid
 - [ ] `theme list` sem avisos para o nome e com a origem esperada
 - [ ] Dark: mesma estrutura, cores re-medidas, sem cinza-azulado

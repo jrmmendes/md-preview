@@ -119,7 +119,7 @@ Registro de execução dos cenários de `docs/bdd-scenarios.md` contra o baselin
 - Adicionado `tests/shell.test.ts`, que lê `src/ui/index.html` e falha se houver qualquer `id` duplicado; também confirma que o style e o select têm ids distintos.
 - Verificação no navegador: trocar o select para `nord` gravou `mdprv_theme=nord`, recarregou com `?theme=nord` e aplicou `data-theme="nord"`; `getElementById("mdprv-theme")` resolve para o `<select>`.
 - **Desvio do ADR:** o ADR sugeria `<style id="mdprv-theme">`, que colidia com o select; adotado `id="mdprv-theme-css"` para o style.
-- O comando de reinício usou `docs/fixtures/reference.md` (com extensão), pois a CLI rejeita arquivos sem `.md`/`.markdown`.
+- O comando de reinício usou `docs/fixtures/reference.md` (com extensão), pois naquela versão a CLI rejeitava arquivos sem `.md`/`.markdown`. Hoje `.mdc` também é aceito.
 - Daemon de validação reiniciado: porta `8780`, PID `222412`, state `/tmp/mdprv-bdd/daemon.json`.
 
 ## Fase 8 — paridade validada

@@ -1,7 +1,17 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { readDaemonState } from "../src/core/state";
 
 const ROOT = join(import.meta.dir, "..");
 const ENTRY = join(ROOT, "src/application/cli/index.ts");
@@ -25,6 +35,61 @@ function run(dir: string, args: string[]) {
 
 function output(result: ReturnType<typeof run>): string {
   return `${result.stdout.toString()}${result.stderr.toString()}`;
+}
+
+function runPreview(dir: string, args: string[], pathPrefix?: string) {
+  return Bun.spawnSync({
+    cmd: [process.execPath, ENTRY, ...args],
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      MDPRV_CONFIG_DIR: dir,
+      MDPRV_PORT: "0",
+      MDPRV_STATE: join(dir, "state", "daemon.json"),
+      MDPRV_IDLE: "1",
+      ...(pathPrefix ? { PATH: `${pathPrefix}:${process.env.PATH ?? ""}` } : {}),
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+}
+
+async function waitUntil(check: () => boolean, timeoutMs = 4000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) {
+      return true;
+    }
+    await Bun.sleep(25);
+  }
+  return check();
+}
+
+async function shutdown(stateFile: string): Promise<void> {
+  const state = readDaemonState(stateFile);
+  if (!state) {
+    return;
+  }
+  try {
+    await fetch(`http://127.0.0.1:${state.port}/__shutdown`, {
+      method: "POST",
+      headers: { "x-mdprv-token": state.token },
+    });
+  } catch {
+    /* already gone */
+  }
+  await waitUntil(() => readDaemonState(stateFile) === null);
+}
+
+function fakeBrowser(dir: string): { bin: string; marker: string } {
+  const bin = join(dir, "bin");
+  mkdirSync(bin, { recursive: true });
+  const marker = join(dir, "browser.log");
+  const script = `#!/bin/sh\necho "$1" >> "${marker}"\n`;
+  for (const name of ["xdg-open", "open", "explorer.exe"]) {
+    writeFileSync(join(bin, name), script, { mode: 0o755 });
+  }
+  return { bin, marker };
 }
 
 afterEach(() => {
@@ -101,4 +166,87 @@ describe("theme and config commands", () => {
     expect(second.exitCode).toBe(0);
     expect(readFileSync(configPath, "utf8")).toBe('{"theme":"nord"}\n');
   });
+});
+
+describe("preview command line", () => {
+  it("documents .mdc, multiple files, --open-browser and --pipe", () => {
+    const result = run(tempDir(), ["--help"]);
+    expect(result.exitCode).toBe(0);
+    const help = result.stdout.toString();
+    expect(help).toContain("[files...]");
+    expect(help).toContain(".mdc");
+    expect(help).toContain("--open-browser");
+    expect(help).toContain("--pipe");
+  });
+
+  it("rejects unsupported extensions with the accepted list", () => {
+    const dir = tempDir();
+    const file = join(dir, "notes.txt");
+    writeFileSync(file, "not markdown\n");
+    const result = run(dir, [file]);
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain(".mdc");
+    expect(output(result)).toContain(".markdown");
+  });
+
+  it("registers several files without opening a browser", async () => {
+    const dir = tempDir();
+    const { bin, marker } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+    const first = join(dir, "first.md");
+    const second = join(dir, "second.mdc");
+    writeFileSync(first, "# First\n");
+    writeFileSync(second, "---\ntitle: Second\n---\n# Second\n");
+
+    try {
+      const result = runPreview(dir, [first, second], bin);
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr.toString()).not.toContain("could not open a browser");
+      const urls = result.stdout
+        .toString()
+        .trim()
+        .split("\n")
+        .filter((line) => line !== "");
+      expect(urls).toHaveLength(2);
+      expect(urls[0]).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//);
+      expect(urls[1]).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//);
+      expect(urls[0]).not.toContain(".mdc");
+      expect(existsSync(marker)).toBe(false);
+
+      const state = readDaemonState(stateFile);
+      expect(state).not.toBeNull();
+      for (const url of urls) {
+        const page = await fetch(url);
+        expect(page.status).toBe(200);
+      }
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("opens the browser once with --open-browser after registering every file", async () => {
+    const dir = tempDir();
+    const { bin, marker } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+    const first = join(dir, "first.md");
+    const second = join(dir, "second.mdc");
+    writeFileSync(first, "# First\n");
+    writeFileSync(second, "# Second\n");
+
+    try {
+      const result = runPreview(dir, [first, second, "--open-browser"], bin);
+      expect(result.exitCode).toBe(0);
+      const urls = result.stdout
+        .toString()
+        .trim()
+        .split("\n")
+        .filter((line) => line !== "");
+      expect(urls).toHaveLength(2);
+      expect(await waitUntil(() => existsSync(marker))).toBe(true);
+      const opened = readFileSync(marker, "utf8").trim().split("\n").filter(Boolean);
+      expect(opened).toEqual([urls[0]]);
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
 });

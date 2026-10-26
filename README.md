@@ -6,7 +6,7 @@
 <img width="1804" height="1116" alt="image" src="https://github.com/user-attachments/assets/46cf31a6-d856-4592-b308-672c289a4966" />
 
 
-A Bun + TypeScript CLI that renders Markdown files in the default browser with live reload.
+A Bun + TypeScript CLI that renders Markdown files in a local preview with live reload. The browser opens only when `--open-browser` is passed.
 
 </div>
 
@@ -15,7 +15,7 @@ A Bun + TypeScript CLI that renders Markdown files in the default browser with l
 ## Requirements
 
 - Bun 1.x (this repo uses `bun@1.4.3`)
-- Linux, macOS, or Windows (browser opening uses `xdg-open`, `open`, or `explorer.exe`)
+- Linux, macOS, or Windows (browser opening, opt-in with `--open-browser`, uses `xdg-open`, `open`, or `explorer.exe`)
 
 ## Setup
 
@@ -31,7 +31,11 @@ The compiled binary is written to `bin/md-preview`. `bun run build` builds the b
 ## Usage
 
 ```sh
-md-preview <file>          # start the daemon if needed, register the file, open it, print the URL
+md-preview <files...>                  # start the daemon if needed, register, print one URL per file
+md-preview <files...> --open-browser   # also open the first file in the default browser
+md-preview a.md b.mdc c.markdown       # multiple files in one invocation
+echo '# test' | md-preview --pipe      # register Markdown from stdin
+echo '# test' | md-preview --pipe --open-browser
 cat doc.md | md-preview register --stdin --slug docs/doc --path /abs/doc.md
 md-preview daemon start
 md-preview daemon stop
@@ -39,7 +43,11 @@ md-preview daemon status   # exit 0 when running, 1 when stopped
 md-preview --version
 ```
 
-Only `.md` and `.markdown` files are accepted by the root command. `register` reads Markdown from stdin (piped, not a TTY), never opens a browser, and prints only the final slug on stdout. `--path` is optional: when present it enables file watching and relative images; when absent the content from stdin is authoritative. Failures go to stderr with exit code 1.
+The root command accepts `.md`, `.markdown` and `.mdc` (Cursor rules format). `.mdc` is rendered exactly like Markdown, including normal YAML frontmatter. Without `--open-browser` the command only registers the files — starting the daemon in the background when needed — and prints one URL per line; no browser is launched. With `--open-browser`, the browser is opened once after every file is registered, with the first file active. Files already registered are reused by absolute/real path, so re-running the command does not create duplicate history entries and live reload keeps working.
+
+`--pipe` reads all of stdin and registers it as a project-managed temporary file named `temp-<uuid>.md` (UUID v4), under `${XDG_CACHE_HOME:-~/.cache}/md-preview/tmp` (override with `MDPRV_TMP_DIR`). The same `temp-<uuid>.md` value is used as the slug, so the printed URL ends with it. Registering the path makes watching and live reload work normally; each pipe creates a new document. `--pipe` cannot be combined with positional files, and a TTY or empty stdin fails with a clear error. Browser rules are the same: no `--open-browser`, no browser.
+
+`register` reads Markdown from stdin (piped, not a TTY), never opens a browser, and prints only the final slug on stdout. `--path` is optional: when present it enables file watching and relative images; when absent the content from stdin is authoritative. Failures go to stderr with exit code 1.
 
 ## Tree fences
 
@@ -131,6 +139,7 @@ Precedence for every option is `defaults < config.json < MDPRV_*`. Invalid JSON 
 | `MDPRV_ZOOM_SENSITIVITY` | `1.1`                                                      | Zoom step multiplier                               |
 | `MDPRV_SEED_THEMES`      | `1`                                                        | Seed missing builtin themes at daemon startup      |
 | `MDPRV_STATE`            | `${XDG_STATE_HOME:-~/.local/state}/md-preview/daemon.json` | Daemon state file                                  |
+| `MDPRV_TMP_DIR`          | `${XDG_CACHE_HOME:-~/.cache}/md-preview/tmp`               | Directory for documents registered with `--pipe`   |
 
 ## Themes
 
@@ -177,7 +186,7 @@ Builtin themes are packaged in `themes/` at the repository root and embedded in 
 Commands:
 
 ```sh
-md-preview doc.md --theme nord    # validate the theme and open with ?theme=nord
+md-preview doc.md --theme nord --open-browser    # validate the theme and open with ?theme=nord
 md-preview theme list [--json]    # builtin and user themes with their source
 md-preview theme validate FILE    # validate one theme.json file
 md-preview theme path             # print the config and themes directories

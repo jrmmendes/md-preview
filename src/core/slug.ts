@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 
+import { stripMarkdownExtension } from "./extensions";
+
 function gitRoot(dir: string): string | null {
   try {
     const result = Bun.spawnSync(["git", "-C", dir, "rev-parse", "--show-toplevel"], {
@@ -38,9 +40,7 @@ export function slugFor(path: string): string {
   }
 
   const root = baseRoot(abs);
-  const rel = abs
-    .slice(root.length)
-    .replace(/\.(md|markdown)$/i, "")
+  const rel = stripMarkdownExtension(abs.slice(root.length))
     .replace(/\s+/g, "-")
     .replace(/[^A-Za-z0-9/._-]/g, "-")
     .replace(/\/+/g, "/")

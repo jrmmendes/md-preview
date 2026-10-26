@@ -1,6 +1,16 @@
+
+<div align=center>
+
 # md-preview
 
+<img width="1804" height="1116" alt="image" src="https://github.com/user-attachments/assets/46cf31a6-d856-4592-b308-672c289a4966" />
+
+
 A Bun + TypeScript CLI that renders Markdown files in the default browser with live reload.
+
+</div>
+
+
 
 ## Requirements
 

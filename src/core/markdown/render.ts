@@ -4,6 +4,7 @@ import footnote from "markdown-it-footnote";
 import taskLists from "markdown-it-task-lists";
 
 import { codeToHtml, warmup } from "./highlight";
+import { renderTree } from "./tree";
 
 export { warmup };
 
@@ -25,9 +26,17 @@ function createRenderer(themeName: string): MarkdownIt {
 
   const defaultFence = md.renderer.rules.fence!;
   md.renderer.rules.fence = (tokens, idx, options, env, self) => {
-    const info = tokens[idx].info.trim().split(/\s+/)[0] || "";
+    const parts = tokens[idx].info.trim().split(/\s+/);
+    const info = parts[0] || "";
     if (info === "mermaid") {
       return '<pre class="mermaid">' + Bun.escapeHTML(tokens[idx].content) + "</pre>\n";
+    }
+    if (info === "tree") {
+      const dirsOnly = parts.slice(1).some((part) => part === "-d" || part === "--dirs-only");
+      const tree = renderTree(tokens[idx].content, { dirsOnly });
+      if (tree !== null) {
+        return tree + "\n";
+      }
     }
     return defaultFence(tokens, idx, options, env, self);
   };

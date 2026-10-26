@@ -63,6 +63,48 @@ describe("renderMarkdown", () => {
     expect(html).toContain("--shiki-dark");
   }, 30000);
 
+  it("renders tree fences as an interactive tree", async () => {
+    const html = await renderMarkdown(
+      "```tree\nprojeto\n├── src\n│   └── index.ts\n└── README.md\n\n1 directory, 2 files\n```\n",
+      "auto",
+      "doc"
+    );
+    expect(html).toContain('class="mdprv-tree"');
+    expect(html).toContain("data-mdprv-tree");
+    expect(html).toContain("index.ts");
+    expect(html).not.toContain("language-tree");
+  }, 30000);
+
+  it("renders a tree fence without a report footer", async () => {
+    const html = await renderMarkdown(
+      "```tree\nprojeto\n├── src\n│\u00a0\u00a0 └── index.ts\n└── README.md\n```\n",
+      "auto",
+      "doc"
+    );
+    expect(html).toContain('class="mdprv-tree"');
+    expect(html).toContain("data-mdprv-tree");
+    expect(html).toContain("index.ts");
+    expect(html).not.toContain("language-tree");
+  }, 30000);
+
+  it("falls back to a plain code block for invalid tree fences", async () => {
+    const html = await renderMarkdown("```tree\nnot a tree\njust text\n```\n", "auto", "doc");
+    expect(html).toContain('<pre><code class="language-tree">');
+    expect(html).not.toContain("mdprv-tree");
+  }, 30000);
+
+  it("accepts a -d hint in the tree fence info", async () => {
+    const html = await renderMarkdown("```tree -d\n.\n├── src\n└── tests\n```\n", "auto", "doc");
+    expect(html).toContain("mdprv-tree-icon--dir");
+    expect(html).not.toContain("mdprv-tree-icon--file");
+  }, 30000);
+
+  it("leaves other fences untouched", async () => {
+    const html = await renderMarkdown("```text\nhello\n```\n", "auto", "doc");
+    expect(html).toContain('<pre><code class="language-text">');
+    expect(html).not.toContain("mdprv-tree");
+  }, 30000);
+
   it("warmup is idempotent", async () => {
     await warmup();
     await warmup();

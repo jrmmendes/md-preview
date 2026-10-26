@@ -41,6 +41,43 @@ md-preview --version
 
 Only `.md` and `.markdown` files are accepted by the root command. `register` reads Markdown from stdin (piped, not a TTY), never opens a browser, and prints only the final slug on stdout. `--path` is optional: when present it enables file watching and relative images; when absent the content from stdin is authoritative. Failures go to stderr with exit code 1.
 
+## Tree fences
+
+Fences tagged `tree` are rendered as an interactive directory tree instead of a
+plain code block. Paste the output of `tree` (the optional `N directories, M
+files` footer is understood and removed):
+
+````markdown
+```tree
+meu-projeto
+├── src
+│   ├── index.ts
+│   └── lib
+│       └── util.ts
+├── docs
+│   └── README.md
+└── package.json
+
+3 directories, 4 files
+```
+````
+
+- The root and the first level start expanded; deeper directories start collapsed,
+  so there is no flash of a fully open tree.
+- Click a directory (or press Enter/Space) to toggle it. Arrow keys move between
+  visible rows and Left/Right collapse or expand. The toolbar offers
+  **Expandir tudo** and **Recolher tudo**.
+- Every directory shows the total number of descendants (`3 itens`, `1 item`).
+- `tree -a` (hidden files) and `tree -d` (directories only) output is supported.
+  `tree -d` is detected from the `0 files` footer, or from a `tree -d` fence info
+  string when the report footer is disabled.
+- If the body is not recognizable as `tree` output, the fence falls back to a
+  normal code block. Names are rendered as text, never as HTML.
+- The component uses only the active theme's CSS variables and has no runtime
+  dependency. It works with `auto`, fixed light/dark themes and static HTML
+  exports; the client script is only needed for the global buttons and keyboard
+  navigation.
+
 ## Security model
 
 The daemon is a local service, so it is hardened against other browser tabs and local web pages:
@@ -217,15 +254,15 @@ src/
     frontmatter.ts
     slug.ts
     state.ts
-    markdown/     # markdown-it + Shiki
+    markdown/     # markdown-it, Shiki and the tree fence
     themes/       # theme contract, store, CSS and Mermaid payload (builtins live in ../themes)
   ui/
     index.html    # shell with {{mdprv-*}} tokens
     main.ts       # islands bootstrap
     prefs.ts      # the only browser storage access
     services/     # loader, navigation, font catalog/search, SSE events
-    islands/      # layout, TOC, history, settings, font picker, Mermaid, copy, live reload
-    styles/       # base, meta, sidebar, fonts, mermaid, loader
+    islands/      # layout, TOC, history, settings, font picker, Mermaid, tree, copy, live reload
+    styles/       # base, meta, sidebar, fonts, mermaid, tree, loader
   types.d.ts
 tests/
 build.ts

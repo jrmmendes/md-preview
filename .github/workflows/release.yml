@@ -30,6 +30,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Build client
+        run: bun run build:client
+
       - name: Test
         run: bun test
 

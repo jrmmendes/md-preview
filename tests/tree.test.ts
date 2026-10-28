@@ -33,6 +33,21 @@ const DIRS_ONLY = `.
 4 directories, 0 files
 `;
 
+/**
+ * Regression fixture: a tree copied from a rendered page. The indentation
+ * gutter is `│` followed by two no-break spaces and one regular space, and the
+ * block has no `N directories, M files` footer.
+ */
+const NBSP = "\u00a0\u00a0";
+const NBSP_TREE = `md-preview
+├── docs
+│${NBSP} └── fixtures
+│${NBSP}     ├── img
+│${NBSP}     │${NBSP} └── foto.png
+│${NBSP}     └── reference.md
+└── package.json
+`;
+
 describe("parseTree", () => {
   it("parses a simple tree and computes descendant totals", () => {
     const parsed = parseTree(SIMPLE);
@@ -91,27 +106,20 @@ describe("parseTree", () => {
     expect(parsed!.root.children[0]!.directory).toBe(false);
   });
 
-  it("parses the test.md tree without a footer and with no-break indentation", async () => {
-    const markdown = await Bun.file(new URL("../test.md", import.meta.url)).text();
-    const fence = /^```tree\r?\n([\s\S]*?)\r?\n```/m.exec(markdown);
-    expect(fence).not.toBeNull();
-    const body = fence![1]!;
-    expect(body).not.toMatch(/directories?,?\s+\d+\s+files?/i);
-
-    const parsed = parseTree(body);
+  it("parses a tree with no-break indentation and no report footer", () => {
+    const parsed = parseTree(NBSP_TREE);
     expect(parsed).not.toBeNull();
     expect(parsed!.root.name).toBe("md-preview");
     expect(parsed!.footer).toBeNull();
     expect(parsed!.root.children.map((child) => child.name)).toContain("docs");
 
-    // Indentation in test.md uses `│` followed by two NBSPs and one space.
     const docs = parsed!.root.children.find((child) => child.name === "docs")!;
     const fixtures = docs.children.find((child) => child.name === "fixtures")!;
     expect(fixtures.children.map((child) => child.name)).toEqual(["img", "reference.md"]);
     expect(fixtures.children[0]!.children[0]!.name).toBe("foto.png");
     expect(fixtures.children[1]!.directory).toBe(false);
 
-    const html = renderTree(body);
+    const html = renderTree(NBSP_TREE);
     expect(html).not.toBeNull();
     expect(html!).toContain("data-mdprv-tree");
     expect(html!).toContain("mdprv-tree-dir");

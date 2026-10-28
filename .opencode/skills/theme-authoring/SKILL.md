@@ -14,7 +14,7 @@ description: >
 # theme-authoring — autoria de temas
 
 Referência longa (fases, tabelas de medição, derivação real e erros):
-[`docs/theme-authoring-method.md`](../../../docs/theme-authoring-method.md).
+[`docs/theme-authoring-method.md`](https://github.com/jrmmendes/md-preview/blob/main/docs/theme-authoring-method.md).
 Esta skill é o roteiro de execução; o doc é a fonte da verdade.
 
 Princípio único: **medir antes de escrever**. Nenhuma cor entra no JSON por

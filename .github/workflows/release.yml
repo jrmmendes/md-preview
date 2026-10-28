@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+# One run per tag: a re-pushed tag waits instead of racing the previous run.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: bun-linux-x64
+            asset: md-preview-linux-x64
+          - target: bun-linux-arm64
+            asset: md-preview-linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check tag matches package.json version
+        run: |
+          set -euo pipefail
+          version="$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("package.json", "utf8")).version)')"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version v${version}"
+            exit 1
+          fi
+
+      - name: Build ${{ matrix.asset }}
+        run: bun run build.ts --target=${{ matrix.target }} --outfile=bin/${{ matrix.asset }}
+
+      - name: Checksum
+        working-directory: bin
+        run: sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          asset="bin/${{ matrix.asset }}"
+
+          # Both matrix legs may start at the same time; tolerate losing the race
+          # and fall back to uploading into the release created by the other leg.
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --generate-notes --verify-tag || true
+          fi
+          gh release view "$tag" >/dev/null
+
+          gh release upload "$tag" "$asset" "$asset.sha256" --clobber
+
+          echo "### Released \`${{ matrix.asset }}\`" >> "$GITHUB_STEP_SUMMARY"
+          cat "$asset.sha256" >> "$GITHUB_STEP_SUMMARY"

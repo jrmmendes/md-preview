@@ -7,6 +7,26 @@ const args = process.argv.slice(2);
 const clientOnly = args.includes("--client-only");
 const dev = args.includes("--dev");
 
+function readOption(name: string): string | undefined {
+  const prefix = `--${name}=`;
+  const inline = args.find((arg) => arg.startsWith(prefix));
+  if (inline !== undefined) {
+    return inline.slice(prefix.length);
+  }
+  const index = args.indexOf(`--${name}`);
+  if (index === -1) {
+    return undefined;
+  }
+  return args[index + 1];
+}
+
+// Defaults keep the local build bit-for-bit identical to the previous behavior.
+// The release workflow overrides these to cross-compile (see .github/workflows/release.yml).
+const buildTarget = (readOption("target") ?? process.env.MD_PREVIEW_BUILD_TARGET ?? "bun") as
+  | "bun"
+  | Bun.Build.CompileTarget;
+const outfile = readOption("outfile") ?? process.env.MD_PREVIEW_BUILD_OUTFILE ?? "bin/md-preview";
+
 const entrypoints = ["src/ui/index.html"];
 const external = ["*/mermaid.min.js"];
 
@@ -44,7 +64,10 @@ const result = await Bun.build({
   entrypoints: ["src/application/cli/index.ts"],
   target: "bun",
   minify: true,
-  compile: { outfile: "bin/md-preview" },
+  compile: {
+    outfile,
+    ...(buildTarget === "bun" ? {} : { target: buildTarget }),
+  },
 });
 
 if (!result.success) {
@@ -54,4 +77,4 @@ if (!result.success) {
   process.exit(1);
 }
 
-console.log("built bin/md-preview");
+console.log(`built ${outfile}`);

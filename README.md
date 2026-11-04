@@ -99,19 +99,39 @@ block. Paste unified diff output (`git diff`), including the `@@` hunk headers:
 ```
 ````
 
+Shorter snippets work too — just prefix the lines and skip the headers:
+
+````markdown
+```diff
+ const total = 41;
+-const next = total + 1;
++const next = total + 2;
+```
+````
+
 - Each block has a toolbar to switch between **Inline** (unified) and **Lado a
   lado** (side by side). The last choice is stored in `localStorage` under
   `mdprv_diff_view` (`inline` or `split`, default `inline`) and applied to every
   diff block while the page is open.
+- Header-less pastes also work: a body that only mixes `+`, `-` and context
+  lines (with at least one `+` or `-`, and no `@@` or file headers) is treated
+  as a simple diff. Context lines may keep the classic single leading space or
+  omit it entirely; a leading space is removed when present, so normal code
+  indentation survives either way. In that case the line-number columns are
+  omitted, since there are no trustworthy numbers to show.
 - Add a language after `diff` to highlight each line with Shiki, using the
   active theme: ```` ```diff tsx ````. Unknown or unavailable languages fall
-  back silently to plain text.
-- File headers (`diff --git`, `index`, `---`, `+++`), hunk headers and the
-  `\ No newline at end of file` marker become metadata rows. In split view the
-  i-th deletion is paired with the i-th addition of each change run; leftovers
-  keep one side empty.
-- A fence without any recognizable diff line (or an empty fence) falls back to a
-  normal code block. All content is escaped and rendered as text, never as HTML.
+  back silently to plain text. This works for unified and simple diffs.
+- In unified output, file headers (`diff --git`, `index`, and the adjacent
+  `---`/`+++` pair), hunk headers and the `\ No newline at end of file` marker
+  become metadata rows. A `---`/`+++` line on its own is ordinary diff content (for example a
+  removed SQL comment starting with `-- `), never a file header. In split view
+  the i-th deletion is paired with the i-th addition of each change run;
+  leftovers keep one side empty.
+- A fence without any `+`/`-` line (or an empty fence) falls back to a normal
+  code block. All content is escaped and rendered as text, never as HTML.
+- `diff` is the only diff fence: there is no separate `gitdiff` alias. Plain
+  `diff -u` output, `git diff` output and header-less snippets all use `diff`.
 - Both views are pre-rendered on the server, so the block stays readable without
   JavaScript; the client only toggles the panes and remembers the preference.
 

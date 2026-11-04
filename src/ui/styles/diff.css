@@ -137,6 +137,12 @@
   width: 50%;
 }
 
+/* Header-less diffs have no number columns; keep both sides at 50% of the
+   table after subtracting the two mark columns. */
+.mdprv-diff--no-numbers .mdprv-diff-table--split .mdprv-diff-col-code {
+  width: calc(50% - 1.4rem);
+}
+
 .mdprv-diff td.mdprv-diff-num,
 .mdprv-diff th.mdprv-diff-num {
   padding: 0 .55em;

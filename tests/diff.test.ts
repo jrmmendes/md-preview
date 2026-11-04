@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   pairDiffRows,
+  parseDiff,
   parseUnifiedDiff,
   renderDiff,
 } from "../src/core/markdown/diff";
@@ -65,21 +66,152 @@ describe("parseUnifiedDiff", () => {
     expect(lines.map((line) => line.kind)).toEqual(["hunk", "del", "meta", "add"]);
   });
 
-  it("accepts fences with only +/- lines", () => {
-    const lines = parseUnifiedDiff("-old\n+new\n");
-    expect(lines).not.toBeNull();
-    if (!lines) {
+  it("accepts a header-less body as a simple diff without numbers", () => {
+    const diff = parseDiff("-old\n+new\n");
+    expect(diff).not.toBeNull();
+    if (!diff) {
       return;
     }
-    expect(lines.map((line) => line.kind)).toEqual(["del", "add"]);
-    expect(lines[0].oldNumber).toBe(1);
-    expect(lines[1].newNumber).toBe(1);
+    expect(diff.numbered).toBe(false);
+    expect(diff.lines.map((line) => line.kind)).toEqual(["del", "add"]);
+    expect(diff.lines[0].oldNumber).toBeNull();
+    expect(diff.lines[0].newNumber).toBeNull();
+    expect(diff.lines[1].oldNumber).toBeNull();
+    expect(diff.lines[1].newNumber).toBeNull();
+  });
+
+  it("keeps unified diffs numbered", () => {
+    const diff = parseDiff(SAMPLE);
+    expect(diff).not.toBeNull();
+    if (!diff) {
+      return;
+    }
+    expect(diff.numbered).toBe(true);
+    expect(diff.lines[5].oldNumber).toBe(1);
+    expect(diff.lines[5].newNumber).toBe(1);
+  });
+
+  it("does not treat a context-only body as a diff", () => {
+    expect(parseDiff(" just context\n another line\n")).toBeNull();
   });
 
   it("returns null for empty or unrecognizable fences", () => {
     expect(parseUnifiedDiff("")).toBeNull();
     expect(parseUnifiedDiff("   \n")).toBeNull();
     expect(parseUnifiedDiff("not a diff\njust text\n")).toBeNull();
+  });
+
+  it("treats unprefixed code lines as context in a header-less diff", () => {
+    const diff = parseDiff(
+      "export async function main(argv: string[]) {\n" +
+        "   const args = parse(argv);\n" +
+        "   if (args.help) {\n" +
+        "     printHelp();\n" +
+        "-    return 0;\n" +
+        "+    return args.code ?? 0;\n" +
+        "   }\n" +
+        "+  await warmup();\n" +
+        "   return run(args);\n" +
+        " }\n"
+    );
+    expect(diff).not.toBeNull();
+    if (!diff) {
+      return;
+    }
+
+    expect(diff.numbered).toBe(false);
+    expect(diff.lines.map((line) => line.kind)).toEqual([
+      "context",
+      "context",
+      "context",
+      "context",
+      "del",
+      "add",
+      "context",
+      "add",
+      "context",
+      "context",
+    ]);
+    expect(diff.lines.map((line) => line.text)).toEqual([
+      "export async function main(argv: string[]) {",
+      "  const args = parse(argv);",
+      "  if (args.help) {",
+      "    printHelp();",
+      "    return 0;",
+      "    return args.code ?? 0;",
+      "  }",
+      "  await warmup();",
+      "  return run(args);",
+      "}",
+    ]);
+    expect(diff.lines.every((line) => line.kind !== "meta")).toBe(true);
+  });
+
+  it("keeps removals whose code starts with -- as deletions", () => {
+    const diff = parseDiff(
+      "--- primeira linha removida\n--- segunda linha removida\n--- terceira linha removida\n--- quarta linha removida\n+SELECT 1;\n"
+    );
+    expect(diff).not.toBeNull();
+    if (!diff) {
+      return;
+    }
+    expect(diff.numbered).toBe(false);
+    expect(diff.lines.map((line) => line.kind)).toEqual([
+      "del",
+      "del",
+      "del",
+      "del",
+      "add",
+    ]);
+    expect(diff.lines[0].text).toBe("-- primeira linha removida");
+    expect(diff.lines[3].text).toBe("-- quarta linha removida");
+  });
+
+  it("keeps additions whose code starts with ++ as additions", () => {
+    const diff = parseDiff("++ a\n++ b\n-- c\n");
+    expect(diff).not.toBeNull();
+    if (!diff) {
+      return;
+    }
+    expect(diff.numbered).toBe(false);
+    expect(diff.lines.map((line) => line.kind)).toEqual(["add", "add", "del"]);
+    expect(diff.lines[0].text).toBe("+ a");
+    expect(diff.lines[2].text).toBe("- c");
+  });
+
+  it("does not treat markdown frontmatter delimiters as file headers", () => {
+    const diff = parseDiff(" ---\n-title: antigo\n+title: novo\n ---\n");
+    expect(diff).not.toBeNull();
+    if (!diff) {
+      return;
+    }
+    expect(diff.numbered).toBe(false);
+    expect(diff.lines.map((line) => line.kind)).toEqual([
+      "context",
+      "del",
+      "add",
+      "context",
+    ]);
+    expect(diff.lines[0].text).toBe("---");
+    expect(diff.lines[3].text).toBe("---");
+  });
+
+  it("still treats an adjacent ---/+++ pair as a file header", () => {
+    const diff = parseDiff(
+      "--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n"
+    );
+    expect(diff).not.toBeNull();
+    if (!diff) {
+      return;
+    }
+    expect(diff.numbered).toBe(true);
+    expect(diff.lines.slice(0, 3).map((line) => line.kind)).toEqual([
+      "meta",
+      "meta",
+      "hunk",
+    ]);
+    expect(diff.lines[0].text).toBe("--- a/src/app.ts");
+    expect(diff.lines[1].text).toBe("+++ b/src/app.ts");
   });
 });
 
@@ -189,6 +321,130 @@ describe("renderDiff", () => {
     expect(html).not.toContain("<b>ok</b>");
   });
 
+  it("renders a header-less diff without number columns", () => {
+    const html = renderDiff(
+      " const head = 1;\n-const answer = 41;\n+const answer = 42;\n const tail = 2;\n",
+      "",
+      { themeName: "auto" }
+    );
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+
+    expect(html).toContain('data-diff-numbers="false"');
+    expect(html).toContain("mdprv-diff--no-numbers");
+    expect(html).not.toContain("mdprv-diff-num");
+    expect(html).not.toContain("mdprv-diff-col-num");
+    expect(html).toContain('class="mdprv-diff-mark is-del">-</td>');
+    expect(html).toContain('class="mdprv-diff-mark is-add">+</td>');
+    expect(html).toContain(
+      '<colgroup><col class="mdprv-diff-col-mark"><col class="mdprv-diff-col-code"><col class="mdprv-diff-col-mark"><col class="mdprv-diff-col-code"></colgroup>'
+    );
+    expect(html).not.toContain("<pre");
+  });
+
+  it("renders unprefixed context lines without meta rows", () => {
+    const html = renderDiff(
+      "export async function main(argv: string[]) {\n" +
+        "   const args = parse(argv);\n" +
+        "   if (args.help) {\n" +
+        "     printHelp();\n" +
+        "-    return 0;\n" +
+        "+    return args.code ?? 0;\n" +
+        "   }\n" +
+        "+  await warmup();\n" +
+        "   return run(args);\n" +
+        " }\n",
+      "",
+      { themeName: "auto" }
+    );
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+
+    expect(html).toContain('data-diff-numbers="false"');
+    expect(html).toContain("mdprv-diff--no-numbers");
+    expect(html).not.toContain('data-diff-kind="meta"');
+    expect(html).not.toContain("mdprv-diff-num");
+    expect(html).toContain('class="mdprv-diff-code">export async function main(argv: string[]) {</td>');
+    expect(html).toContain('class="mdprv-diff-code">  const args = parse(argv);</td>');
+    expect(html).toContain('class="mdprv-diff-code is-del">    return 0;</td>');
+    expect(html).toContain('class="mdprv-diff-code is-add">    return args.code ?? 0;</td>');
+    expect(html).toContain('class="mdprv-diff-code">}</td>');
+    expect(html).toContain('class="mdprv-diff-row is-del is-add"');
+  });
+
+  it("pairs simple diff rows side by side", () => {
+    const html = renderDiff("-old\n+new\n", "", { themeName: "auto" });
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+
+    expect(html).toContain('class="mdprv-diff-row is-del is-add"');
+    expect(html).toContain('class="mdprv-diff-mark is-del">-</td>');
+    expect(html).toContain('class="mdprv-diff-mark is-add">+</td>');
+    expect(html).toContain('class="mdprv-diff-code is-del">old</td>');
+    expect(html).toContain('class="mdprv-diff-code is-add">new</td>');
+  });
+
+  it("renders simple diffs that only remove lines", () => {
+    const html = renderDiff("-a\n-b\n", "", { themeName: "auto" });
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+
+    expect(html).toContain('class="mdprv-diff-mark is-empty"></td>');
+    expect(html).toContain('class="mdprv-diff-code is-empty"></td>');
+    expect(html).not.toContain("mdprv-diff-num");
+  });
+
+  it("escapes user content in header-less diffs", () => {
+    const html = renderDiff(
+      '-<script>alert("x") & y</script>\n+<b>ok</b> & done\n',
+      "",
+      { themeName: "auto" }
+    );
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("&amp;");
+    expect(html).toContain("&lt;b&gt;ok&lt;/b&gt;");
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain("<b>ok</b>");
+  });
+
+  it("returns null for a context-only body", () => {
+    expect(renderDiff(" just context\n", "", { themeName: "auto" })).toBeNull();
+  });
+
+  it("does not render ordinary -- deletions as metadata rows", () => {
+    const html = renderDiff(
+      "--- a\n--- b\n--- c\n--- d\n+e\n",
+      "",
+      { themeName: "auto" }
+    );
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+
+    const inline = html.slice(
+      html.indexOf('data-diff-pane="inline"'),
+      html.indexOf('data-diff-pane="split"')
+    );
+    expect(html).toContain('data-diff-numbers="false"');
+    expect(html).not.toContain('data-diff-kind="meta"');
+    expect(inline.match(/data-diff-kind="del"/g)).toHaveLength(4);
+    expect(inline).toContain('class="mdprv-diff-code is-del">-- a</td>');
+    expect(inline).toContain('class="mdprv-diff-code is-add">e</td>');
+  });
+
   it("returns null for invalid input", () => {
     expect(renderDiff("just text\n", "", { themeName: "auto" })).toBeNull();
   });
@@ -207,6 +463,36 @@ describe("diff fences in Markdown", () => {
     expect(html).toContain("--shiki-dark");
     expect(html).toContain('class="mdprv-diff-mark is-del">-</td>');
     expect(html).toContain('class="mdprv-diff-mark is-add">+</td>');
+  }, 30000);
+
+  it("highlights a header-less diff without adding numbers", async () => {
+    const html = await renderMarkdown(
+      "```diff ts\n-const answer: number = 41;\n+const answer: number = 42;\n```\n",
+      "auto",
+      "doc"
+    );
+    expect(html).toContain('class="mdprv-diff');
+    expect(html).toContain('data-diff-numbers="false"');
+    expect(html).toContain("mdprv-diff-token");
+    expect(html).toContain("--shiki-light");
+    expect(html).not.toContain("mdprv-diff-num");
+  }, 30000);
+
+  it("falls back to a plain code block for a context-only diff fence", async () => {
+    const html = await renderMarkdown("```diff\n just context\n```\n", "auto", "doc");
+    expect(html).toContain('<pre><code class="language-diff">');
+    expect(html).not.toContain("mdprv-diff");
+  }, 30000);
+
+  it("keeps numbers for unified diff fences", async () => {
+    const html = await renderMarkdown(
+      "```diff\n@@ -1 +1 @@\n-old\n+new\n```\n",
+      "auto",
+      "doc"
+    );
+    expect(html).toContain('data-diff-numbers="true"');
+    expect(html).toContain("mdprv-diff-num");
+    expect(html).toContain("mdprv-diff-col-num");
   }, 30000);
 
   it("silently falls back to plain text for unknown languages", async () => {

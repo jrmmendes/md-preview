@@ -70,7 +70,8 @@ registre de novo. Apagar o estado com o processo vivo tem o mesmo efeito.
 - fence `mermaid` renderiza no navegador via `/__assets/mermaid.min.js`;
 - fence `tree` vira árvore interativa quando o corpo parece saída de `tree`;
 - fence `diff` vira diff estilo GitHub com alternância inline/lado a lado; a
-  linguagem opcional (`diff tsx`) liga o realce por linha;
+  linguagem opcional (`diff tsx`) liga o realce por linha; trecho colado só com
+  linhas `+`/`-`/contexto (sem cabeçalhos) vira diff simples, sem numeração;
 - imagens relativas são servidas em `/img/<slug>/...`, restritas ao diretório do
   documento registrado;
 - HTML inline funciona sob CSP com nonce: `<script>`, `onclick` e

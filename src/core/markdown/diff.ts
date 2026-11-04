@@ -20,10 +20,20 @@ export interface DiffLine {
   kind: DiffLineKind;
   /** Content without the `+`, `-` or space prefix. */
   text: string;
-  /** 1-based line number on the old side, `null` for additions. */
+  /** 1-based line number on the old side, `null` for additions or unnumbered diffs. */
   oldNumber: number | null;
-  /** 1-based line number on the new side, `null` for deletions. */
+  /** 1-based line number on the new side, `null` for deletions or unnumbered diffs. */
   newNumber: number | null;
+}
+
+export interface DiffDocument {
+  lines: DiffLine[];
+  /**
+   * `false` for header-less pastes: the body only mixes `+`, `-` and context
+   * lines, so there are no trustworthy line numbers and the renderer omits the
+   * number columns entirely.
+   */
+  numbered: boolean;
 }
 
 export interface DiffCell {
@@ -52,7 +62,7 @@ const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 /** Very large diffs skip Shiki; the plain escaped text keeps rendering fast. */
 const MAX_HIGHLIGHT_LINES = 2000;
 
-const META_RES = [
+const GIT_META_RES = [
   /^diff --git /,
   /^index /,
   /^new file mode /,
@@ -67,12 +77,26 @@ const META_RES = [
   /^copy to /,
   /^Binary files /,
   /^GIT binary patch/,
-  /^--- /,
-  /^\+\+\+ /,
 ];
 
-function isMetaLine(line: string): boolean {
-  return META_RES.some((pattern) => pattern.test(line));
+const OLD_FILE_HEADER_RE = /^--- /;
+const NEW_FILE_HEADER_RE = /^\+\+\+ /;
+
+function isGitMetaLine(line: string): boolean {
+  return GIT_META_RES.some((pattern) => pattern.test(line));
+}
+
+/**
+ * `--- ` and `+++ ` are ambiguous on their own: in a header-less diff they are
+ * ordinary deletions/additions whose code starts with `-- ` or `++ `. They are
+ * file headers only when they form the adjacent `--- old` / `+++ new` pair that
+ * unified diff tools emit, so both lines are classified together.
+ */
+function isFileHeaderPair(rawLines: string[], index: number): boolean {
+  return (
+    OLD_FILE_HEADER_RE.test(rawLines[index]) &&
+    NEW_FILE_HEADER_RE.test(rawLines[index + 1] ?? "")
+  );
 }
 
 function escapeHtml(value: string): string {
@@ -89,16 +113,72 @@ function metaLine(line: string): DiffLine {
 }
 
 /**
- * Parse a unified diff body. Returns `null` when no hunk or body line is found
+ * A header-less paste (`-old`, `+new`, ` context`) has no hunk headers and no
+ * file metadata, so it is rendered as a simple diff without line numbers. A
+ * single `+`/`-` line is enough to opt in; every other line is context.
+ *
+ * Context lines normally carry a single leading marker space, but people often
+ * paste code with the marker stripped from some (or all) lines. Both shapes are
+ * accepted: a leading space is removed when present, otherwise the line is kept
+ * verbatim so normal code indentation survives.
+ */
+function isSimpleDiffBody(rawLines: string[]): boolean {
+  let sawChange = false;
+
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const raw = rawLines[index];
+    // Strong unified-diff signals: let the numbered parser handle them.
+    if (
+      HUNK_RE.test(raw) ||
+      raw.startsWith("diff --git ") ||
+      isFileHeaderPair(rawLines, index)
+    ) {
+      return false;
+    }
+    if (raw.startsWith("+") || raw.startsWith("-")) {
+      sawChange = true;
+    }
+  }
+
+  return sawChange;
+}
+
+function parseSimpleDiff(rawLines: string[]): DiffLine[] {
+  return rawLines.map((raw): DiffLine => {
+    if (raw.startsWith("\\")) {
+      return metaLine(raw);
+    }
+    if (raw.startsWith("+")) {
+      return { kind: "add", text: raw.slice(1), oldNumber: null, newNumber: null };
+    }
+    if (raw.startsWith("-")) {
+      return { kind: "del", text: raw.slice(1), oldNumber: null, newNumber: null };
+    }
+    return {
+      kind: "context",
+      text: raw.startsWith(" ") ? raw.slice(1) : raw,
+      oldNumber: null,
+      newNumber: null,
+    };
+  });
+}
+
+/**
+ * Parse a `diff` fence body. Returns `null` when no hunk or body line is found
  * (empty fences, prose, unrelated text), so the caller can fall back to a
  * normal code block.
  *
- * File headers (`diff --git`, `index`, `---`, `+++`, ...), the
- * `\ No newline at end of file` marker and other Git metadata become `meta`
- * rows. Line numbers come from `@@ -a,b +c,d @@` headers. A fence with only
- * `+`/`-` lines (no header) is accepted as an implicit hunk starting at 1.
+ * Two shapes are accepted:
+ *
+ * - Unified output: file headers (`diff --git`, `index`, the adjacent `---`/
+ *   `+++` pair, ...), `@@ -a,b +c,d @@` hunks and the
+ *   `\ No newline at end of file` marker become `meta` rows, and line numbers
+ *   come from the hunk headers.
+ * - Header-less paste: only `+`, `-` and context lines (plus the no-newline
+ *   marker). This is a simple diff: `numbered` is `false` and every line has
+ *   `oldNumber`/`newNumber` set to `null`.
  */
-export function parseUnifiedDiff(code: string): DiffLine[] | null {
+export function parseDiff(code: string): DiffDocument | null {
   const normalized = code.replace(/\r\n?/g, "\n");
   if (normalized.trim() === "") {
     return null;
@@ -107,6 +187,10 @@ export function parseUnifiedDiff(code: string): DiffLine[] | null {
   const rawLines = normalized.split("\n");
   if (rawLines.length > 0 && rawLines[rawLines.length - 1] === "") {
     rawLines.pop();
+  }
+
+  if (isSimpleDiffBody(rawLines)) {
+    return { lines: parseSimpleDiff(rawLines), numbered: false };
   }
 
   const lines: DiffLine[] = [];
@@ -125,7 +209,8 @@ export function parseUnifiedDiff(code: string): DiffLine[] | null {
     sawBody = true;
   };
 
-  for (const raw of rawLines) {
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const raw = rawLines[index];
     const hunk = HUNK_RE.exec(raw);
     if (hunk) {
       inHunk = true;
@@ -169,7 +254,7 @@ export function parseUnifiedDiff(code: string): DiffLine[] | null {
         pushContext("");
         continue;
       }
-      if (isMetaLine(raw)) {
+      if (isGitMetaLine(raw)) {
         inHunk = false;
         lines.push(metaLine(raw));
         continue;
@@ -179,7 +264,16 @@ export function parseUnifiedDiff(code: string): DiffLine[] | null {
       continue;
     }
 
-    if (isMetaLine(raw) || raw.startsWith("\\")) {
+    // A `---`/`+++` pair is a file header; on its own each line is just a
+    // deletion/addition of code starting with `-- ` / `++ `.
+    if (isFileHeaderPair(rawLines, index)) {
+      lines.push(metaLine(raw));
+      lines.push(metaLine(rawLines[index + 1]));
+      index += 1;
+      continue;
+    }
+
+    if (isGitMetaLine(raw) || raw.startsWith("\\")) {
       lines.push(metaLine(raw));
       continue;
     }
@@ -213,7 +307,16 @@ export function parseUnifiedDiff(code: string): DiffLine[] | null {
     lines.push(metaLine(raw));
   }
 
-  return sawBody ? lines : null;
+  return sawBody ? { lines, numbered: true } : null;
+}
+
+/**
+ * Parse a unified diff body and return only its lines. Kept for callers that
+ * do not need to know whether the block carries line numbers; use `parseDiff`
+ * when rendering.
+ */
+export function parseUnifiedDiff(code: string): DiffLine[] | null {
+  return parseDiff(code)?.lines ?? null;
 }
 
 function emptyCell(): DiffCell {
@@ -412,30 +515,38 @@ function markFor(kind: DiffCell["kind"]): string {
   return " ";
 }
 
-function inlineRow(line: DiffLine, tokens: TokenMaps): string {
+function inlineRow(line: DiffLine, tokens: TokenMaps, numbered: boolean): string {
   if (line.kind === "meta" || line.kind === "hunk") {
-    return `<tr class="mdprv-diff-row ${rowClass(line.kind)}" data-diff-kind="${line.kind}"><td class="mdprv-diff-meta" colspan="4">${escapeHtml(line.text)}</td></tr>`;
+    return `<tr class="mdprv-diff-row ${rowClass(line.kind)}" data-diff-kind="${line.kind}"><td class="mdprv-diff-meta" colspan="${numbered ? 4 : 2}">${escapeHtml(line.text)}</td></tr>`;
   }
 
   const changed = line.kind === "add" || line.kind === "del";
   const extra = changed ? ` is-${line.kind}` : "";
   const lineTokens =
     line.kind === "add" ? tokens.new.get(line) : tokens.old.get(line);
+  const numbers = numbered
+    ? `<td class="mdprv-diff-num${extra}">${line.oldNumber ?? ""}</td>` +
+      `<td class="mdprv-diff-num${extra}">${line.newNumber ?? ""}</td>`
+    : "";
 
   return (
     `<tr class="mdprv-diff-row ${rowClass(line.kind)}" data-diff-kind="${line.kind}">` +
-    `<td class="mdprv-diff-num${extra}">${line.oldNumber ?? ""}</td>` +
-    `<td class="mdprv-diff-num${extra}">${line.newNumber ?? ""}</td>` +
+    numbers +
     `<td class="mdprv-diff-mark${extra}">${markFor(line.kind)}</td>` +
     `<td class="mdprv-diff-code${extra}">${renderLineContent(lineTokens, line.text)}</td>` +
     `</tr>`
   );
 }
 
-function splitCell(cell: DiffCell, side: "old" | "new", tokens: TokenMaps): string {
+function splitCell(
+  cell: DiffCell,
+  side: "old" | "new",
+  tokens: TokenMaps,
+  numbered: boolean
+): string {
   if (cell.kind === "empty") {
     return (
-      `<td class="mdprv-diff-num is-empty"></td>` +
+      (numbered ? `<td class="mdprv-diff-num is-empty"></td>` : "") +
       `<td class="mdprv-diff-mark is-empty"></td>` +
       `<td class="mdprv-diff-code is-empty"></td>`
     );
@@ -443,17 +554,20 @@ function splitCell(cell: DiffCell, side: "old" | "new", tokens: TokenMaps): stri
   const extra = sideClass(cell);
   const map = side === "old" ? tokens.old : tokens.new;
   const lineTokens = cell.line ? map.get(cell.line) : undefined;
+  const numbers = numbered
+    ? `<td class="mdprv-diff-num${extra}">${cell.number ?? ""}</td>`
+    : "";
 
   return (
-    `<td class="mdprv-diff-num${extra}">${cell.number ?? ""}</td>` +
+    numbers +
     `<td class="mdprv-diff-mark${extra}">${markFor(cell.kind)}</td>` +
     `<td class="mdprv-diff-code${extra}">${renderLineContent(lineTokens, cell.text)}</td>`
   );
 }
 
-function splitRow(row: DiffRow, tokens: TokenMaps): string {
+function splitRow(row: DiffRow, tokens: TokenMaps, numbered: boolean): string {
   if (row.full !== null) {
-    return `<tr class="mdprv-diff-row ${rowClass(row.kind)}" data-diff-kind="${row.kind}"><td class="mdprv-diff-meta" colspan="6">${escapeHtml(row.full)}</td></tr>`;
+    return `<tr class="mdprv-diff-row ${rowClass(row.kind)}" data-diff-kind="${row.kind}"><td class="mdprv-diff-meta" colspan="${numbered ? 6 : 4}">${escapeHtml(row.full)}</td></tr>`;
   }
 
   const left = row.left;
@@ -476,21 +590,33 @@ function splitRow(row: DiffRow, tokens: TokenMaps): string {
 
   return (
     `<tr class="${Array.from(classes).join(" ")}" data-diff-kind="${dataKind}">` +
-    splitCell(left, "old", tokens) +
-    splitCell(right, "new", tokens) +
+    splitCell(left, "old", tokens, numbered) +
+    splitCell(right, "new", tokens, numbered) +
     `</tr>`
   );
 }
 
-function inlineTable(lines: DiffLine[], tokens: TokenMaps): string {
-  const rows = lines.map((line) => inlineRow(line, tokens)).join("");
+function inlineTable(
+  lines: DiffLine[],
+  tokens: TokenMaps,
+  numbered: boolean
+): string {
+  const rows = lines
+    .map((line) => inlineRow(line, tokens, numbered))
+    .join("");
+  const colgroup = numbered
+    ? `<colgroup><col class="mdprv-diff-col-num"><col class="mdprv-diff-col-num"><col class="mdprv-diff-col-mark"><col></colgroup>`
+    : `<colgroup><col class="mdprv-diff-col-mark"><col></colgroup>`;
+  const header = numbered
+    ? `<th class="mdprv-diff-num" scope="col">Antigo</th>` +
+      `<th class="mdprv-diff-num" scope="col">Novo</th>`
+    : "";
   return (
     `<div class="mdprv-diff-pane mdprv-diff-pane--inline" data-diff-pane="inline">` +
     `<table class="mdprv-diff-table mdprv-diff-table--inline">` +
-    `<colgroup><col class="mdprv-diff-col-num"><col class="mdprv-diff-col-num"><col class="mdprv-diff-col-mark"><col></colgroup>` +
+    colgroup +
     `<thead class="mdprv-diff-thead"><tr>` +
-    `<th class="mdprv-diff-num" scope="col">Antigo</th>` +
-    `<th class="mdprv-diff-num" scope="col">Novo</th>` +
+    header +
     `<th class="mdprv-diff-mark" scope="col"><span class="mdprv-visually-hidden">Marcador</span></th>` +
     `<th class="mdprv-diff-code" scope="col">Código</th>` +
     `</tr></thead>` +
@@ -498,21 +624,32 @@ function inlineTable(lines: DiffLine[], tokens: TokenMaps): string {
   );
 }
 
-function splitTable(lines: DiffLine[], tokens: TokenMaps): string {
+function splitTable(
+  lines: DiffLine[],
+  tokens: TokenMaps,
+  numbered: boolean
+): string {
   const rows = pairDiffRows(lines)
-    .map((row) => splitRow(row, tokens))
+    .map((row) => splitRow(row, tokens, numbered))
     .join("");
+  const columns = numbered
+    ? `<col class="mdprv-diff-col-num"><col class="mdprv-diff-col-mark"><col class="mdprv-diff-col-code">`
+    : `<col class="mdprv-diff-col-mark"><col class="mdprv-diff-col-code">`;
+  const oldHeader =
+    (numbered ? `<th class="mdprv-diff-num" scope="col">Antigo</th>` : "") +
+    `<th class="mdprv-diff-mark" scope="col"><span class="mdprv-visually-hidden">Marcador</span></th>` +
+    `<th class="mdprv-diff-code" scope="col">Código</th>`;
+  const newHeader =
+    (numbered ? `<th class="mdprv-diff-num" scope="col">Novo</th>` : "") +
+    `<th class="mdprv-diff-mark" scope="col"><span class="mdprv-visually-hidden">Marcador</span></th>` +
+    `<th class="mdprv-diff-code" scope="col">Código</th>`;
   return (
     `<div class="mdprv-diff-pane mdprv-diff-pane--split" data-diff-pane="split" hidden>` +
     `<table class="mdprv-diff-table mdprv-diff-table--split">` +
-    `<colgroup><col class="mdprv-diff-col-num"><col class="mdprv-diff-col-mark"><col class="mdprv-diff-col-code"><col class="mdprv-diff-col-num"><col class="mdprv-diff-col-mark"><col class="mdprv-diff-col-code"></colgroup>` +
+    `<colgroup>${columns}${columns}</colgroup>` +
     `<thead class="mdprv-diff-thead"><tr>` +
-    `<th class="mdprv-diff-num" scope="col">Antigo</th>` +
-    `<th class="mdprv-diff-mark" scope="col"><span class="mdprv-visually-hidden">Marcador</span></th>` +
-    `<th class="mdprv-diff-code" scope="col">Código</th>` +
-    `<th class="mdprv-diff-num" scope="col">Novo</th>` +
-    `<th class="mdprv-diff-mark" scope="col"><span class="mdprv-visually-hidden">Marcador</span></th>` +
-    `<th class="mdprv-diff-code" scope="col">Código</th>` +
+    oldHeader +
+    newHeader +
     `</tr></thead>` +
     `<tbody>${rows}</tbody></table></div>`
   );
@@ -524,17 +661,19 @@ function splitTable(lines: DiffLine[], tokens: TokenMaps): string {
  * `lang` is the optional extra token in the fence info (```diff tsx```). When
  * it is a loaded Shiki language, each line is tokenized with the active
  * light/dark theme pair; otherwise (or on any failure) the text is escaped and
- * rendered plainly. Returns `null` when the body is not a recognizable diff.
+ * rendered plainly. Header-less pastes are rendered without line-number
+ * columns. Returns `null` when the body is not a recognizable diff.
  */
 export function renderDiff(
   code: string,
   lang: string,
   options: DiffRenderOptions
 ): string | null {
-  const lines = parseUnifiedDiff(code);
-  if (!lines) {
+  const diff = parseDiff(code);
+  if (!diff) {
     return null;
   }
+  const { lines, numbered } = diff;
 
   const oldSide = lines.filter(
     (line) => line.kind === "context" || line.kind === "del"
@@ -557,10 +696,10 @@ export function renderDiff(
     `</div>`;
 
   return (
-    `<div class="mdprv-diff" data-diff-view="inline">` +
+    `<div class="mdprv-diff${numbered ? "" : " mdprv-diff--no-numbers"}" data-diff-view="inline" data-diff-numbers="${numbered ? "true" : "false"}">` +
     toolbar +
-    inlineTable(lines, tokens) +
-    splitTable(lines, tokens) +
+    inlineTable(lines, tokens, numbered) +
+    splitTable(lines, tokens, numbered) +
     `</div>`
   );
 }

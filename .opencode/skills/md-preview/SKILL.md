@@ -65,7 +65,8 @@ registre de novo. Apagar o estado com o processo vivo tem o mesmo efeito.
 
 - GFM: tabelas, riscado, task lists, footnotes, linkify, typographer, âncoras;
 - frontmatter YAML vira cartão de metadados e título da aba;
-- Shiki realça `js`, `ts`, `json`, `lua`, `bash`, `html`, `css`, `md` e `py`;
+- Shiki realça `js`, `ts`, `json`, `lua`, `bash`, `html`, `css`, `md`, `py`,
+  `rust`, `go`, `yaml`, `tsx`, `jsx`, `sql` e `xml`;
 - fence `mermaid` renderiza no navegador via `/__assets/mermaid.min.js`;
 - fence `tree` vira árvore interativa quando o corpo parece saída de `tree`;
 - imagens relativas são servidas em `/img/<slug>/...`, restritas ao diretório do

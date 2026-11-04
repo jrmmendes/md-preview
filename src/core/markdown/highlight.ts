@@ -9,6 +9,13 @@ import html from "@shikijs/langs/html";
 import css from "@shikijs/langs/css";
 import markdown from "@shikijs/langs/markdown";
 import python from "@shikijs/langs/python";
+import rust from "@shikijs/langs/rust";
+import go from "@shikijs/langs/go";
+import yaml from "@shikijs/langs/yaml";
+import tsx from "@shikijs/langs/tsx";
+import jsx from "@shikijs/langs/jsx";
+import sql from "@shikijs/langs/sql";
+import xml from "@shikijs/langs/xml";
 import githubLight from "@shikijs/themes/github-light";
 import githubDark from "@shikijs/themes/github-dark";
 import dracula from "@shikijs/themes/dracula";
@@ -20,7 +27,24 @@ import gruvboxLight from "@shikijs/themes/gruvbox-light-medium";
 
 import { getTheme, shikiThemeNames } from "../themes/index";
 
-export const LANGS = [javascript, typescript, json, lua, bash, html, css, markdown, python];
+export const LANGS = [
+  javascript,
+  typescript,
+  json,
+  lua,
+  bash,
+  html,
+  css,
+  markdown,
+  python,
+  rust,
+  go,
+  yaml,
+  tsx,
+  jsx,
+  sql,
+  xml,
+];
 
 export const THEME_MODULES: Record<string, unknown> = {
   "github-light": githubLight,

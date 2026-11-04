@@ -105,6 +105,30 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain("mdprv-tree");
   }, 30000);
 
+  const highlightCases: Array<{ lang: string; code: string }> = [
+    { lang: "rust", code: 'fn main() { println!("hi"); }' },
+    { lang: "go", code: "package main\nfunc main() {}" },
+    { lang: "yaml", code: "name: md-preview\nversion: 1" },
+    { lang: "tsx", code: "const App = () => <div />;" },
+    { lang: "jsx", code: "const App = () => <div />;" },
+    { lang: "sql", code: "SELECT 1;" },
+    { lang: "xml", code: "<root><item /></root>" },
+  ];
+
+  for (const { lang, code } of highlightCases) {
+    it(`highlights ${lang} fences`, async () => {
+      const html = await renderMarkdown("```" + lang + "\n" + code + "\n```\n", "auto", "doc");
+      expect(html).toContain('class="shiki');
+      expect(html).not.toContain(`<pre><code class="language-${lang}">`);
+    }, 30000);
+  }
+
+  it("resolves the yml alias to yaml", async () => {
+    const html = await renderMarkdown("```yml\nname: md-preview\n```\n", "auto", "doc");
+    expect(html).toContain('class="shiki');
+    expect(html).not.toContain('<pre><code class="language-yml">');
+  }, 30000);
+
   it("warmup is idempotent", async () => {
     await warmup();
     await warmup();

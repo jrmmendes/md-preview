@@ -4,25 +4,41 @@
    block stays legible in light, dark and fixed themes. */
 
 .mdprv-diff {
-  margin: 0 0 1em;
+  margin: 1em 0;
+  padding: var(--mdprv-code-padding, 1em);
   border: 1px solid var(--mdprv-border);
   border-radius: var(--mdprv-radius-md, 6px);
   background: var(--mdprv-code-bg, transparent);
   color: var(--mdprv-code-fg, inherit);
   font-family: var(--mdprv-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
   font-size: .85em;
-  line-height: var(--mdprv-code-line-height, 1.45);
+  /* Themes default --mdprv-code-line-height to 1, which makes table rows feel
+     cramped; keep a readable minimum without ignoring larger theme values. */
+  line-height: max(1.45, var(--mdprv-code-line-height, 1.45));
   overflow: hidden;
 }
 
+/* Bleed the toolbar to the block edges (the container padding is the gutter),
+   then restore the same gap between the toolbar and the code area. */
 .mdprv-diff-toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: .35rem;
-  padding: .4rem .5rem;
+  margin:
+    calc(-1 * var(--mdprv-code-padding, 1em))
+    calc(-1 * var(--mdprv-code-padding, 1em))
+    var(--mdprv-code-padding, 1em);
+  padding: .4rem var(--mdprv-code-padding, 1em);
   border-bottom: 1px solid var(--mdprv-border);
   background: var(--mdprv-surface, transparent);
+}
+
+.mdprv-diff-views {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: .35rem;
 }
 
 .mdprv-diff-btn {
@@ -62,6 +78,24 @@
 .mdprv-diff-btn:focus-visible {
   outline: 2px solid var(--mdprv-accent);
   outline-offset: 1px;
+}
+
+.mdprv-diff-copy {
+  min-height: 0;
+  width: calc(var(--mdprv-control-height, 1.9rem) - .35rem);
+  height: calc(var(--mdprv-control-height, 1.9rem) - .35rem);
+  padding: 0;
+}
+
+.mdprv-diff-copy svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+}
+
+.mdprv-diff-copy.mdprv-copied {
+  border-color: var(--mdprv-link);
+  color: var(--mdprv-link);
 }
 
 .mdprv-diff-pane {
@@ -173,12 +207,24 @@
 }
 
 .mdprv-diff td.mdprv-diff-meta {
-  padding: .15em .8em;
+  padding: .15em 0;
   color: var(--mdprv-muted);
   background: var(--mdprv-surface, transparent);
   white-space: pre;
   border-top: 1px solid var(--mdprv-border) !important;
   border-bottom: 1px solid var(--mdprv-border) !important;
+}
+
+/* The block padding already provides the 1em gutter, so the outer cells must
+   not add a second inset: code aligns with the `pre` content edge. */
+.mdprv-diff-table tr > th:first-child,
+.mdprv-diff-table tr > td:first-child {
+  padding-left: 0;
+}
+
+.mdprv-diff-table tr > th:last-child,
+.mdprv-diff-table tr > td:last-child {
+  padding-right: 0;
 }
 
 .mdprv-diff tr:first-child td.mdprv-diff-meta {

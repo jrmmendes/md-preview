@@ -12,6 +12,8 @@
 
 import type { ThemedTokenWithVariants } from "shiki/types";
 
+import { COPY_ICON } from "../../shared/copy-icons";
+import { buildDiffClipboardText } from "../../shared/diff-text";
 import { codeToThemedTokens } from "./highlight";
 
 export type DiffLineKind = "context" | "add" | "del" | "meta" | "hunk";
@@ -317,6 +319,17 @@ export function parseDiff(code: string): DiffDocument | null {
  */
 export function parseUnifiedDiff(code: string): DiffLine[] | null {
   return parseDiff(code)?.lines ?? null;
+}
+
+/**
+ * Plain-text representation used by the diff copy button: a simplified patch
+ * with `+`/`-` markers for changes, a single leading space for context and no
+ * hunk/metadata rows (they carry no code cell). Returns `null` when the body is
+ * not a recognizable diff, mirroring `renderDiff`.
+ */
+export function diffPlainText(code: string): string | null {
+  const diff = parseDiff(code);
+  return diff ? buildDiffClipboardText(diff.lines) : null;
 }
 
 function emptyCell(): DiffCell {
@@ -690,9 +703,12 @@ export function renderDiff(
         };
 
   const toolbar =
-    `<div class="mdprv-diff-toolbar" role="group" aria-label="Modo de visualização do diff">` +
+    `<div class="mdprv-diff-toolbar">` +
+    `<div class="mdprv-diff-views" role="group" aria-label="Modo de visualização do diff">` +
     `<button type="button" class="mdprv-diff-btn" data-diff-view-target="inline" aria-pressed="true">Inline</button>` +
     `<button type="button" class="mdprv-diff-btn" data-diff-view-target="split" aria-pressed="false">Lado a lado</button>` +
+    `</div>` +
+    `<button type="button" class="mdprv-diff-btn mdprv-diff-copy" data-diff-copy aria-label="Copiar diff" title="Copiar diff">${COPY_ICON}</button>` +
     `</div>`;
 
   return (

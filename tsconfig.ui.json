@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "types": []
   },
-  "include": ["src/ui", "src/types.d.ts"]
+  "include": ["src/ui", "src/shared", "src/types.d.ts"]
 }

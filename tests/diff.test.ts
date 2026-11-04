@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  diffPlainText,
   pairDiffRows,
   parseDiff,
   parseUnifiedDiff,
@@ -261,6 +262,33 @@ describe("pairDiffRows", () => {
   });
 });
 
+describe("diffPlainText", () => {
+  it("keeps +/- prefixes, prefixes context and drops hunk/meta rows", () => {
+    expect(diffPlainText(SAMPLE)).toBe(
+      ' import { x } from "./x";\n' +
+        "-const answer = 41;\n" +
+        "+const answer = 42;\n" +
+        " export default answer;"
+    );
+  });
+
+  it("handles header-less diffs and restores the context prefix", () => {
+    expect(
+      diffPlainText(" const a = 1;\n-const b = 2;\n+const b = 3;\n")
+    ).toBe(" const a = 1;\n-const b = 2;\n+const b = 3;");
+  });
+
+  it("skips the no-newline marker and keeps no trailing newline", () => {
+    expect(diffPlainText("@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new")).toBe(
+      "-old\n+new"
+    );
+  });
+
+  it("returns null for a non-diff body", () => {
+    expect(diffPlainText("just text\n")).toBeNull();
+  });
+});
+
 describe("renderDiff", () => {
   it("renders the toolbar and both panes", () => {
     const html = renderDiff(SAMPLE, "", { themeName: "auto" });
@@ -274,6 +302,9 @@ describe("renderDiff", () => {
     expect(html).toContain('aria-label="Modo de visualização do diff"');
     expect(html).toContain('data-diff-view-target="inline" aria-pressed="true"');
     expect(html).toContain('data-diff-view-target="split" aria-pressed="false"');
+    expect(html).toContain('class="mdprv-diff-btn mdprv-diff-copy" data-diff-copy');
+    expect(html).toContain('aria-label="Copiar diff"');
+    expect(html).toContain("<svg");
     expect(html).toContain('class="mdprv-diff-pane mdprv-diff-pane--inline"');
     expect(html).toContain(
       'class="mdprv-diff-pane mdprv-diff-pane--split" data-diff-pane="split" hidden'

@@ -86,6 +86,35 @@ meu-projeto
   exports; the client script is only needed for the global buttons and keyboard
   navigation.
 
+## Diff fences
+
+Fences tagged `diff` are rendered as a GitHub-style diff instead of a plain code
+block. Paste unified diff output (`git diff`), including the `@@` hunk headers:
+
+````markdown
+```diff
+@@ -1,2 +1,2 @@
+-old
++new
+```
+````
+
+- Each block has a toolbar to switch between **Inline** (unified) and **Lado a
+  lado** (side by side). The last choice is stored in `localStorage` under
+  `mdprv_diff_view` (`inline` or `split`, default `inline`) and applied to every
+  diff block while the page is open.
+- Add a language after `diff` to highlight each line with Shiki, using the
+  active theme: ```` ```diff tsx ````. Unknown or unavailable languages fall
+  back silently to plain text.
+- File headers (`diff --git`, `index`, `---`, `+++`), hunk headers and the
+  `\ No newline at end of file` marker become metadata rows. In split view the
+  i-th deletion is paired with the i-th addition of each change run; leftovers
+  keep one side empty.
+- A fence without any recognizable diff line (or an empty fence) falls back to a
+  normal code block. All content is escaped and rendered as text, never as HTML.
+- Both views are pre-rendered on the server, so the block stays readable without
+  JavaScript; the client only toggles the panes and remembers the preference.
+
 ## Security model
 
 The daemon is a local service, so it is hardened against other browser tabs and local web pages:
@@ -263,15 +292,15 @@ src/
     frontmatter.ts
     slug.ts
     state.ts
-    markdown/     # markdown-it, Shiki and the tree fence
+    markdown/     # markdown-it, Shiki and the tree/diff fences
     themes/       # theme contract, store, CSS and Mermaid payload (builtins live in ../themes)
   ui/
     index.html    # shell with {{mdprv-*}} tokens
     main.ts       # islands bootstrap
     prefs.ts      # the only browser storage access
     services/     # loader, navigation, font catalog/search, SSE events
-    islands/      # layout, TOC, history, settings, font picker, Mermaid, tree, copy, live reload
-    styles/       # base, meta, sidebar, fonts, mermaid, tree, loader
+    islands/      # layout, TOC, history, settings, font picker, Mermaid, tree, diff, copy, live reload
+    styles/       # base, meta, sidebar, fonts, mermaid, tree, diff, loader
   types.d.ts
 tests/
 build.ts

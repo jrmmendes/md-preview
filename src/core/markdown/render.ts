@@ -3,6 +3,7 @@ import anchor from "markdown-it-anchor";
 import footnote from "markdown-it-footnote";
 import taskLists from "markdown-it-task-lists";
 
+import { renderDiff } from "./diff";
 import { codeToHtml, warmup } from "./highlight";
 import { renderTree } from "./tree";
 
@@ -36,6 +37,12 @@ function createRenderer(themeName: string): MarkdownIt {
       const tree = renderTree(tokens[idx].content, { dirsOnly });
       if (tree !== null) {
         return tree + "\n";
+      }
+    }
+    if (info === "diff") {
+      const diff = renderDiff(tokens[idx].content, parts[1] || "", { themeName });
+      if (diff !== null) {
+        return diff + "\n";
       }
     }
     return defaultFence(tokens, idx, options, env, self);

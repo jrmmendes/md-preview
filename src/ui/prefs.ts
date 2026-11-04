@@ -32,6 +32,7 @@ const KEYS = {
   left: "mdprv_left_collapsed",
   right: "mdprv_right_collapsed",
   loaderIntent: "mdprv_loader_pending",
+  diffView: "mdprv_diff_view",
 } as const;
 
 const LEGACY_KEYS = {
@@ -42,6 +43,8 @@ const LEGACY_KEYS = {
 const THEME_COOKIE = "mdprv_theme";
 
 export type CollapsedSide = "left" | "right";
+
+export type DiffView = "inline" | "split";
 
 const memory = new Map<string, string>();
 const sessionMemory = new Map<string, string>();
@@ -300,6 +303,14 @@ export function getCollapsed(side: CollapsedSide): boolean {
 
 export function setCollapsed(side: CollapsedSide, collapsed: boolean): void {
   localSet(side === "left" ? KEYS.left : KEYS.right, collapsed ? "1" : "0");
+}
+
+export function getDiffView(): DiffView {
+  return localGet(KEYS.diffView) === "split" ? "split" : "inline";
+}
+
+export function setDiffView(view: DiffView): void {
+  localSet(KEYS.diffView, view === "split" ? "split" : "inline");
 }
 
 function currentPath(): string {

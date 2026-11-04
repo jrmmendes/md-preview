@@ -1,4 +1,5 @@
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
+import type { ThemedTokenWithVariants } from "shiki/types";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 import javascript from "@shikijs/langs/javascript";
 import typescript from "@shikijs/langs/typescript";
@@ -82,6 +83,37 @@ export async function getHighlighter(): Promise<HighlighterCore> {
     throw new Error("shiki highlighter unavailable");
   }
   return highlighter;
+}
+
+/**
+ * Tokenize `code` with both light and dark Shiki themes for the active theme.
+ *
+ * Returns `null` when the highlighter is not ready, the language is not loaded
+ * or tokenization fails, so callers can fall back to plain escaped text.
+ */
+export function codeToThemedTokens(
+  code: string,
+  lang: string,
+  themeName: string
+): ThemedTokenWithVariants[][] | null {
+  if (!highlighter || !lang) {
+    return null;
+  }
+  const loaded = highlighter.getLoadedLanguages() as string[];
+  if (!loaded.includes(lang)) {
+    return null;
+  }
+  const theme = getTheme(themeName);
+  try {
+    // HighlighterCore is typed with `never` language/theme keys; the names are
+    // validated against the loaded set above and resolved at runtime.
+    return highlighter.codeToTokensWithThemes(code, {
+      lang,
+      themes: { light: theme.light.shiki.light, dark: theme.dark.shiki.dark },
+    } as never);
+  } catch {
+    return null;
+  }
 }
 
 export function codeToHtml(code: string, lang: string, themeName: string): string {

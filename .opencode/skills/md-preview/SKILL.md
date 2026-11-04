@@ -18,7 +18,7 @@ Documentação publicada: <https://github.com/jrmmendes/md-preview#readme>.
 ## Quando usar
 
 - revisar o Markdown que um agente acabou de gerar;
-- conferir frontmatter, tabelas, Mermaid e tree fences renderizados;
+- conferir frontmatter, tabelas, Mermaid, tree e diff fences renderizados;
 - testar a saída de um comando via `--pipe` antes de incorporá-la;
 - validar um `theme.json` de usuário;
 - diagnosticar daemon, porta ou token.
@@ -69,6 +69,8 @@ registre de novo. Apagar o estado com o processo vivo tem o mesmo efeito.
   `rust`, `go`, `yaml`, `tsx`, `jsx`, `sql` e `xml`;
 - fence `mermaid` renderiza no navegador via `/__assets/mermaid.min.js`;
 - fence `tree` vira árvore interativa quando o corpo parece saída de `tree`;
+- fence `diff` vira diff estilo GitHub com alternância inline/lado a lado; a
+  linguagem opcional (`diff tsx`) liga o realce por linha;
 - imagens relativas são servidas em `/img/<slug>/...`, restritas ao diretório do
   documento registrado;
 - HTML inline funciona sob CSP com nonce: `<script>`, `onclick` e

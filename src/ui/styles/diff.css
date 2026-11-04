@@ -1,0 +1,250 @@
+/* Unified and side-by-side diff rendered from ```diff fences.
+   All colors, fonts and motion values come from the active theme tokens; line
+   tints are derived from --mdprv-success/--mdprv-danger with color-mix so the
+   block stays legible in light, dark and fixed themes. */
+
+.mdprv-diff {
+  margin: 0 0 1em;
+  border: 1px solid var(--mdprv-border);
+  border-radius: var(--mdprv-radius-md, 6px);
+  background: var(--mdprv-code-bg, transparent);
+  color: var(--mdprv-code-fg, inherit);
+  font-family: var(--mdprv-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-size: .85em;
+  line-height: var(--mdprv-code-line-height, 1.45);
+  overflow: hidden;
+}
+
+.mdprv-diff-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .35rem;
+  padding: .4rem .5rem;
+  border-bottom: 1px solid var(--mdprv-border);
+  background: var(--mdprv-surface, transparent);
+}
+
+.mdprv-diff-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--mdprv-control-height, 1.9rem) - .35rem);
+  padding: .1rem .55rem;
+  border: 1px solid var(--mdprv-border);
+  border-radius: var(--mdprv-radius-sm, 5px);
+  background: var(--mdprv-bg, transparent);
+  color: var(--mdprv-muted);
+  font: inherit;
+  font-family: var(--mdprv-font, var(--mdprv-font-stack, system-ui, sans-serif));
+  font-size: var(--mdprv-font-size-small, 11.5px);
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    color var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease),
+    background-color var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease),
+    border-color var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease);
+}
+
+.mdprv-diff-btn:hover {
+  border-color: var(--mdprv-border-strong, var(--mdprv-border));
+  background: var(--mdprv-surface-raised, var(--mdprv-surface, transparent));
+  color: var(--mdprv-fg);
+}
+
+.mdprv-diff-btn[aria-pressed="true"] {
+  border-color: var(--mdprv-border-strong, var(--mdprv-border));
+  background: var(--mdprv-surface-raised, var(--mdprv-surface, transparent));
+  color: var(--mdprv-fg);
+  font-weight: var(--mdprv-font-weight-bold, 600);
+}
+
+.mdprv-diff-btn:focus-visible {
+  outline: 2px solid var(--mdprv-accent);
+  outline-offset: 1px;
+}
+
+.mdprv-diff-pane {
+  overflow-x: auto;
+}
+
+.mdprv-diff-pane[hidden] {
+  display: none;
+}
+
+.mdprv-diff-table {
+  display: table;
+  overflow: visible;
+  margin: 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.mdprv-diff-table--inline {
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+}
+
+.mdprv-diff-table--split {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.mdprv-diff-thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.mdprv-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.mdprv-diff td,
+.mdprv-diff th {
+  border: 0;
+  padding: 0;
+  vertical-align: top;
+}
+
+.mdprv-diff-col-num {
+  width: 3.4rem;
+}
+
+.mdprv-diff-col-mark {
+  width: 1.4rem;
+}
+
+.mdprv-diff-table--split .mdprv-diff-col-code {
+  width: 50%;
+}
+
+.mdprv-diff td.mdprv-diff-num,
+.mdprv-diff th.mdprv-diff-num {
+  padding: 0 .55em;
+  color: var(--mdprv-muted);
+  text-align: right;
+  white-space: nowrap;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.mdprv-diff td.mdprv-diff-mark,
+.mdprv-diff th.mdprv-diff-mark {
+  padding: 0 .2em;
+  text-align: center;
+  user-select: none;
+}
+
+.mdprv-diff td.mdprv-diff-code,
+.mdprv-diff th.mdprv-diff-code {
+  padding: 0 .8em 0 .1em;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.mdprv-diff-table--split td.mdprv-diff-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mdprv-diff td.mdprv-diff-meta {
+  padding: .15em .8em;
+  color: var(--mdprv-muted);
+  background: var(--mdprv-surface, transparent);
+  white-space: pre;
+  border-top: 1px solid var(--mdprv-border) !important;
+  border-bottom: 1px solid var(--mdprv-border) !important;
+}
+
+.mdprv-diff tr:first-child td.mdprv-diff-meta {
+  border-top: 0 !important;
+}
+
+.mdprv-diff tr.is-hunk .mdprv-diff-meta {
+  background: color-mix(in srgb, var(--mdprv-info, #58a6ff) 12%, transparent);
+  color: var(--mdprv-info, var(--mdprv-muted));
+}
+
+.mdprv-diff td.is-add {
+  background: rgba(46, 160, 67, .12);
+  background: color-mix(in srgb, var(--mdprv-success, #3fb950) 14%, transparent);
+}
+
+.mdprv-diff td.is-del {
+  background: rgba(248, 81, 73, .12);
+  background: color-mix(in srgb, var(--mdprv-danger, #f85149) 14%, transparent);
+}
+
+.mdprv-diff td.is-add.mdprv-diff-mark {
+  color: var(--mdprv-success, #3fb950);
+}
+
+.mdprv-diff td.is-del.mdprv-diff-mark {
+  color: var(--mdprv-danger, #f85149);
+}
+
+.mdprv-diff td.is-empty {
+  background: rgba(139, 148, 158, .07);
+  background: color-mix(in srgb, var(--mdprv-muted, #8b949e) 8%, transparent);
+}
+
+/* Dual-theme Shiki tokens: the inline style only carries the CSS variables,
+   matching the .shiki rules in base.css. */
+.mdprv-diff-token {
+  color: var(--shiki-light);
+  font-style: var(--shiki-light-font-style, inherit);
+  font-weight: var(--shiki-light-font-weight, inherit);
+  text-decoration: var(--shiki-light-text-decoration, none);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mdprv-diff-token {
+    color: var(--shiki-dark);
+    font-style: var(--shiki-dark-font-style, inherit);
+    font-weight: var(--shiki-dark-font-weight, inherit);
+    text-decoration: var(--shiki-dark-text-decoration, none);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mdprv-diff-btn {
+    transition: none;
+  }
+}
+
+@media print {
+  .mdprv-diff-toolbar {
+    display: none;
+  }
+
+  .mdprv-diff {
+    overflow: visible;
+  }
+
+  .mdprv-diff-pane {
+    overflow: visible;
+  }
+
+  .mdprv-diff-pane[hidden] {
+    display: none;
+  }
+}

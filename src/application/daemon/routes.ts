@@ -6,11 +6,13 @@ import type { Config } from "../../core/config";
 import type { SnapshotEvent } from "../../core/contract";
 import { renderPage } from "../../core/page";
 import { normalizeContent, renderMarkdown } from "../../core/markdown/render";
+import { encodeSlugPath, slugFor } from "../../core/slug";
 import { resolveThemeName } from "../../core/themes/resolve";
 import type { ThemeStore } from "../../core/themes/store";
 import { VERSION } from "../../core/version";
 import { parseFrontmatter } from "../../core/frontmatter";
 import { mermaidAsset } from "./assets";
+import { createDocLinkResolver, resolveDocFile } from "./doc-links";
 import { createFontCatalog, type FontCatalog } from "./fonts";
 import { baseHeaders, fontAssetHeaders, SECURITY_HEADERS } from "./headers";
 import { serveImage } from "./images";
@@ -322,7 +324,10 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         ? String(data.title).trim()
         : "";
     const title = metaTitle || (entry.path ? basename(entry.path) : "Markdown Preview");
-    const body = await renderMarkdown(normalizeContent(markdownBody), themeName, slug);
+    const theme = url.searchParams.get("theme");
+    const body = await renderMarkdown(normalizeContent(markdownBody), themeName, slug, {
+      docLinkResolver: createDocLinkResolver(registry, slug, theme),
+    });
     const nonce = randomBytes(16).toString("base64");
     return new Response(
       renderPage(
@@ -345,6 +350,24 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       }
     );
   }
+
+  function serveDoc(url: URL, head: boolean): Response {
+    const from = url.searchParams.get("from") ?? "";
+    const rel = url.searchParams.get("rel") ?? "";
+    const resolved = resolveDocFile(registry, from, rel);
+    if (!resolved) {
+      return text("not found", 404, head);
+    }
+    const slug = registry.register(slugFor(resolved.path), resolved.path, null);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...baseHeaders("text/plain; charset=utf-8"),
+        Location: "/" + encodeSlugPath(slug) + resolved.suffix,
+      },
+    });
+  }
+
 
   async function handle(req: Request): Promise<Response> {
     if (!hostAllowed(req) || !originAllowed(req)) {
@@ -378,6 +401,9 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     }
     if ((method === "GET" || method === "HEAD") && route === "/__themes") {
       return json({ themes: themes.names(), errors: themes.errors() }, 200, method === "HEAD");
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__doc") {
+      return serveDoc(url, method === "HEAD");
     }
     if ((method === "GET" || method === "HEAD") && route.startsWith("/__assets/")) {
       const name = route.slice("/__assets/".length);

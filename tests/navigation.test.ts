@@ -6,6 +6,7 @@ import {
   parseLoaderIntent,
   serializeLoaderIntent,
 } from "../src/ui/services/loader-intent";
+import { isPlainDocLinkActivation } from "../src/core/doc-links";
 import { shouldMarkNavigation } from "../src/ui/services/navigation";
 
 const CURRENT = "https://preview.test/docs/a";
@@ -48,6 +49,26 @@ describe("shouldMarkNavigation", () => {
     expect(shouldMarkNavigation(link("/docs/b"), { defaultPrevented: true }, CURRENT)).toBe(false);
     expect(shouldMarkNavigation(link("mailto:dev@example.com"), {}, CURRENT)).toBe(false);
     expect(shouldMarkNavigation(link("javascript:void(0)"), {}, CURRENT)).toBe(false);
+  });
+});
+
+describe("isPlainDocLinkActivation", () => {
+  const target = { target: null, hasDownload: false };
+
+  it("keeps primary in-tab clicks for the /__doc prefetch", () => {
+    expect(isPlainDocLinkActivation(target, {})).toBe(true);
+    expect(isPlainDocLinkActivation({ target: "_self" }, { button: 0 })).toBe(true);
+  });
+
+  it("leaves modified, download and new-tab clicks to the browser", () => {
+    expect(isPlainDocLinkActivation(target, { ctrlKey: true })).toBe(false);
+    expect(isPlainDocLinkActivation(target, { metaKey: true })).toBe(false);
+    expect(isPlainDocLinkActivation(target, { shiftKey: true })).toBe(false);
+    expect(isPlainDocLinkActivation(target, { altKey: true })).toBe(false);
+    expect(isPlainDocLinkActivation(target, { button: 1 })).toBe(false);
+    expect(isPlainDocLinkActivation(target, { defaultPrevented: true })).toBe(false);
+    expect(isPlainDocLinkActivation({ hasDownload: true }, {})).toBe(false);
+    expect(isPlainDocLinkActivation({ target: "_blank" }, {})).toBe(false);
   });
 });
 

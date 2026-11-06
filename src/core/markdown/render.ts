@@ -6,8 +6,21 @@ import taskLists from "markdown-it-task-lists";
 import { renderDiff } from "./diff";
 import { codeToHtml, warmup } from "./highlight";
 import { renderTree } from "./tree";
+import type { DocLinkState } from "../doc-links";
 
 export { warmup };
+
+export interface DocLinkResolution {
+  href: string;
+  state: DocLinkState;
+}
+
+export type DocLinkResolver = (href: string) => DocLinkResolution | null;
+
+export interface RenderOptions {
+  /** Optional hook that rewrites sibling Markdown links at render time. */
+  docLinkResolver?: DocLinkResolver;
+}
 
 const mdCache = new Map<string, MarkdownIt>();
 
@@ -65,6 +78,29 @@ function createRenderer(themeName: string): MarkdownIt {
     return defaultImage(tokens, idx, options, env, self);
   };
 
+  const defaultLinkOpen =
+    md.renderer.rules.link_open ??
+    ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+  md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    const resolver: DocLinkResolver | undefined = env?.docLinkResolver;
+    const hrefIdx = token.attrIndex("href");
+    if (resolver && hrefIdx >= 0 && token.attrs) {
+      const href = token.attrs[hrefIdx][1];
+      const target = resolver(href);
+      if (target) {
+        token.attrs[hrefIdx][1] = target.href;
+        if (target.state === "missing") {
+          token.attrSet("data-mdprv-doc-missing", "1");
+          token.attrSet("title", "Document not found");
+        } else if (target.state === "pending") {
+          token.attrSet("data-mdprv-doc-resolve", "1");
+        }
+      }
+    }
+    return defaultLinkOpen(tokens, idx, options, env, self);
+  };
+
   return md;
 }
 
@@ -87,9 +123,14 @@ export function normalizeContent(content: string): string {
 export async function renderMarkdown(
   content: string,
   themeName: string,
-  slug: string
+  slug: string,
+  options: RenderOptions = {}
 ): Promise<string> {
   await warmup();
   const md = rendererFor(themeName);
-  return md.render(content, { slug });
+  const env: { slug: string; docLinkResolver?: DocLinkResolver } = { slug };
+  if (options.docLinkResolver) {
+    env.docLinkResolver = options.docLinkResolver;
+  }
+  return md.render(content, env);
 }

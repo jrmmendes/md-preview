@@ -133,4 +133,55 @@ describe("renderMarkdown", () => {
     await warmup();
     await warmup();
   }, 30000);
+
+  it("rewrites sibling document links through the resolver", async () => {
+    const html = await renderMarkdown(
+      [
+        "[registered](exists.md)",
+        "[pending](new.md?x=1#sec)",
+        "[missing](gone.md#later)",
+        "[sub](sub/other.md)",
+        "[external](https://example.com/x.md)",
+        "[anchor](#local)",
+        "",
+      ].join("\n\n"),
+      "auto",
+      "docs/a",
+      {
+        docLinkResolver: (href) => {
+          if (href === "exists.md") {
+            return { href: "/docs/exists", state: "registered" };
+          }
+          if (href === "new.md?x=1#sec") {
+            return { href: "/__doc?from=docs%2Fa&rel=new.md%3Fx%3D1%23sec", state: "pending" };
+          }
+          if (href.startsWith("gone.md")) {
+            return { href, state: "missing" };
+          }
+          return null;
+        },
+      }
+    );
+
+    expect(html).toContain('href="/docs/exists"');
+    expect(html).toContain('href="/__doc?from=docs%2Fa&amp;rel=new.md%3Fx%3D1%23sec"');
+    expect(html).toContain('data-mdprv-doc-resolve="1"');
+    expect(html).toContain('href="gone.md#later"');
+    expect(html).toContain('data-mdprv-doc-missing="1"');
+    expect(html).toContain('title="Document not found"');
+    expect(html).toContain('href="sub/other.md"');
+    expect(html).toContain('href="https://example.com/x.md"');
+    expect(html).toContain('href="#local"');
+  }, 30000);
+
+  it("does not rewrite raw HTML links", async () => {
+    const html = await renderMarkdown(
+      '<a href="other.md">raw</a>\n',
+      "auto",
+      "docs/a",
+      { docLinkResolver: (href) => ({ href: "/should-not-use", state: "registered" }) }
+    );
+    expect(html).toContain('href="other.md"');
+    expect(html).not.toContain("/should-not-use");
+  }, 30000);
 });

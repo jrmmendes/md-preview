@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -9,6 +9,7 @@ import { createFontCatalog, type ExecResult } from "../src/application/daemon/fo
 import type { Config } from "../src/core/config";
 import type { FontsPayload, SlugInfo, SnapshotEvent, VersionEvent } from "../src/core/contract";
 import { readDaemonState } from "../src/core/state";
+import { writePipeDocument } from "../src/core/temp";
 import { VERSION } from "../src/core/version";
 
 function okExec(stdout: string): ExecResult {
@@ -462,6 +463,76 @@ describe("application daemon themes", () => {
       abort.abort();
       await reader?.cancel();
       daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+});
+
+describe("application daemon document links", () => {
+  it("redirects /__doc to the registered slug and rejects escapes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-doc-route-"));
+    const file = join(dir, "doc.md");
+    const other = join(dir, "other.md");
+    const stateFile = join(dir, "state", "daemon.json");
+    writeFileSync(file, "# Doc\n");
+    writeFileSync(other, "# Other\n");
+    const outside = join(dir, "..", `mdprv-doc-outside-${Date.now()}.md`);
+    writeFileSync(outside, "# Outside\n");
+    try {
+      symlinkSync(outside, join(dir, "escape.md"));
+    } catch {
+      /* symlinks unavailable on this platform */
+    }
+
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50 });
+    const base = `http://127.0.0.1:${daemon.port}`;
+
+    try {
+      await register(base, daemon.token, "doc", file);
+
+      const redirect = await fetch(`${base}/__doc?from=doc&rel=other.md`, {
+        redirect: "manual",
+      });
+      expect(redirect.status).toBe(302);
+      expect(redirect.headers.get("cache-control")).toBe("no-store");
+      const location = redirect.headers.get("location") ?? "";
+      expect(location).not.toBe("");
+      expect(location).toContain("other");
+      expect(location.startsWith("/")).toBe(true);
+
+      const page = await fetch(base + location);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toContain("Other");
+
+      const hashRedirect = await fetch(`${base}/__doc?from=doc&rel=other.md%23section`, {
+        redirect: "manual",
+      });
+      expect(hashRedirect.status).toBe(302);
+      expect(hashRedirect.headers.get("location")).toBe(`${location}#section`);
+
+      const head = await fetch(`${base}/__doc?from=doc&rel=other.md`, {
+        method: "HEAD",
+        redirect: "manual",
+      });
+      expect(head.status).toBe(302);
+      expect(await head.text()).toBe("");
+
+      expect((await fetch(`${base}/__doc?from=unknown&rel=other.md`)).status).toBe(404);
+      expect((await fetch(`${base}/__doc?from=doc&rel=missing.md`)).status).toBe(404);
+      expect((await fetch(`${base}/__doc?from=doc&rel=../other.md`)).status).toBe(404);
+      expect((await fetch(`${base}/__doc?from=doc&rel=%2Fetc%2Fpasswd`)).status).toBe(404);
+      expect((await fetch(`${base}/__doc?from=doc&rel=escape.md`)).status).toBe(404);
+      expect((await fetch(`${base}/__doc?from=doc&rel=other`)).status).toBe(404);
+      const pipe = await fetch(`${base}/__register`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-mdprv-token": daemon.token },
+        body: JSON.stringify({ slug: "pipe", path: "", content: "# Pipe\n" }),
+      });
+      expect(pipe.ok).toBe(true);
+      expect((await fetch(`${base}/__doc?from=pipe&rel=other.md`)).status).toBe(404);
+    } finally {
+      daemon.stop();
+      rmSync(outside, { force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   }, 15000);

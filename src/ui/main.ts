@@ -9,6 +9,7 @@ import "./styles/loader.css";
 
 import { initCopyCode } from "./islands/copy-code";
 import { initDiffView } from "./islands/diff-view";
+import { initDocLinks } from "./islands/doc-links";
 import { initHistory } from "./islands/history";
 import { initLayout } from "./islands/layout";
 import { initLiveReload } from "./islands/live-reload";
@@ -22,6 +23,7 @@ import { show } from "./services/loader";
 import { initNavigation } from "./services/navigation";
 
 initLayout();
+initDocLinks();
 initNavigation((path) => {
   writeLoaderIntent(path);
   show();

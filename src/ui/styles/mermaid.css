@@ -4,6 +4,13 @@ pre.mermaid svg{max-width:100%;height:auto}
 pre.mermaid:hover .mdprv-mermaid-fs,.mdprv-mermaid-fs:focus-visible{opacity:1}
 .mdprv-mermaid-fs:hover{color:var(--mdprv-fg);background:var(--mdprv-code-bg)}
 .mdprv-mermaid-fs svg{width:1rem;height:1rem;display:block}
+/* Images use the same fullscreen affordance as diagrams, but need an inline
+   positioning context of their own. The wrapper is inert for layout: it hugs
+   the image (or the link that wraps it) and keeps max-width behavior. */
+.mdprv-image{position:relative;display:inline-block;max-width:100%;line-height:0}
+.mdprv-image>img,.mdprv-image>a,.mdprv-image>picture{display:block;max-width:100%}
+.mdprv-image img{max-width:100%;height:auto}
+.mdprv-image:hover .mdprv-mermaid-fs,.mdprv-image .mdprv-mermaid-fs:focus-visible{opacity:1}
 .mdprv-mermaid-lightbox{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:var(--mdprv-overlay,rgba(0,0,0,.55));-webkit-backdrop-filter:blur(var(--mdprv-blur,8px));backdrop-filter:blur(var(--mdprv-blur,8px));opacity:0;visibility:hidden;pointer-events:none;transition:opacity var(--mdprv-duration-fast,.15s) var(--mdprv-easing,ease),visibility var(--mdprv-duration-fast,.15s) var(--mdprv-easing,ease)}
 /* Theme-aware frosted veil. There is no opaque stage anymore: the diagram
    floats over the blurred page, so the veil alone has to keep the worst-case
@@ -39,6 +46,15 @@ pre.mermaid:hover .mdprv-mermaid-fs,.mdprv-mermaid-fs:focus-visible{opacity:1}
 .mdprv-mermaid-tools{position:absolute;bottom:1rem;right:1rem;z-index:2;display:flex;gap:.4rem}
 .mdprv-mermaid-tools button{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;height:2.2rem;padding:0 .55rem;border:1px solid var(--mdprv-border);border-radius:var(--mdprv-radius-md,6px);background:var(--mdprv-bg);color:var(--mdprv-muted);cursor:pointer;font:inherit;font-size:var(--mdprv-font-size-ui,13px);line-height:1}
 .mdprv-mermaid-tools button:hover{color:var(--mdprv-fg);background:var(--mdprv-code-bg)}
+.mdprv-mermaid-tools button svg{width:1rem;height:1rem;display:block}
+.mdprv-mermaid-tools button.mdprv-copied{color:var(--mdprv-link)}
+.mdprv-mermaid-tools button.mdprv-copy-error{color:var(--mdprv-danger,#c0392b)}
+.mdprv-mermaid-tools button:disabled{opacity:.5;cursor:default}
+.mdprv-mermaid-status{position:absolute;bottom:3.6rem;right:1rem;z-index:2;max-width:min(80vw,28rem);padding:.35rem .6rem;border:1px solid var(--mdprv-border);border-radius:var(--mdprv-radius-md,6px);background:var(--mdprv-bg);color:var(--mdprv-fg);font-size:var(--mdprv-font-size-small,11.5px);line-height:1.35;pointer-events:none;opacity:0;transition:opacity var(--mdprv-duration-fast,.15s)}
+.mdprv-mermaid-status:not(:empty){opacity:1}
+.mdprv-mermaid-status[data-kind="error"]{color:var(--mdprv-danger,#c0392b);border-color:color-mix(in srgb,var(--mdprv-danger,#c0392b) 45%,var(--mdprv-border))}
+.mdprv-mermaid-stage img{max-width:100%;max-height:100%;width:auto;height:auto;display:block}
+.mdprv-mermaid-zoom img{max-width:none;max-height:none}
 .mdprv-mermaid-stage svg{max-width:100%;max-height:100%;width:auto;height:auto}
 .mdprv-mermaid-close{position:absolute;top:1rem;right:1rem;display:inline-flex;align-items:center;justify-content:center;width:2.2rem;height:2.2rem;padding:0;border:1px solid var(--mdprv-border);border-radius:var(--mdprv-radius-circle,9999px);background:var(--mdprv-bg);color:var(--mdprv-muted);cursor:pointer}
 .mdprv-mermaid-close:hover{color:var(--mdprv-fg);background:var(--mdprv-code-bg)}

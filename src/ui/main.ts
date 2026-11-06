@@ -13,7 +13,7 @@ import { initHistory } from "./islands/history";
 import { initLayout } from "./islands/layout";
 import { initLiveReload } from "./islands/live-reload";
 import { initLoaderOverlay } from "./islands/loader-overlay";
-import { initMermaidLightbox } from "./islands/mermaid-lightbox";
+import { initLightbox } from "./islands/lightbox";
 import { initSettings } from "./islands/settings";
 import { initToc } from "./islands/toc";
 import { initTree } from "./islands/tree";
@@ -28,7 +28,7 @@ initNavigation((path) => {
 });
 initLoaderOverlay();
 initSettings();
-initMermaidLightbox();
+initLightbox();
 initToc();
 initTree();
 initDiffView();

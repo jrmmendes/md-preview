@@ -37,10 +37,10 @@ function output(result: ReturnType<typeof run>): string {
   return `${result.stdout.toString()}${result.stderr.toString()}`;
 }
 
-function runPreview(dir: string, args: string[], pathPrefix?: string) {
+function runPreview(dir: string, args: string[], pathPrefix?: string, cwd = ROOT) {
   return Bun.spawnSync({
     cmd: [process.execPath, ENTRY, ...args],
-    cwd: ROOT,
+    cwd,
     env: {
       ...process.env,
       MDPRV_CONFIG_DIR: dir,
@@ -249,4 +249,87 @@ describe("preview command line", () => {
       await shutdown(stateFile);
     }
   }, 15000);
+});
+
+describe("folder command line", () => {
+  it("is listed in --help", () => {
+    const result = run(tempDir(), ["--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("folder");
+    expect(result.stdout.toString()).toContain("Markdown file in a folder");
+  });
+
+  it("registers every Markdown file and opens index.md first", async () => {
+    const dir = tempDir();
+    const docs = join(dir, "docs");
+    mkdirSync(docs);
+    const { bin, marker } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+    writeFileSync(join(docs, "zeta.md"), "# Zeta\n");
+    writeFileSync(join(docs, "alpha.markdown"), "# Alpha\n");
+    writeFileSync(join(docs, "index.md"), "# Index\n");
+    writeFileSync(join(docs, "notes.txt"), "not markdown\n");
+    mkdirSync(join(docs, "sub"));
+    writeFileSync(join(docs, "sub", "nested.md"), "# Nested\n");
+
+    try {
+      const result = runPreview(dir, ["folder", docs], bin);
+      expect(result.exitCode).toBe(0);
+      const stdout = result.stdout.toString();
+      expect(stdout).not.toContain(docs);
+      const lines = stdout.trim().split("\n").filter(Boolean);
+      expect(lines).toHaveLength(3);
+      expect(lines.map((line) => line.split(/\s+/)[0])).toEqual([
+        "alpha.markdown",
+        "index.md",
+        "zeta.md",
+      ]);
+      const urls = lines.map((line) => line.split(/\s+/)[1]!);
+      for (const url of urls) {
+        expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//);
+        const page = await fetch(url);
+        expect(page.status).toBe(200);
+      }
+
+      const indexUrl = urls[1]!;
+      expect(await waitUntil(() => existsSync(marker))).toBe(true);
+      expect(readFileSync(marker, "utf8").trim()).toBe(indexUrl);
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("uses the current directory when no folder is given", async () => {
+    const dir = tempDir();
+    const docs = join(dir, "cwd-docs");
+    mkdirSync(docs);
+    const { bin, marker } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+    writeFileSync(join(docs, "b.md"), "# B\n");
+    writeFileSync(join(docs, "a.md"), "# A\n");
+
+    try {
+      const result = runPreview(dir, ["folder"], bin, docs);
+      expect(result.exitCode).toBe(0);
+      const lines = result.stdout.toString().trim().split("\n").filter(Boolean);
+      expect(lines).toHaveLength(2);
+      const urls = lines.map((line) => line.split(/\s+/)[1]!);
+      expect(await waitUntil(() => existsSync(marker))).toBe(true);
+      expect(readFileSync(marker, "utf8").trim()).toBe(urls[0]!);
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("fails clearly when the folder has no Markdown files", () => {
+    const dir = tempDir();
+    const docs = join(dir, "empty-docs");
+    mkdirSync(docs);
+    writeFileSync(join(docs, "notes.txt"), "not markdown\n");
+    const result = runPreview(dir, ["folder", docs], undefined);
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain("no Markdown files");
+    expect(output(result)).toContain(".md");
+    expect(readDaemonState(join(dir, "state", "daemon.json"))).toBeNull();
+  });
 });

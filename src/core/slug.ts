@@ -32,6 +32,10 @@ export function baseRoot(path: string): string {
   return "/";
 }
 
+export function encodeSlugPath(slug: string): string {
+  return slug.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+}
+
 export function slugFor(path: string): string {
   let abs = resolve(path);
   abs = abs.replace(/\/+$/, "");

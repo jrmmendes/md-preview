@@ -1,6 +1,7 @@
 import { Command } from "commander";
 
 import { preview, previewPipe } from "./commands/preview";
+import { previewFolder } from "./commands/folder";
 import { register } from "./commands/register";
 import { daemonStart, daemonStatus, daemonStop } from "./commands/daemon";
 import { serve } from "./commands/serve";
@@ -51,6 +52,14 @@ program
       await preview(files, previewOptions);
     }
   );
+
+program
+  .command("folder")
+  .description("Register every Markdown file in a folder and open its preview")
+  .argument("[dir]", "folder to scan (defaults to the current directory)")
+  .action(async (dir?: string) => {
+    await previewFolder(dir);
+  });
 
 const daemon = program.command("daemon").description("Manage the preview daemon");
 daemon

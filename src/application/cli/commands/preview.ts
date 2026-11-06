@@ -7,16 +7,12 @@ import {
   MARKDOWN_EXTENSIONS_LABEL,
 } from "../../../core/extensions";
 import { canonicalPath } from "../../../core/paths";
-import { slugFor } from "../../../core/slug";
+import { encodeSlugPath, slugFor } from "../../../core/slug";
 import { writePipeDocument, type TempEnv } from "../../../core/temp";
 import { themesDir } from "../../../core/config-file";
 import { createThemeStore } from "../../../core/themes/store";
 import { openInBrowser } from "../browser";
 import { ensureDaemon, registerDocument } from "../daemon-client";
-
-function encodeSlug(slug: string): string {
-  return slug.split("/").map(encodeURIComponent).join("/");
-}
 
 export interface PreviewOptions {
   theme?: string;
@@ -127,7 +123,7 @@ async function registerDocuments(
       file: document.file,
       path: document.path,
       slug: finalSlug,
-      url: `http://127.0.0.1:${daemon.port}/${encodeSlug(finalSlug)}${query}`,
+      url: `http://127.0.0.1:${daemon.port}/${encodeSlugPath(finalSlug)}${query}`,
     });
   }
 

@@ -5,8 +5,35 @@ pre.mermaid:hover .mdprv-mermaid-fs,.mdprv-mermaid-fs:focus-visible{opacity:1}
 .mdprv-mermaid-fs:hover{color:var(--mdprv-fg);background:var(--mdprv-code-bg)}
 .mdprv-mermaid-fs svg{width:1rem;height:1rem;display:block}
 .mdprv-mermaid-lightbox{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:var(--mdprv-overlay,rgba(0,0,0,.55));-webkit-backdrop-filter:blur(var(--mdprv-blur,8px));backdrop-filter:blur(var(--mdprv-blur,8px));opacity:0;visibility:hidden;pointer-events:none;transition:opacity var(--mdprv-duration-fast,.15s) var(--mdprv-easing,ease),visibility var(--mdprv-duration-fast,.15s) var(--mdprv-easing,ease)}
+/* Theme-aware frosted veil. There is no opaque stage anymore: the diagram
+   floats over the blurred page, so the veil alone has to keep the worst-case
+   backdrop (a dark code block or image behind the overlay) light/dark enough
+   for text and strokes. A high, theme-tinted alpha compresses that variance;
+   `data-scheme` is set by the lightbox island from the effective
+   `color-scheme` (works for fixed and auto themes). The base `background`
+   above keeps `--mdprv-overlay` as fallback. The blur stays untouched. */
+.mdprv-mermaid-lightbox[data-scheme="light"]{background:color-mix(in srgb,var(--mdprv-bg,#fff) 68%,transparent)}
+.mdprv-mermaid-lightbox[data-scheme="dark"]{background:color-mix(in srgb,var(--mdprv-bg,#000) 78%,transparent)}
 .mdprv-mermaid-lightbox.mdprv-mermaid-open{opacity:1;visibility:visible;pointer-events:auto}
-.mdprv-mermaid-stage{width:92vw;height:88vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+/* The stage is a layout box only: no fill, border or shadow, so the diagram
+   appears to float over the blurred page instead of inside a flat rectangle.
+   Contrast comes from the full-viewport veil above plus the stroke overrides
+   below. */
+.mdprv-mermaid-stage{position:relative;width:92vw;height:88vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:1.25rem;background:none;border:0;box-shadow:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+/* Panning must never paint a native text selection over the SVG labels. */
+.mdprv-mermaid-stage *{user-select:none!important;-webkit-user-select:none!important;-webkit-touch-callout:none}
+.mdprv-mermaid-lightbox.mdprv-mermaid-dragging .mdprv-mermaid-zoom{cursor:grabbing}
+/* Non-text strokes inside the lightbox must stay >=3:1 against the stage.
+   Mermaid injects `#id .cluster rect{...}` (and a neo gradient for node
+   strokes), so a scoped `!important` is required to win over that inline
+   <style>. Only the fullscreen clone is affected; inline diagrams keep their
+   original theme colors. */
+.mdprv-mermaid-lightbox{--mdprv-mermaid-stroke:color-mix(in srgb,var(--mdprv-accent,#0969da) 55%,var(--mdprv-fg,#000));--mdprv-mermaid-label:color-mix(in srgb,var(--mdprv-fg,#000) 75%,#fff)}
+.mdprv-mermaid-lightbox .cluster>rect,.mdprv-mermaid-lightbox .node>rect,.mdprv-mermaid-lightbox .node>circle,.mdprv-mermaid-lightbox .node>ellipse,.mdprv-mermaid-lightbox .node>polygon,.mdprv-mermaid-lightbox .node>path,.mdprv-mermaid-lightbox .note{stroke:var(--mdprv-mermaid-stroke)!important}
+/* In dark themes Mermaid's edge label text sits at ~4.4:1 on its chip. */
+.mdprv-mermaid-lightbox[data-scheme="dark"] .edgeLabel,.mdprv-mermaid-lightbox[data-scheme="dark"] .edgeLabel p,.mdprv-mermaid-lightbox[data-scheme="dark"] .edgeLabel span{color:var(--mdprv-mermaid-label)!important}
+.mdprv-mermaid-lightbox[data-scheme="dark"] .noteText,.mdprv-mermaid-lightbox[data-scheme="dark"] .noteText>tspan{fill:var(--mdprv-mermaid-label)!important}
+.mdprv-mermaid-stage pre.mermaid{background:transparent}
 .mdprv-mermaid-zoom{transform-origin:center center;cursor:grab}
 .mdprv-mermaid-zoom.mdprv-mermaid-pan{cursor:grabbing}
 .mdprv-mermaid-tools{position:absolute;bottom:1rem;right:1rem;z-index:2;display:flex;gap:.4rem}

@@ -25,6 +25,35 @@ function readPayload(): MermaidPayload | null {
   }
 }
 
+function prefersDark(): boolean {
+  return (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+}
+
+/**
+ * `data-theme` holds the theme *name* ("auto", "github-light", "nord", ...),
+ * not a light/dark token. Only "auto" follows the OS; for fixed themes the
+ * `color-scheme` emitted by the theme CSS is the source of truth.
+ */
+function effectiveScheme(): "light" | "dark" {
+  const name = document.documentElement.getAttribute("data-theme") ?? "auto";
+  if (name !== "auto") {
+    const scheme =
+      typeof window.getComputedStyle === "function"
+        ? window.getComputedStyle(document.documentElement).getPropertyValue("color-scheme")
+        : "";
+    if (scheme.includes("dark") && !scheme.includes("light")) {
+      return "dark";
+    }
+    if (scheme.includes("light") && !scheme.includes("dark")) {
+      return "light";
+    }
+  }
+  return prefersDark() ? "dark" : "light";
+}
+
 export function initMermaidLightbox(): void {
   const data = readPayload();
 
@@ -32,10 +61,7 @@ export function initMermaidLightbox(): void {
     if (!data) {
       return {};
     }
-    const dark =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
-    return dark ? data.mermaid.dark : data.mermaid.light;
+    return effectiveScheme() === "dark" ? data.mermaid.dark : data.mermaid.light;
   }
 
   function decorate(): void {
@@ -67,6 +93,9 @@ export function initMermaidLightbox(): void {
   let scale = 1;
   let translateX = 0;
   let translateY = 0;
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
 
   const lightbox = document.getElementById("mdprv-mermaid-lightbox");
   const stage = document.getElementById("mdprv-mermaid-stage");
@@ -104,10 +133,17 @@ export function initMermaidLightbox(): void {
     return value;
   }
 
+  function endDrag(): void {
+    dragging = false;
+    zoomElement?.classList.remove("mdprv-mermaid-pan");
+    lightbox?.classList.remove("mdprv-mermaid-dragging");
+  }
+
   function openLightbox(svg: SVGSVGElement): void {
     if (!lightbox || !stage || !svg) {
       return;
     }
+    endDrag();
     stage.innerHTML = "";
     zoomElement = document.createElement("div");
     zoomElement.className = "mdprv-mermaid-zoom";
@@ -115,7 +151,18 @@ export function initMermaidLightbox(): void {
     const rect = svg.getBoundingClientRect();
     const width = rect.width || Number.parseFloat(svg.getAttribute("width") ?? "") || 300;
     const height = rect.height || Number.parseFloat(svg.getAttribute("height") ?? "") || 150;
-    let fit = Math.min(stage.clientWidth / width, stage.clientHeight / height);
+    // Fit inside the stage content box so the stage padding keeps the diagram
+    // away from the border.
+    const stageStyle = window.getComputedStyle(stage);
+    const padX =
+      (Number.parseFloat(stageStyle.paddingLeft) || 0) +
+      (Number.parseFloat(stageStyle.paddingRight) || 0);
+    const padY =
+      (Number.parseFloat(stageStyle.paddingTop) || 0) +
+      (Number.parseFloat(stageStyle.paddingBottom) || 0);
+    const availableWidth = Math.max(1, stage.clientWidth - padX);
+    const availableHeight = Math.max(1, stage.clientHeight - padY);
+    let fit = Math.min(availableWidth / width, availableHeight / height);
     if (!Number.isFinite(fit) || fit <= 0) {
       fit = 1;
     }
@@ -134,6 +181,7 @@ export function initMermaidLightbox(): void {
     translateX = 0;
     translateY = 0;
     applyZoom();
+    lightbox.dataset.scheme = effectiveScheme();
     lightbox.classList.add("mdprv-mermaid-open");
     lightbox.setAttribute("aria-hidden", "false");
     document.body.classList.add("mdprv-mermaid-lock");
@@ -143,6 +191,7 @@ export function initMermaidLightbox(): void {
     if (!lightbox) {
       return;
     }
+    endDrag();
     lightbox.classList.remove("mdprv-mermaid-open");
     lightbox.setAttribute("aria-hidden", "true");
     document.body.classList.remove("mdprv-mermaid-lock");
@@ -184,38 +233,39 @@ export function initMermaidLightbox(): void {
   });
 
   if (stage) {
-    let dragging = false;
-    let startX = 0;
-    let startY = 0;
-
     stage.addEventListener("pointerdown", (event) => {
-      if (!zoomElement) {
+      if (!zoomElement || event.button !== 0) {
         return;
       }
       dragging = true;
       startX = event.clientX - translateX;
       startY = event.clientY - translateY;
       zoomElement.classList.add("mdprv-mermaid-pan");
+      lightbox?.classList.add("mdprv-mermaid-dragging");
       try {
         stage.setPointerCapture(event.pointerId);
       } catch {
         /* ignore */
       }
+      // Prevent the browser from starting a native text selection on the SVG
+      // labels and drop any selection that predates the gesture.
+      event.preventDefault();
+      window.getSelection()?.removeAllRanges();
     });
 
     stage.addEventListener("pointermove", (event) => {
       if (!dragging) {
         return;
       }
+      event.preventDefault();
       translateX = event.clientX - startX;
       translateY = event.clientY - startY;
       applyZoom();
     });
 
-    stage.addEventListener("pointerup", () => {
-      dragging = false;
-      zoomElement?.classList.remove("mdprv-mermaid-pan");
-    });
+    stage.addEventListener("pointerup", endDrag);
+    stage.addEventListener("pointercancel", endDrag);
+    stage.addEventListener("lostpointercapture", endDrag);
   }
 
   document.addEventListener("keydown", (event) => {

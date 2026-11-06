@@ -536,4 +536,73 @@ describe("application daemon document links", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 15000);
+
+  it("unregisters a document with DELETE and stops watching it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-doc-delete-"));
+    const file = join(dir, "doc.md");
+    const other = join(dir, "other.md");
+    const stateFile = join(dir, "state", "daemon.json");
+    writeFileSync(file, "# Doc\n");
+    writeFileSync(other, "# Other\n");
+
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50 });
+    const base = `http://127.0.0.1:${daemon.port}`;
+    const abort = new AbortController();
+    let reader: SseReader | undefined;
+
+    try {
+      await register(base, daemon.token, "doc", file);
+      await register(base, daemon.token, "other", other);
+
+      const events = await fetch(`${base}/__events`, { signal: abort.signal });
+      reader = new SseReader(events.body!.getReader() as ReadableStreamDefaultReader<Uint8Array>);
+      const snapshot = await reader.next<SnapshotEvent>("snapshot");
+      expect(snapshot.slugs.map((item) => item.slug).sort()).toEqual(["doc", "other"]);
+
+      const deleted = await fetch(`${base}/__doc/other`, { method: "DELETE" });
+      expect(deleted.status).toBe(204);
+      expect(deleted.headers.get("cache-control")).toBe("no-store");
+      expect(await deleted.text()).toBe("");
+
+      const slugs = await reader.next<SlugInfo[]>("slugs");
+      expect(slugs.map((item) => item.slug)).toEqual(["doc"]);
+      expect((await fetch(`${base}/other`)).status).toBe(404);
+
+      // The file stays on disk and deleting again is a uniform 404.
+      expect(readFileSync(other, "utf8")).toBe("# Other\n");
+      expect((await fetch(`${base}/__doc/other`, { method: "DELETE" })).status).toBe(404);
+      expect((await fetch(`${base}/__doc/missing`, { method: "DELETE" })).status).toBe(404);
+      expect((await fetch(`${base}/__doc/`, { method: "DELETE" })).status).toBe(404);
+
+      // Cross-site browser requests are rejected even without a token.
+      const forbidden = await fetch(`${base}/__doc/doc`, {
+        method: "DELETE",
+        headers: { "Sec-Fetch-Site": "cross-site" },
+      });
+      expect(forbidden.status).toBe(403);
+      const wrongOrigin = await fetch(`${base}/__doc/doc`, {
+        method: "DELETE",
+        headers: { Origin: "http://127.0.0.1:1" },
+      });
+      expect(wrongOrigin.status).toBe(403);
+      expect((await fetch(`${base}/doc`)).status).toBe(200);
+
+      // The watcher is gone: editing the file no longer emits a version event.
+      writeFileSync(other, "# Changed\n");
+      await expect(reader.next("version", 400)).rejects.toThrow(/timeout/);
+
+      // A same-origin DELETE is accepted and removes the document.
+      const sameOrigin = await fetch(`${base}/__doc/doc`, {
+        method: "DELETE",
+        headers: { Origin: base },
+      });
+      expect(sameOrigin.status).toBe(204);
+      expect((await fetch(`${base}/doc`)).status).toBe(404);
+    } finally {
+      abort.abort();
+      await reader?.cancel();
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
 });

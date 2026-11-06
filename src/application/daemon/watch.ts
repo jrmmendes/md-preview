@@ -22,6 +22,8 @@ export interface WatchCallbacks {
 
 export interface SlugRegistry {
   register(rawSlug: string, rawPath: string, content: string | null): string;
+  /** Remove a registered document and stop watching it. Never touches the file. */
+  unregister(slug: string): boolean;
   findByPath(rawPath: string): string | null;
   get(slug: string): SlugEntry | undefined;
   entries(): ReadonlyMap<string, SlugEntry>;
@@ -198,8 +200,21 @@ export function createSlugRegistry(callbacks: WatchCallbacks = {}): SlugRegistry
     }
   }
 
+  function unregister(slug: string): boolean {
+    const entry = slugs.get(slug);
+    if (!entry) {
+      return false;
+    }
+    entry.watcher?.close();
+    entry.watcher = null;
+    slugs.delete(slug);
+    callbacks.onSlugs?.(list());
+    return true;
+  }
+
   return {
     register,
+    unregister,
     findByPath,
     get: (slug) => slugs.get(slug),
     entries: () => slugs,

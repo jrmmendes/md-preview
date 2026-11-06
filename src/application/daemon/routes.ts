@@ -86,6 +86,34 @@ function originAllowed(req: Request): boolean {
   return url.protocol === "http:" && hostnameIsLoopback(url.host);
 }
 
+/** Reject cross-site browser requests that carry `Sec-Fetch-Site`. */
+function fetchSiteAllowed(req: Request): boolean {
+  const site = req.headers.get("sec-fetch-site");
+  if (site === null) {
+    return true;
+  }
+  const value = site.trim().toLowerCase();
+  return value === "same-origin" || value === "none";
+}
+
+/** When an `Origin` is present, require it to match the `Host` exactly. */
+function sameOriginRequest(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (origin === null) {
+    return true;
+  }
+  const host = req.headers.get("host");
+  if (!host) {
+    return false;
+  }
+  try {
+    const url = new URL(origin);
+    return url.protocol === "http:" && url.host === host;
+  } catch {
+    return false;
+  }
+}
+
 function tokenMatches(req: Request, expected: string): boolean {
   const given = req.headers.get("x-mdprv-token");
   if (!given) {
@@ -368,6 +396,25 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     });
   }
 
+  /**
+   * Unregister a document from the sidebar without deleting it from disk.
+   *
+   * Only an already registered slug is accepted; nothing is created on the
+   * fly, so `DELETE` cannot be used to probe the filesystem.
+   */
+  function deleteDoc(route: string): Response {
+    const slug = route.slice("/__doc/".length);
+    if (!slug || !registry.get(slug)) {
+      return text("not found", 404);
+    }
+    if (!registry.unregister(slug)) {
+      return text("not found", 404);
+    }
+    return new Response(null, {
+      status: 204,
+      headers: baseHeaders("text/plain; charset=utf-8"),
+    });
+  }
 
   async function handle(req: Request): Promise<Response> {
     if (!hostAllowed(req) || !originAllowed(req)) {
@@ -401,6 +448,12 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     }
     if ((method === "GET" || method === "HEAD") && route === "/__themes") {
       return json({ themes: themes.names(), errors: themes.errors() }, 200, method === "HEAD");
+    }
+    if (method === "DELETE" && route.startsWith("/__doc/")) {
+      if (!sameOriginRequest(req) || !fetchSiteAllowed(req)) {
+        return text("forbidden", 403);
+      }
+      return deleteDoc(route);
     }
     if ((method === "GET" || method === "HEAD") && route === "/__doc") {
       return serveDoc(url, method === "HEAD");

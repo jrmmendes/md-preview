@@ -57,4 +57,29 @@ describe("ui shell", () => {
     expect(head).toContain('id = "mdprv-font-google-css"');
     expect(head).toContain("data-font-missing");
   });
+
+  it("exposes a single visually hidden live status region", () => {
+    const all = ids(SHELL);
+    expect(all.filter((id) => id === "mdprv-status")).toHaveLength(1);
+    expect(SHELL).toContain('<p id="mdprv-status" class="mdprv-sr-only" role="status" aria-live="polite"></p>');
+    expect(SHELL).toContain('id="mdprv-font-status"');
+    expect(SHELL).toContain('class="mdprv-mermaid-status"');
+  });
+
+  it("keeps an empty state for when the document in view is closed", () => {
+    expect(SHELL).toContain('<article id="mdprv-doc" class="markdown-body" tabindex="-1">');
+    expect(SHELL).toContain('<section id="mdprv-closed" class="mdprv-closed-state" aria-labelledby="mdprv-closed-title" hidden>');
+    expect(SHELL).toContain('<h2 id="mdprv-closed-title" tabindex="-1">No document open</h2>');
+    expect(SHELL).toContain("md-preview &lt;file&gt;");
+    expect(SHELL).not.toContain("mdprv-reopen");
+    expect(ids(SHELL).filter((id) => id === "mdprv-closed")).toHaveLength(1);
+  });
+
+  it("has no global close or folder controls", () => {
+    expect(SHELL).not.toContain('id="mdprv-close"');
+    expect(SHELL).not.toContain('id="mdprv-folder"');
+    expect(SHELL).not.toContain("mdprv-folder-dialog");
+    expect(SHELL).not.toContain("{{mdprv-folder-hidden}}");
+    expect(SHELL).toContain('<ul class="mdprv-history-list" id="mdprv-history-list"></ul>');
+  });
 });

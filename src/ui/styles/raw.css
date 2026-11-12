@@ -1,0 +1,183 @@
+/* "Raw" / "Copy raw" controls and the plain source view. Every color and
+   motion value comes from the active theme tokens so the controls follow
+   light, dark and automatic themes. */
+
+/* Floating pill: fixed positioning keeps it outside the document flow, so
+   adding the control never shifts the article or the top of the page. */
+.mdprv-view-toolbar {
+  position: fixed;
+  top: .4rem;
+  left: 50%;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin: 0;
+  padding: .2rem;
+  transform: translateX(-50%);
+  border: 1px solid var(--mdprv-border);
+  border-radius: var(--mdprv-radius-md, 6px);
+  background: var(--mdprv-surface-raised, var(--mdprv-surface, var(--mdprv-bg)));
+  box-shadow: var(--mdprv-shadow-panel, 0 8px 28px rgba(0, 0, 0, .28));
+}
+
+.mdprv-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-height: calc(var(--mdprv-control-height, 1.9rem) - .35rem);
+  padding: .1rem .6rem;
+  border: 1px solid transparent;
+  border-radius: var(--mdprv-radius-sm, 5px);
+  background: transparent;
+  color: var(--mdprv-muted);
+  font: inherit;
+  font-size: var(--mdprv-font-size-small, 11.5px);
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    color var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease),
+    background-color var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease),
+    border-color var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease);
+}
+
+.mdprv-view-btn:hover {
+  border-color: var(--mdprv-border);
+  background: var(--mdprv-code-bg);
+  color: var(--mdprv-fg);
+}
+
+.mdprv-view-btn[aria-pressed="true"] {
+  border-color: var(--mdprv-border-strong, var(--mdprv-border));
+  background: var(--mdprv-code-bg);
+  color: var(--mdprv-fg);
+  font-weight: var(--mdprv-font-weight-bold, 600);
+}
+
+.mdprv-view-btn:focus-visible {
+  outline: 2px solid var(--mdprv-accent);
+  outline-offset: 2px;
+}
+
+.mdprv-raw-copy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mdprv-raw-copy-icon svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+}
+
+.mdprv-raw-copy-icon.mdprv-copied {
+  color: var(--mdprv-link);
+}
+
+/* The raw source shares the article's centered column and horizontal padding,
+   but it is plain text: no panel, border, radius or internal scrolling. */
+.mdprv-raw {
+  max-width: var(--mdprv-content-width, 46rem);
+  margin: 0 auto;
+  padding:
+    var(--mdprv-article-padding-y, 2.5rem)
+    var(--mdprv-article-padding-x, 1.25rem)
+    var(--mdprv-article-padding-bottom, 6rem);
+  opacity: 0;
+  transform: translateY(-.35rem);
+  transition:
+    opacity var(--mdprv-duration-ui, .18s) var(--mdprv-easing, ease),
+    transform var(--mdprv-duration-ui, .18s) var(--mdprv-easing, ease);
+}
+
+.mdprv-raw[hidden] {
+  display: none;
+}
+
+.mdprv-raw.mdprv-raw-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.mdprv-raw-pre {
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--mdprv-fg);
+  font-family: var(--mdprv-font-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-size: .9em;
+  line-height: max(1.5, var(--mdprv-line-height, 1.65));
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mdprv-raw-code {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: inherit;
+  overflow: visible;
+}
+
+/* Shiki paints token colors through these spans; the wrapper stays plain. */
+.mdprv-raw-code.shiki,
+.mdprv-raw-code.shiki span {
+  background: none;
+}
+
+html.mdprv-raw-open #mdprv-doc {
+  display: none;
+}
+
+/* Fade the rendered document back in when raw is closed (including zen). */
+@keyframes mdprv-doc-appear {
+  from {
+    opacity: 0;
+    transform: translateY(.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html:not(.mdprv-raw-open) #mdprv-doc {
+  animation: mdprv-doc-appear var(--mdprv-duration-ui, .18s) var(--mdprv-easing, ease);
+}
+
+html.mdprv-zen .mdprv-view-toolbar,
+html.mdprv-closed .mdprv-view-toolbar {
+  display: none;
+}
+
+html.mdprv-zen .mdprv-raw {
+  display: none;
+}
+
+/* Backstop: if a class order ever leaves both states on, zen wins. */
+html.mdprv-zen.mdprv-raw-open #mdprv-doc {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mdprv-raw,
+  .mdprv-view-btn {
+    transition: none;
+  }
+
+  html:not(.mdprv-raw-open) #mdprv-doc {
+    animation: none;
+  }
+}

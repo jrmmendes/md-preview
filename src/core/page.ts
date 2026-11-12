@@ -39,7 +39,7 @@ export function renderPage(input: PageInput, shell: string, store?: ThemeStore):
     ["{{mdprv-zoom}}", String(input.zoomSensitivity)],
     ["{{mdprv-theme-css}}", themeCss(theme)],
     ["{{mdprv-meta}}", renderMeta(input.meta)],
-    ["{{mdprv-data}}", jsonForScript({ mermaid })],
+    ["{{mdprv-data}}", jsonForScript({ mermaid, raw: input.raw ?? "" })],
   ];
 
   const out = fill.reduce((html, [token, value]) => html.split(token).join(value), shell);

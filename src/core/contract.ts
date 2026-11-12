@@ -7,6 +7,8 @@ export interface PageInput {
   loader: LoaderName;
   zoomSensitivity: number;
   meta?: Record<string, unknown>;
+  /** Raw Markdown source (frontmatter included) sent to the client payload. */
+  raw?: string;
 }
 
 export type FontCategory = "sans" | "serif" | "monospace" | "script" | "unknown";

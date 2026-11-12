@@ -6,6 +6,7 @@ import type { Config } from "../../core/config";
 import type { SnapshotEvent } from "../../core/contract";
 import { renderPage } from "../../core/page";
 import { normalizeContent, renderMarkdown } from "../../core/markdown/render";
+import { codeToHtml, warmup } from "../../core/markdown/highlight";
 import { encodeSlugPath, slugFor } from "../../core/slug";
 import { resolveThemeName } from "../../core/themes/resolve";
 import type { ThemeStore } from "../../core/themes/store";
@@ -17,7 +18,7 @@ import { createFontCatalog, type FontCatalog } from "./fonts";
 import { baseHeaders, fontAssetHeaders, SECURITY_HEADERS } from "./headers";
 import { serveImage } from "./images";
 import { loadShell } from "./shell";
-import type { SlugRegistry } from "./watch";
+import type { SlugEntry, SlugRegistry } from "./watch";
 
 const CLIENT_TYPES: Record<string, string> = {
   js: "application/javascript; charset=utf-8",
@@ -188,6 +189,18 @@ function readDisk(filePath: string): string | null {
   }
 }
 
+/** Registered content when available, otherwise the current file on disk. */
+function entryContent(entry: SlugEntry): string {
+  let content = entry.content;
+  if (content === null || content === undefined) {
+    content = entry.path ? readDisk(entry.path) : null;
+    if (content === null) {
+      content = "";
+    }
+  }
+  return content;
+}
+
 function cookieValue(header: string | null, name: string): string | null {
   if (!header) {
     return null;
@@ -332,13 +345,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       return text("not found", 404);
     }
 
-    let content = entry.content;
-    if (content === null || content === undefined) {
-      content = entry.path ? readDisk(entry.path) : null;
-      if (content === null) {
-        content = "";
-      }
-    }
+    const content = entryContent(entry);
 
     const themeName = resolveThemeName(
       url.searchParams.get("theme"),
@@ -366,6 +373,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
           loader: config.loader,
           zoomSensitivity: config.zoomSensitivity,
           meta: data,
+          raw: content,
         },
         addNonce(loadShell(), nonce),
         themes
@@ -377,6 +385,29 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         },
       }
     );
+  }
+
+  /**
+   * Lazy Shiki pass for the raw view. The page payload only carries the plain
+   * Markdown; the client asks for this fragment the first time raw is opened.
+   */
+  async function serveRawHighlight(req: Request, url: URL, head: boolean): Promise<Response> {
+    const slug = url.searchParams.get("slug") ?? "";
+    const entry = registry.get(slug);
+    if (!entry) {
+      return text("not found", 404, head);
+    }
+    const themeName = resolveThemeName(
+      url.searchParams.get("theme"),
+      cookieValue(req.headers.get("cookie"), "mdprv_theme"),
+      config.theme,
+      themes
+    );
+    await warmup();
+    const html = codeToHtml(entryContent(entry), "markdown", themeName);
+    return new Response(head ? null : html, {
+      headers: baseHeaders("text/html; charset=utf-8"),
+    });
   }
 
   function serveDoc(url: URL, head: boolean): Response {
@@ -457,6 +488,9 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     }
     if ((method === "GET" || method === "HEAD") && route === "/__doc") {
       return serveDoc(url, method === "HEAD");
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__raw-highlight") {
+      return serveRawHighlight(req, url, method === "HEAD");
     }
     if ((method === "GET" || method === "HEAD") && route.startsWith("/__assets/")) {
       const name = route.slice("/__assets/".length);

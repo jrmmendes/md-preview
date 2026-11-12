@@ -78,4 +78,14 @@ describe("renderPage", () => {
   it("escapes '<' in JSON so it cannot close the script block", () => {
     expect(jsonForScript({ value: "</script>" })).toBe('{"value":"\\u003c/script>"}');
   });
+
+  it("ships the raw Markdown source in the JSON payload", () => {
+    const raw = "---\ntitle: T\n---\n# Body\n\n<script>x</script>\n";
+    const html = renderPage(input({ raw }), SHELL);
+    const payload = html.match(/id="mdprv-data">([\s\S]*?)<\/script>/);
+    expect(payload).not.toBeNull();
+    const data = JSON.parse(payload?.[1] ?? "{}") as { raw?: string };
+    expect(data.raw).toBe(raw);
+    expect(html).not.toContain("</script>x");
+  });
 });

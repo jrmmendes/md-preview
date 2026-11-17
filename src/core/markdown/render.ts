@@ -5,6 +5,7 @@ import taskLists from "markdown-it-task-lists";
 
 import { renderDiff } from "./diff";
 import { codeToHtml, warmup } from "./highlight";
+import { renderCsvTable, renderGfmTableClose, renderGfmTableOpen } from "./table";
 import { renderTree } from "./tree";
 import type { DocLinkState } from "../doc-links";
 
@@ -20,6 +21,21 @@ export type DocLinkResolver = (href: string) => DocLinkResolution | null;
 export interface RenderOptions {
   /** Optional hook that rewrites sibling Markdown links at render time. */
   docLinkResolver?: DocLinkResolver;
+}
+
+interface RenderEnv {
+  slug: string;
+  docLinkResolver?: DocLinkResolver;
+  /** Monotonic table counter, shared by GFM tables and csv fences. */
+  tableSeq?: number;
+  /** Open GFM tables, used to close the wrapper after `</table>`. */
+  tableStack?: string[];
+}
+
+function nextTableSeq(env: RenderEnv): number {
+  const seq = (env.tableSeq ?? 0) + 1;
+  env.tableSeq = seq;
+  return seq;
 }
 
 const mdCache = new Map<string, MarkdownIt>();
@@ -45,6 +61,15 @@ function createRenderer(themeName: string): MarkdownIt {
     if (info === "mermaid") {
       return '<pre class="mermaid">' + Bun.escapeHTML(tokens[idx].content) + "</pre>\n";
     }
+    if (info === "csv") {
+      const csv = renderCsvTable(tokens[idx].content, {
+        seq: nextTableSeq(env as RenderEnv),
+        renderSource: (source) => codeToHtml(source, "csv", themeName),
+      });
+      if (csv !== null) {
+        return csv + "\n";
+      }
+    }
     if (info === "tree") {
       const dirsOnly = parts.slice(1).some((part) => part === "-d" || part === "--dirs-only");
       const tree = renderTree(tokens[idx].content, { dirsOnly });
@@ -59,6 +84,35 @@ function createRenderer(themeName: string): MarkdownIt {
       }
     }
     return defaultFence(tokens, idx, options, env, self);
+  };
+
+  const defaultTableOpen =
+    md.renderer.rules.table_open ??
+    ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+  md.renderer.rules.table_open = (tokens, idx, options, env, self) => {
+    const renderEnv = env as RenderEnv;
+    const seq = nextTableSeq(renderEnv);
+    const id = `mdprv-table-${seq}`;
+    const token = tokens[idx]!;
+    token.attrJoin("class", "mdprv-grid");
+    token.attrSet("role", "grid");
+    token.attrSet("aria-label", "Tabela de dados");
+    token.attrSet("id", `${id}-grid`);
+    (renderEnv.tableStack ??= []).push(id);
+    return renderGfmTableOpen(seq) + defaultTableOpen(tokens, idx, options, env, self);
+  };
+
+  const defaultTableClose =
+    md.renderer.rules.table_close ??
+    ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+  md.renderer.rules.table_close = (tokens, idx, options, env, self) => {
+    const stack = (env as RenderEnv).tableStack;
+    const html = defaultTableClose(tokens, idx, options, env, self);
+    if (!stack || stack.length === 0) {
+      return html;
+    }
+    stack.pop();
+    return html + renderGfmTableClose();
   };
 
   const defaultImage = md.renderer.rules.image!;
@@ -128,7 +182,7 @@ export async function renderMarkdown(
 ): Promise<string> {
   await warmup();
   const md = rendererFor(themeName);
-  const env: { slug: string; docLinkResolver?: DocLinkResolver } = { slug };
+  const env: RenderEnv = { slug };
   if (options.docLinkResolver) {
     env.docLinkResolver = options.docLinkResolver;
   }

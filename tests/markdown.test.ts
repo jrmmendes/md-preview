@@ -40,7 +40,8 @@ describe("normalizeContent", () => {
 describe("renderMarkdown", () => {
   it("renders GFM, footnotes, relative images and Mermaid fences", async () => {
     const html = await renderMarkdown(normalizeContent(SAMPLE), "auto", "docs/fixtures/reference");
-    expect(html).toContain("<table>");
+    expect(html).toContain('<table class="mdprv-grid"');
+    expect(html).toContain('data-mdprv-table');
     expect(html).toContain('<input class="task-list-item-checkbox"');
     expect(html).toContain("<s>riscado</s>");
     expect(html).toContain('class="footnotes"');
@@ -123,6 +124,63 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain('<span class="mdprv-tree-name">.</span>');
     expect(html).toContain('<ul class="mdprv-tree-list"><li class="mdprv-tree-item');
     expect(html).not.toContain("language-tree");
+  }, 30000);
+
+  it("wraps GFM tables in the spreadsheet shell without a raw toggle", async () => {
+    const html = await renderMarkdown(
+      "| Nome | Valor |\n| :--- | ---: |\n| A | 1 |\n",
+      "auto",
+      "doc"
+    );
+    expect(html).toContain('class="mdprv-table"');
+    expect(html).toContain('data-mdprv-table-kind="gfm"');
+    expect(html).toContain('data-mdprv-table-header-row="1"');
+    expect(html).toContain('data-mdprv-table-toolbar hidden');
+    expect(html).toContain('<table class="mdprv-grid"');
+    expect(html).toContain('role="grid"');
+    expect(html).toContain('id="mdprv-table-1-grid"');
+    expect(html).toContain('<th style="text-align:left">Nome</th>');
+    expect(html).toContain('<td style="text-align:right">1</td>');
+    expect(html).toContain("</table>\n</div></div>");
+    // GFM keeps the original table; the per-block Raw toggle is CSV-only.
+    expect(html).not.toContain('data-mdprv-table-action="raw"');
+    expect(html).not.toContain("data-mdprv-table-raw-view");
+  }, 30000);
+
+  it("gives every table a unique id", async () => {
+    const html = await renderMarkdown(
+      ["| A |", "| --- |", "| 1 |", "", "| B |", "| --- |", "| 2 |", ""].join("\n"),
+      "auto",
+      "doc"
+    );
+    expect(html).toContain('id="mdprv-table-1-grid"');
+    expect(html).toContain('id="mdprv-table-2-grid"');
+    expect(html).toContain('aria-controls="mdprv-table-2-search"');
+  }, 30000);
+
+  it("renders csv fences as a table with header, numbers and highlighted raw", async () => {
+    const html = await renderMarkdown(
+      '```csv\nnome;valor\nAna;1.234,50\n"Silva, Bia";2,5\n```\n',
+      "auto",
+      "doc"
+    );
+    expect(html).toContain('data-mdprv-table-kind="csv"');
+    expect(html).toContain('data-mdprv-table-raw="0"');
+    expect(html).toContain('<th role="columnheader" scope="col" aria-colindex="1">nome</th>');
+    expect(html).toContain('<th role="columnheader" scope="col" aria-colindex="2">valor</th>');
+    expect(html).toContain('data-mdprv-num="1">1.234,50</td>');
+    expect(html).toContain("Silva, Bia");
+    expect(html).toContain('data-mdprv-table-action="raw"');
+    expect(html).toContain("data-mdprv-table-raw-view hidden");
+    expect(html).toContain('class="shiki');
+    expect(html).toContain('id="mdprv-table-1-grid"');
+    expect(html).not.toContain("language-csv");
+  }, 30000);
+
+  it("falls back to a code block for an empty csv fence", async () => {
+    const html = await renderMarkdown("```csv\n\n```\n", "auto", "doc");
+    expect(html).not.toContain("data-mdprv-table");
+    expect(html).toContain('class="shiki');
   }, 30000);
 
   it("leaves other fences untouched", async () => {

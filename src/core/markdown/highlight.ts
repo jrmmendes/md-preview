@@ -6,6 +6,7 @@ import typescript from "@shikijs/langs/typescript";
 import json from "@shikijs/langs/json";
 import lua from "@shikijs/langs/lua";
 import bash from "@shikijs/langs/bash";
+import csv from "@shikijs/langs/csv";
 import html from "@shikijs/langs/html";
 import css from "@shikijs/langs/css";
 import markdown from "@shikijs/langs/markdown";
@@ -34,6 +35,7 @@ export const LANGS = [
   json,
   lua,
   bash,
+  csv,
   html,
   css,
   markdown,

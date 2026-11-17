@@ -72,7 +72,12 @@ describe("renderMarkdown", () => {
     expect(html).toContain('class="mdprv-tree"');
     expect(html).toContain("data-mdprv-tree");
     expect(html).toContain("index.ts");
+    expect(html).toContain('<span class="mdprv-tree-name">projeto</span>');
     expect(html).not.toContain("language-tree");
+    // The per-block Raw toggle shows the same body highlighted as bash.
+    expect(html).toContain("mdprv-tree-raw-toggle");
+    expect(html).toContain("data-mdprv-tree-raw");
+    expect(html).toContain('class="shiki');
   }, 30000);
 
   it("renders a tree fence without a report footer", async () => {
@@ -97,6 +102,27 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown("```tree -d\n.\n├── src\n└── tests\n```\n", "auto", "doc");
     expect(html).toContain("mdprv-tree-icon--dir");
     expect(html).not.toContain("mdprv-tree-icon--file");
+  }, 30000);
+
+  it("renders the README indentation-only tree fence with comments", async () => {
+    const fence = [
+      "src/",
+      "  application/cli/      # entrypoint, subcomandos, cliente do daemon, abertura do navegador",
+      "  application/daemon/   # Bun.serve, rotas SSE, watch de arquivos, imagens, assets",
+      "  core/                 # renderização (markdown-it, Shiki), config, temas, estado",
+      "  ui/                   # index.html, islands, services e estilos do cliente",
+      "  shared/               # utilitários usados pelo servidor e pelo cliente",
+      "tests/                  # testes de unidade e integração",
+      "build.ts                # build do cliente e do binário",
+    ].join("\n");
+    const html = await renderMarkdown("```tree\n" + fence + "\n```\n", "auto", "doc");
+    expect(html).toContain('class="mdprv-tree"');
+    expect(html).toContain('class="mdprv-tree-comment"');
+    expect(html).toContain("# renderização (markdown-it, Shiki), config, temas, estado");
+    expect(html).toContain("mdprv-tree-icon--dir");
+    expect(html).not.toContain('<span class="mdprv-tree-name">.</span>');
+    expect(html).toContain('<ul class="mdprv-tree-list"><li class="mdprv-tree-item');
+    expect(html).not.toContain("language-tree");
   }, 30000);
 
   it("leaves other fences untouched", async () => {

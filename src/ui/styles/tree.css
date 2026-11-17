@@ -27,6 +27,25 @@
   display: none;
 }
 
+/* The per-block Raw toggle reuses the document-wide Raw look (.mdprv-view-btn)
+   and sits at the left of the toolbar, before the bulk actions. */
+.mdprv-tree-raw-toggle {
+  margin-right: auto;
+}
+
+/* Raw view: the exact fence body highlighted by Shiki. The tree panel already
+   provides border, radius and background, so the code block drops its own. */
+.mdprv-tree-raw {
+  font-size: var(--mdprv-font-size, 17px);
+}
+
+.mdprv-tree-raw pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .mdprv-tree-action {
   display: inline-flex;
   align-items: center;
@@ -52,6 +71,16 @@
   border-color: var(--mdprv-border-strong, var(--mdprv-border));
   background: var(--mdprv-surface-raised, var(--mdprv-surface, transparent));
   color: var(--mdprv-fg);
+}
+
+/* Bulk actions are disabled while the Raw view replaces the tree. */
+.mdprv-tree-action:disabled,
+.mdprv-tree-action:disabled:hover {
+  border-color: var(--mdprv-border);
+  background: var(--mdprv-bg, transparent);
+  color: var(--mdprv-muted);
+  opacity: .45;
+  cursor: default;
 }
 
 .mdprv-tree-action:focus-visible,
@@ -124,6 +153,13 @@
 
 .mdprv-tree-name {
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mdprv-tree-comment {
+  min-width: 0;
+  color: var(--mdprv-muted);
+  font-size: var(--mdprv-font-size-small, 11.5px);
   overflow-wrap: anywhere;
 }
 

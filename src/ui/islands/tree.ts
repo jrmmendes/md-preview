@@ -2,9 +2,9 @@
  * Progressive enhancement for server-rendered ```tree fences.
  *
  * The markup already contains native <details>/<summary> elements, so the tree
- * is usable without JavaScript. This island only adds the global toolbar,
- * keeps aria-expanded in sync and implements the conventional arrow-key
- * navigation between visible rows.
+ * is usable without JavaScript. This island only adds the toolbar (bulk
+ * expand/collapse and the per-block Raw toggle), keeps aria-expanded in sync and
+ * implements the conventional arrow-key navigation between visible rows.
  */
 
 const TREE_SELECTOR = "[data-mdprv-tree]";
@@ -80,6 +80,36 @@ function setup(tree: HTMLElement): void {
   tree
     .querySelector<HTMLElement>('[data-mdprv-tree-action="collapse"]')
     ?.addEventListener("click", () => setAll(false));
+
+  // Per-block "Raw" toggle: swaps the interactive tree for the original fence
+  // body highlighted as bash. Both views are server-rendered, so the swap only
+  // flips attributes and never refetches.
+  const rawToggle = tree.querySelector<HTMLButtonElement>('[data-mdprv-tree-action="raw"]');
+  const rawView = tree.querySelector<HTMLElement>("[data-mdprv-tree-raw]");
+  const list = tree.querySelector<HTMLElement>(".mdprv-tree-list");
+  const bulkActions = Array.from(
+    tree.querySelectorAll<HTMLButtonElement>(
+      '[data-mdprv-tree-action="expand"], [data-mdprv-tree-action="collapse"]'
+    )
+  );
+
+  const setRaw = (raw: boolean): void => {
+    rawToggle?.setAttribute("aria-pressed", raw ? "true" : "false");
+    if (rawView) {
+      rawView.hidden = !raw;
+    }
+    if (list) {
+      list.hidden = raw;
+    }
+    // Expanding a tree that is not visible would be a silent no-op.
+    for (const button of bulkActions) {
+      button.disabled = raw;
+    }
+  };
+
+  rawToggle?.addEventListener("click", () => {
+    setRaw(rawToggle.getAttribute("aria-pressed") !== "true");
+  });
 
   tree.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) {

@@ -72,7 +72,12 @@ function createRenderer(themeName: string): MarkdownIt {
     }
     if (info === "tree") {
       const dirsOnly = parts.slice(1).some((part) => part === "-d" || part === "--dirs-only");
-      const tree = renderTree(tokens[idx].content, { dirsOnly });
+      const tree = renderTree(tokens[idx].content, {
+        dirsOnly,
+        // The raw toggle shows the fence body as a bash-highlighted block, the
+        // same way a normal code block would be rendered.
+        renderSource: (source) => codeToHtml(source, "bash", themeName),
+      });
       if (tree !== null) {
         return tree + "\n";
       }

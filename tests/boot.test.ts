@@ -22,9 +22,28 @@ interface FakeStyle {
 class FakeElement {
   readonly tagName: string;
   readonly attributes = new Map<string, string>();
+  readonly classes = new Set<string>();
   readonly children: FakeElement[] = [];
   readonly listeners = new Map<string, () => void>();
   readonly style: FakeStyle;
+  readonly classList = {
+    add: (name: string): void => {
+      this.classes.add(name);
+    },
+    remove: (name: string): void => {
+      this.classes.delete(name);
+    },
+    contains: (name: string): boolean => this.classes.has(name),
+    toggle: (name: string, force?: boolean): boolean => {
+      const next = force ?? !this.classes.has(name);
+      if (next) {
+        this.classes.add(name);
+      } else {
+        this.classes.delete(name);
+      }
+      return next;
+    },
+  };
   parentNode: FakeElement | null = null;
   id = "";
   rel = "";
@@ -232,6 +251,21 @@ describe("boot inline script", () => {
       expect(document.documentElement.style.getPropertyValue("--mdprv-font")).toBe("");
       expect(document.head.children).toHaveLength(0);
     }
+  });
+
+  it("applies the simple table and diff classes independently", () => {
+    const both = boot({
+      local: { mdprv_simple_table: "1", mdprv_simple_diff: "1" },
+    }).document.documentElement;
+    expect(both.classList.contains("mdprv-simple-tables")).toBe(true);
+    expect(both.classList.contains("mdprv-simple-diffs")).toBe(true);
+
+    const tablesOnly = boot({ local: { mdprv_simple_table: "1" } }).document.documentElement;
+    expect(tablesOnly.classList.contains("mdprv-simple-tables")).toBe(true);
+    expect(tablesOnly.classList.contains("mdprv-simple-diffs")).toBe(false);
+
+    const plain = boot({ local: { mdprv_simple_diff: "0" } }).document.documentElement;
+    expect(plain.classList.contains("mdprv-simple-diffs")).toBe(false);
   });
 
   it("keeps the loader intent working for the current path", () => {

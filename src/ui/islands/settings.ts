@@ -1,6 +1,8 @@
 import {
+  getSimpleDiffs,
   getSimpleTables,
   getZoomSensitivity,
+  setSimpleDiffs,
   setSimpleTables,
   setTheme,
   setZoomSensitivity,
@@ -108,10 +110,27 @@ function setupSimpleTables(): void {
   });
 }
 
+function setupSimpleDiffs(): void {
+  const input = document.getElementById("mdprv-simple-diff") as HTMLInputElement | null;
+  if (!input) {
+    return;
+  }
+  const apply = (value: boolean): void => {
+    document.documentElement.classList.toggle("mdprv-simple-diffs", value);
+  };
+  input.checked = getSimpleDiffs();
+  apply(input.checked);
+  input.addEventListener("change", () => {
+    setSimpleDiffs(input.checked);
+    apply(input.checked);
+  });
+}
+
 export function initSettings(): void {
   setupPanel();
   setupTheme();
   initFontPicker();
   setupZoom();
   setupSimpleTables();
+  setupSimpleDiffs();
 }

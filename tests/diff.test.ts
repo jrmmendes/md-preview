@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   diffPlainText,
@@ -474,6 +476,72 @@ describe("renderDiff", () => {
     expect(inline.match(/data-diff-kind="del"/g)).toHaveLength(4);
     expect(inline).toContain('class="mdprv-diff-code is-del">-- a</td>');
     expect(inline).toContain('class="mdprv-diff-code is-add">e</td>');
+  });
+
+  it("marks file metadata, hunk headers and notices semantically", () => {
+    const code =
+      "diff --git a/old.txt b/new.txt\n" +
+      "index 1234567..89abcde 100644\n" +
+      "--- a/old.txt\n" +
+      "+++ b/new.txt\n" +
+      "@@ -1,2 +1,2 @@\n" +
+      " old\n" +
+      "-before\n" +
+      "+after\n" +
+      "\\ No newline at end of file\n" +
+      "diff --git a/old.txt b/new.txt\n" +
+      "new file mode 100644\n" +
+      "rename from old.txt\n" +
+      "rename to new.txt\n" +
+      "Binary files a/x and b/x differ\n";
+    const html = renderDiff(code, "", { themeName: "auto" });
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+
+    const inline = html.slice(
+      html.indexOf('data-diff-pane="inline"'),
+      html.indexOf('data-diff-pane="split"')
+    );
+    // diff --git, index, ---, +++, diff --git, new file mode, rename from,
+    // rename to and Binary files.
+    expect(inline.match(/data-diff-meta="file"/g)).toHaveLength(9);
+    expect(inline).toContain(
+      '<tr class="mdprv-diff-row is-hunk" data-diff-kind="hunk"><td'
+    );
+    expect(inline).toContain('data-diff-kind="hunk"');
+    expect(inline.match(/data-diff-meta="notice"/g)).toHaveLength(1);
+    expect(inline).toContain('data-diff-kind="del"');
+    expect(inline).toContain('data-diff-kind="add"');
+    expect(inline).toContain('data-diff-kind="context"');
+  });
+
+  it("marks free-form prose as a text metadata row", () => {
+    const html = renderDiff(
+      "texto antes do diff\n@@ -1 +1 @@\n-old\n+new\n",
+      "",
+      { themeName: "auto" }
+    );
+    expect(html).not.toBeNull();
+    if (!html) {
+      return;
+    }
+    expect(html).toContain('data-diff-kind="meta" data-diff-meta="text"');
+    expect(html).toContain(">texto antes do diff<");
+  });
+
+  it("hides metadata and hunk rows in simple diff mode", () => {
+    const css = readFileSync(
+      join(import.meta.dir, "../src/ui/styles/diff.css"),
+      "utf8"
+    );
+    expect(css).toContain(
+      'html.mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="meta"]'
+    );
+    expect(css).toContain(
+      'html.mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="hunk"]'
+    );
   });
 
   it("returns null for invalid input", () => {

@@ -259,6 +259,19 @@
   background: color-mix(in srgb, var(--mdprv-muted, #8b949e) 8%, transparent);
 }
 
+/* --- simple diff mode (global preference) ---
+   The preference lives in `mdprv_simple_diff` and the boot script puts the
+   class on <html> before the body is parsed, so the reduced view is already in
+   place on first paint. Hiding the whole <tr> keeps the table layout valid:
+   no orphan number/mark cells remain and the body rows of adjacent hunks and
+   files collapse into a single contiguous block (rows carry no vertical
+   margin/border of their own). Line numbers float with their content, as
+   usual. */
+html.mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="meta"],
+html.mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="hunk"] {
+  display: none;
+}
+
 /* Dual-theme Shiki tokens: the inline style only carries the CSS variables,
    matching the .shiki rules in base.css. */
 .mdprv-diff-token {

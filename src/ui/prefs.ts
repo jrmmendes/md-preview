@@ -34,6 +34,7 @@ const KEYS = {
   loaderIntent: "mdprv_loader_pending",
   diffView: "mdprv_diff_view",
   simpleTables: "mdprv_simple_table",
+  simpleDiffs: "mdprv_simple_diff",
 } as const;
 
 const LEGACY_KEYS = {
@@ -321,6 +322,19 @@ export function getSimpleTables(): boolean {
 
 export function setSimpleTables(value: boolean): void {
   localSet(KEYS.simpleTables, value ? "1" : "0");
+}
+
+/**
+ * Simple diff mode hides file metadata and `@@` hunk headers on every diff,
+ * keeping only additions, deletions and context. It is independent from the
+ * simple table mode.
+ */
+export function getSimpleDiffs(): boolean {
+  return localGet(KEYS.simpleDiffs) === "1";
+}
+
+export function setSimpleDiffs(value: boolean): void {
+  localSet(KEYS.simpleDiffs, value ? "1" : "0");
 }
 
 function currentPath(): string {

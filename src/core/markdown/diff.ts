@@ -18,6 +18,14 @@ import { codeToThemedTokens } from "./highlight";
 
 export type DiffLineKind = "context" | "add" | "del" | "meta" | "hunk";
 
+/**
+ * Subtype of a `meta` row, used by the markup (`data-diff-meta`) so CSS and
+ * consumers can tell file headers, the no-newline notice and free-form text
+ * apart. The simple diff mode hides every meta row, but the distinction keeps
+ * the contract explicit and future-proof.
+ */
+export type DiffMetaKind = "file" | "notice" | "text";
+
 export interface DiffLine {
   kind: DiffLineKind;
   /** Content without the `+`, `-` or space prefix. */
@@ -26,6 +34,8 @@ export interface DiffLine {
   oldNumber: number | null;
   /** 1-based line number on the new side, `null` for deletions or unnumbered diffs. */
   newNumber: number | null;
+  /** Set for `meta` rows only. */
+  meta?: DiffMetaKind;
 }
 
 export interface DiffDocument {
@@ -50,6 +60,8 @@ export interface DiffRow {
   kind: DiffLineKind;
   /** Full-width content for `meta`/`hunk` rows, when set. */
   full: string | null;
+  /** Meta subtype for `meta` rows, mirrored from `DiffLine.meta`. */
+  meta?: DiffMetaKind;
   left: DiffCell | null;
   right: DiffCell | null;
 }
@@ -110,8 +122,8 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function metaLine(line: string): DiffLine {
-  return { kind: "meta", text: line, oldNumber: null, newNumber: null };
+function metaLine(line: string, meta: DiffMetaKind = "file"): DiffLine {
+  return { kind: "meta", text: line, oldNumber: null, newNumber: null, meta };
 }
 
 /**
@@ -148,7 +160,7 @@ function isSimpleDiffBody(rawLines: string[]): boolean {
 function parseSimpleDiff(rawLines: string[]): DiffLine[] {
   return rawLines.map((raw): DiffLine => {
     if (raw.startsWith("\\")) {
-      return metaLine(raw);
+      return metaLine(raw, "notice");
     }
     if (raw.startsWith("+")) {
       return { kind: "add", text: raw.slice(1), oldNumber: null, newNumber: null };
@@ -224,7 +236,7 @@ export function parseDiff(code: string): DiffDocument | null {
 
     if (inHunk) {
       if (raw.startsWith("\\")) {
-        lines.push(metaLine(raw));
+        lines.push(metaLine(raw, "notice"));
         continue;
       }
       if (raw.startsWith("+")) {
@@ -258,25 +270,30 @@ export function parseDiff(code: string): DiffDocument | null {
       }
       if (isGitMetaLine(raw)) {
         inHunk = false;
-        lines.push(metaLine(raw));
+        lines.push(metaLine(raw, "file"));
         continue;
       }
       // Unknown content inside a hunk: keep it visible, do not lose the state.
-      lines.push(metaLine(raw));
+      lines.push(metaLine(raw, "text"));
       continue;
     }
 
     // A `---`/`+++` pair is a file header; on its own each line is just a
     // deletion/addition of code starting with `-- ` / `++ `.
     if (isFileHeaderPair(rawLines, index)) {
-      lines.push(metaLine(raw));
-      lines.push(metaLine(rawLines[index + 1]));
+      lines.push(metaLine(raw, "file"));
+      lines.push(metaLine(rawLines[index + 1], "file"));
       index += 1;
       continue;
     }
 
-    if (isGitMetaLine(raw) || raw.startsWith("\\")) {
-      lines.push(metaLine(raw));
+    if (isGitMetaLine(raw)) {
+      lines.push(metaLine(raw, "file"));
+      continue;
+    }
+
+    if (raw.startsWith("\\")) {
+      lines.push(metaLine(raw, "notice"));
       continue;
     }
 
@@ -306,7 +323,7 @@ export function parseDiff(code: string): DiffDocument | null {
 
     // Prose before or after the diff is preserved as meta only if the fence
     // later turns out to contain a real diff.
-    lines.push(metaLine(raw));
+    lines.push(metaLine(raw, "text"));
   }
 
   return sawBody ? { lines, numbered: true } : null;
@@ -358,7 +375,13 @@ export function pairDiffRows(lines: DiffLine[]): DiffRow[] {
     const line = lines[index];
 
     if (line.kind === "meta" || line.kind === "hunk") {
-      rows.push({ kind: line.kind, full: line.text, left: null, right: null });
+      rows.push({
+        kind: line.kind,
+        full: line.text,
+        meta: line.meta,
+        left: null,
+        right: null,
+      });
       index += 1;
       continue;
     }
@@ -528,9 +551,13 @@ function markFor(kind: DiffCell["kind"]): string {
   return " ";
 }
 
+function metaAttr(meta: DiffMetaKind | undefined): string {
+  return meta ? ` data-diff-meta="${meta}"` : "";
+}
+
 function inlineRow(line: DiffLine, tokens: TokenMaps, numbered: boolean): string {
   if (line.kind === "meta" || line.kind === "hunk") {
-    return `<tr class="mdprv-diff-row ${rowClass(line.kind)}" data-diff-kind="${line.kind}"><td class="mdprv-diff-meta" colspan="${numbered ? 4 : 2}">${escapeHtml(line.text)}</td></tr>`;
+    return `<tr class="mdprv-diff-row ${rowClass(line.kind)}" data-diff-kind="${line.kind}"${metaAttr(line.meta)}><td class="mdprv-diff-meta" colspan="${numbered ? 4 : 2}">${escapeHtml(line.text)}</td></tr>`;
   }
 
   const changed = line.kind === "add" || line.kind === "del";
@@ -580,7 +607,7 @@ function splitCell(
 
 function splitRow(row: DiffRow, tokens: TokenMaps, numbered: boolean): string {
   if (row.full !== null) {
-    return `<tr class="mdprv-diff-row ${rowClass(row.kind)}" data-diff-kind="${row.kind}"><td class="mdprv-diff-meta" colspan="${numbered ? 6 : 4}">${escapeHtml(row.full)}</td></tr>`;
+    return `<tr class="mdprv-diff-row ${rowClass(row.kind)}" data-diff-kind="${row.kind}"${metaAttr(row.meta)}><td class="mdprv-diff-meta" colspan="${numbered ? 6 : 4}">${escapeHtml(row.full)}</td></tr>`;
   }
 
   const left = row.left;

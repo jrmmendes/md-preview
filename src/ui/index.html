@@ -28,6 +28,10 @@
       root.classList.add("mdprv-simple-tables");
     }
 
+    if (local("mdprv_simple_diff") === "1") {
+      root.classList.add("mdprv-simple-diffs");
+    }
+
     var shouldLoad = false;
     var raw = session("mdprv_loader_pending");
     if (raw !== null) {
@@ -183,6 +187,11 @@
       <span>Modo simples de tabela</span>
     </label>
     <p id="mdprv-simple-table-desc" class="mdprv-field-hint">Oculta as faixas de letras e números e a moldura de planilha, mantendo filtros, seleção e gráficos.</p>
+    <label class="mdprv-field-check" for="mdprv-simple-diff">
+      <input id="mdprv-simple-diff" type="checkbox" aria-describedby="mdprv-simple-diff-desc">
+      <span>Modo simples de diff</span>
+    </label>
+    <p id="mdprv-simple-diff-desc" class="mdprv-field-hint">Oculta os metadados de arquivo e os cabeçalhos de hunk, deixando só adições, remoções e contexto.</p>
   </div>
   <button type="button" id="mdprv-sidebar-toggle" class="mdprv-sidebar-toggle" aria-label="Toggle sidebar" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></svg></button>
   <aside class="mdprv-history" id="mdprv-history" aria-label="Recent previews">

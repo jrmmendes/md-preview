@@ -10,6 +10,7 @@ import "./styles/raw.css";
 import "./styles/loader.css";
 
 import { initCopyCode } from "./islands/copy-code";
+import { initActivate } from "./islands/activate";
 import { initDiffView } from "./islands/diff-view";
 import { initDocLinks } from "./islands/doc-links";
 import { initHistory } from "./islands/history";
@@ -41,5 +42,6 @@ initTable();
 initDiffView();
 initRawView();
 initLiveReload();
+initActivate();
 initCopyCode();
 initHistory();

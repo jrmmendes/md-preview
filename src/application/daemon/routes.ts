@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 
 import type { Config } from "../../core/config";
-import type { SnapshotEvent } from "../../core/contract";
+import type { ActivateEvent, SnapshotEvent } from "../../core/contract";
 import { renderPage } from "../../core/page";
 import { normalizeContent, renderMarkdown } from "../../core/markdown/render";
 import { codeToHtml, warmup } from "../../core/markdown/highlight";
@@ -27,6 +27,13 @@ const CLIENT_TYPES: Record<string, string> = {
 
 const DEFAULT_HEARTBEAT_MS = 20_000;
 
+/**
+ * After an opener hand-off the tab needs a moment to connect. Repeat CLI calls
+ * during this window wait instead of opening a duplicate tab.
+ */
+const ACTIVATE_GRACE_MS = 6_000;
+const ACTIVATE_WAIT_MS = 1_200;
+
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1"]);
 
 type SseController = ReadableStreamDefaultController<Uint8Array>;
@@ -40,6 +47,20 @@ export interface RouteDeps {
   requestShutdown: () => void;
   heartbeatMs?: number;
   fonts?: FontCatalog;
+  /** Per-daemon-session record of opener hand-offs. */
+  browser: BrowserSession;
+}
+
+/**
+ * What the daemon remembers about opening the platform browser.
+ *
+ * `openedAt` is only used to wait briefly for a freshly opened tab to connect
+ * before deciding that another opener call is needed.
+ */
+export interface BrowserSession {
+  readonly opened: boolean;
+  readonly openedAt: number | null;
+  markOpened(url: string): void;
 }
 
 export interface RoutesHandle {
@@ -237,7 +258,8 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
   const fonts = deps.fonts ?? createFontCatalog();
   const heartbeatMs = deps.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
   const encoder = new TextEncoder();
-  const clients = new Set<SseController>();
+  /** Connected tabs, mapped to the slug they reported on connect. */
+  const clients = new Map<SseController, string | null>();
   const heartbeats = new Map<SseController, ReturnType<typeof setInterval>>();
 
   function snapshot(): SnapshotEvent {
@@ -277,17 +299,19 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
   }
 
   function broadcast(event: string, data: unknown): void {
-    for (const controller of [...clients]) {
+    for (const controller of [...clients.keys()]) {
       send(controller, event, data);
     }
   }
 
-  function openStream(req: Request): Response {
+  function openStream(req: Request, url: URL): Response {
+    const requested = url.searchParams.get("doc") ?? "";
+    const doc = requested !== "" && requested.length <= 2048 ? requested : null;
     let controllerRef: SseController | null = null;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controllerRef = controller;
-        clients.add(controller);
+        clients.set(controller, doc);
         send(controller, "snapshot", snapshot());
         const timer = setInterval(() => {
           if (!send(controller, "ping", { ts: Date.now() })) {
@@ -336,6 +360,77 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     const filePath = typeof payload.path === "string" ? payload.path : "";
     const content = typeof payload.content === "string" ? payload.content : null;
     return json({ slug: registry.register(payload.slug, filePath, content) });
+  }
+
+  async function waitForClients(timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (clients.size === 0 && Date.now() < deadline) {
+      await Bun.sleep(50);
+    }
+  }
+
+  /**
+   * Show a document in an existing tab when possible, otherwise tell the CLI
+   * that it should open the browser.
+   *
+   * Tabs whose reported slug matches the target are only asked to focus. When
+   * no tab shows the document, the most recently connected tab is asked to
+   * navigate in place, which avoids a duplicate tab.
+   */
+  async function activateHandler(req: Request): Promise<Response> {
+    let data: unknown;
+    try {
+      data = await req.json();
+    } catch {
+      return text("bad request", 400);
+    }
+    const payload = data as { slug?: unknown; url?: unknown };
+    const rawUrl = typeof payload?.url === "string" ? payload.url : "";
+    if (rawUrl === "" || rawUrl.length > 4096) {
+      return text("bad request", 400);
+    }
+    const host = req.headers.get("host") ?? "";
+    let target: URL;
+    try {
+      target = new URL(rawUrl, `http://${host}`);
+    } catch {
+      return text("bad request", 400);
+    }
+    if (target.protocol !== "http:" || host === "" || target.host !== host) {
+      return text("bad request", 400);
+    }
+    const slug = typeof payload.slug === "string" ? payload.slug : "";
+    const event: ActivateEvent = {
+      slug,
+      url: target.pathname + target.search,
+      ts: Date.now(),
+    };
+
+    if (
+      clients.size === 0 &&
+      deps.browser.openedAt !== null &&
+      Date.now() - deps.browser.openedAt < ACTIVATE_GRACE_MS
+    ) {
+      await waitForClients(ACTIVATE_WAIT_MS);
+    }
+
+    const matching = [...clients]
+      .filter(([, doc]) => doc !== null && doc === slug)
+      .map(([controller]) => controller);
+    const focused = matching.filter((controller) => send(controller, "activate", event));
+    if (focused.length > 0) {
+      return json({ action: "focused", clients: clients.size, matched: focused.length });
+    }
+
+    const controllers = [...clients.keys()];
+    const fallback = controllers[controllers.length - 1];
+    if (fallback && send(fallback, "activate", event)) {
+      return json({ action: "navigated", clients: clients.size, matched: 1 });
+    }
+
+    const first = !deps.browser.opened;
+    deps.browser.markOpened(event.url);
+    return json({ action: "opened", first, clients: 0 });
   }
 
   async function serveSlug(route: string, req: Request, url: URL): Promise<Response> {
@@ -465,6 +560,12 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       }
       return registerHandler(req);
     }
+    if (method === "POST" && route === "/__activate") {
+      if (!tokenMatches(req, deps.token)) {
+        return text("unauthorized", 401);
+      }
+      return activateHandler(req);
+    }
     if (method === "POST" && route === "/__shutdown") {
       if (!tokenMatches(req, deps.token)) {
         return text("unauthorized", 401);
@@ -475,7 +576,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       return text("bye");
     }
     if (method === "GET" && route === "/__events") {
-      return openStream(req);
+      return openStream(req, url);
     }
     if ((method === "GET" || method === "HEAD") && route === "/__themes") {
       return json({ themes: themes.names(), errors: themes.errors() }, 200, method === "HEAD");
@@ -537,7 +638,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     handle,
     broadcast,
     close() {
-      for (const controller of [...clients]) {
+      for (const controller of [...clients.keys()]) {
         remove(controller);
       }
     },

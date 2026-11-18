@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { Config } from "../../core/config";
 import { themesDir } from "../../core/config-file";
 import { warmup } from "../../core/markdown/render";
-import { clearDaemonState, writeDaemonState } from "../../core/state";
+import { clearDaemonState, updateDaemonState, writeDaemonState } from "../../core/state";
 import { getThemeStore, setThemeStore } from "../../core/themes/index";
 import { seedThemes as seedThemeFiles } from "../../core/themes/seed";
 import { createThemeStore, type ThemeStore } from "../../core/themes/store";
@@ -43,6 +43,30 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
 
   const broadcast = (event: string, data: unknown): void => {
     routes?.broadcast(event, data);
+  };
+
+  const browserState: { opened: boolean; openedAt: number | null; lastUrl: string | null } = {
+    opened: false,
+    openedAt: null,
+    lastUrl: null,
+  };
+  const browserSession = {
+    get opened(): boolean {
+      return browserState.opened;
+    },
+    get openedAt(): number | null {
+      return browserState.openedAt;
+    },
+    markOpened(url: string): void {
+      browserState.opened = true;
+      browserState.openedAt = Date.now();
+      browserState.lastUrl = url;
+      updateDaemonState(config.stateFile, {
+        browserOpened: true,
+        browserOpenedAt: browserState.openedAt,
+        browserUrl: url,
+      });
+    },
   };
 
   const themeStore =
@@ -94,6 +118,7 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     token,
     heartbeatMs: options.heartbeatMs,
     fonts: options.fontCatalog,
+    browser: browserSession,
     onActivity: () => {
       lastActivity = Date.now();
     },

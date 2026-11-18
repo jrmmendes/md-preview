@@ -154,6 +154,7 @@ export function createSlugRegistry(callbacks: WatchCallbacks = {}): SlugRegistry
       }
     }
 
+    let created = false;
     if (!entry) {
       entry = {
         path: "",
@@ -164,6 +165,7 @@ export function createSlugRegistry(callbacks: WatchCallbacks = {}): SlugRegistry
         watcher: null,
       };
       slugs.set(slug, entry);
+      created = true;
     }
 
     if (abs && !matchedByRealPath) {
@@ -177,13 +179,19 @@ export function createSlugRegistry(callbacks: WatchCallbacks = {}): SlugRegistry
     } else if (abs && !entry.realPath) {
       entry.realPath = real;
     }
+    let changed = created;
     if (typeof content === "string") {
+      if (entry.content !== content) {
+        changed = true;
+      }
       entry.content = content;
     }
-    // Re-registering an existing file keeps its tab but still bumps the
-    // version, preserving the current reload/live-reload behavior.
-    entry.version = (entry.version || 0) + 1;
-    callbacks.onVersion?.(slug, entry.version);
+    // Registering the same content again must not reload an open tab. Only a
+    // new document or new content bumps the version.
+    if (changed) {
+      entry.version = (entry.version || 0) + 1;
+      callbacks.onVersion?.(slug, entry.version);
+    }
     if (entry.path) {
       watchSlug(slug);
     }

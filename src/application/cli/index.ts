@@ -1,7 +1,7 @@
 import { Command } from "commander";
 
-import { preview, previewPipe } from "./commands/preview";
-import { previewFolder } from "./commands/folder";
+import { previewPipe } from "./commands/preview";
+import { previewTarget } from "./commands/target";
 import { register } from "./commands/register";
 import { daemonStart, daemonStatus, daemonStop } from "./commands/daemon";
 import { serve } from "./commands/serve";
@@ -18,11 +18,15 @@ const program = new Command();
 
 program
   .name("md-preview")
-  .description("Register Markdown files in a local preview daemon")
+  .description("Register Markdown files or a directory in a local preview daemon")
   .version(VERSION)
-  .argument("[files...]", "Markdown files (.md, .markdown or .mdc)")
+  .argument("[paths...]", "Markdown files (.md, .markdown or .mdc) or a directory")
   .option("--theme <name>", "theme for this preview")
-  .option("--open-browser", "open the first file in the default browser after registering")
+  .option("--open-browser", "always open the first file in the default browser")
+  .option(
+    "--no-open-browser",
+    "never open or focus a browser; only register the documents"
+  )
   .option("--pipe", "read Markdown from stdin and register it as a temporary file")
   .action(
     async (
@@ -31,7 +35,7 @@ program
     ) => {
       const previewOptions = {
         theme: options.theme,
-        openBrowser: options.openBrowser === true,
+        openBrowser: options.openBrowser,
       };
 
       if (options.pipe) {
@@ -47,19 +51,11 @@ program
       }
 
       if (files.length === 0) {
-        fail("missing file argument (or use --pipe)");
+        fail("missing path argument (or use --pipe)");
       }
-      await preview(files, previewOptions);
+      await previewTarget(files, previewOptions);
     }
   );
-
-program
-  .command("folder")
-  .description("Register every Markdown file in a folder and open its preview")
-  .argument("[dir]", "folder to scan (defaults to the current directory)")
-  .action(async (dir?: string) => {
-    await previewFolder(dir);
-  });
 
 const daemon = program.command("daemon").description("Manage the preview daemon");
 daemon

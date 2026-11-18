@@ -72,6 +72,31 @@ describe("daemon request authorization", () => {
     expect(response.status).toBe(401);
   });
 
+  it("rejects activate without the daemon token", async () => {
+    const response = await fetch(`${base}/__activate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: "doc", url: "/doc" }),
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects activate targets outside the daemon origin", async () => {
+    const foreign = await fetch(`${base}/__activate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-mdprv-token": daemon.token },
+      body: JSON.stringify({ slug: "doc", url: "https://evil.test/doc" }),
+    });
+    expect(foreign.status).toBe(400);
+
+    const malformed = await fetch(`${base}/__activate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-mdprv-token": daemon.token },
+      body: JSON.stringify({ slug: "doc", url: "" }),
+    });
+    expect(malformed.status).toBe(400);
+  });
+
   it("rejects a foreign Host header (DNS rebinding)", async () => {
     const response = await fetch(`${base}/doc`, { headers: { host: "evil.test" } });
     expect(response.status).toBe(403);

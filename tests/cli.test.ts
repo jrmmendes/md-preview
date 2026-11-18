@@ -6,6 +6,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -79,6 +80,81 @@ async function shutdown(stateFile: string): Promise<void> {
     /* already gone */
   }
   await waitUntil(() => readDaemonState(stateFile) === null);
+}
+
+async function openEvents(port: number, doc: string) {
+  const controller = new AbortController();
+  const response = await fetch(
+    `http://127.0.0.1:${port}/__events?doc=${encodeURIComponent(doc)}`,
+    { signal: controller.signal }
+  );
+  const reader = response.body!.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  function parse(): { event: string; data: unknown } | null {
+    const index = buffer.indexOf("\n\n");
+    if (index < 0) {
+      return null;
+    }
+    const block = buffer.slice(0, index);
+    buffer = buffer.slice(index + 2);
+    let event = "message";
+    const data: string[] = [];
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) {
+        event = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        data.push(line.slice("data:".length).trimStart());
+      }
+    }
+    if (data.length === 0) {
+      return null;
+    }
+    try {
+      return { event, data: JSON.parse(data.join("\n")) };
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    async next<T>(type: string, timeoutMs = 6000): Promise<T> {
+      const deadline = Date.now() + timeoutMs;
+      while (true) {
+        const ready = parse();
+        if (ready) {
+          if (ready.event === type) {
+            return ready.data as T;
+          }
+          continue;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw new Error(`timeout waiting for ${type}`);
+        }
+        const outcome = await Promise.race([
+          reader.read().then((result) => ({ kind: "read" as const, result })),
+          Bun.sleep(remaining).then(() => ({ kind: "timeout" as const })),
+        ]);
+        if (outcome.kind === "timeout") {
+          throw new Error(`timeout waiting for ${type}`);
+        }
+        if (outcome.result.done) {
+          throw new Error(`stream ended waiting for ${type}`);
+        }
+        buffer += decoder.decode(outcome.result.value, { stream: true });
+      }
+    },
+    async close(): Promise<void> {
+      controller.abort();
+      try {
+        await reader.cancel();
+      } catch {
+        /* already closed */
+      }
+    },
+  };
 }
 
 function fakeBrowser(dir: string): { bin: string; marker: string } {
@@ -169,13 +245,15 @@ describe("theme and config commands", () => {
 });
 
 describe("preview command line", () => {
-  it("documents .mdc, multiple files, --open-browser and --pipe", () => {
+  it("documents .mdc, multiple paths, both browser flags and --pipe", () => {
     const result = run(tempDir(), ["--help"]);
     expect(result.exitCode).toBe(0);
     const help = result.stdout.toString();
-    expect(help).toContain("[files...]");
+    expect(help).toContain("[paths...]");
+    expect(help).toContain("or a directory");
     expect(help).toContain(".mdc");
     expect(help).toContain("--open-browser");
+    expect(help).toContain("--no-open-browser");
     expect(help).toContain("--pipe");
   });
 
@@ -189,7 +267,7 @@ describe("preview command line", () => {
     expect(output(result)).toContain(".markdown");
   });
 
-  it("registers several files without opening a browser", async () => {
+  it("opens the browser by default after registering every file", async () => {
     const dir = tempDir();
     const { bin, marker } = fakeBrowser(dir);
     const stateFile = join(dir, "state", "daemon.json");
@@ -201,7 +279,7 @@ describe("preview command line", () => {
     try {
       const result = runPreview(dir, [first, second], bin);
       expect(result.exitCode).toBe(0);
-      expect(result.stderr.toString()).not.toContain("could not open a browser");
+      expect(result.stderr.toString()).toContain("opened in browser");
       const urls = result.stdout
         .toString()
         .trim()
@@ -211,10 +289,13 @@ describe("preview command line", () => {
       expect(urls[0]).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//);
       expect(urls[1]).toMatch(/^http:\/\/127\.0\.0\.1:\d+\//);
       expect(urls[0]).not.toContain(".mdc");
-      expect(existsSync(marker)).toBe(false);
+      expect(await waitUntil(() => existsSync(marker))).toBe(true);
+      expect(readFileSync(marker, "utf8").trim().split("\n").filter(Boolean)).toEqual([urls[0]]);
 
       const state = readDaemonState(stateFile);
       expect(state).not.toBeNull();
+      expect(state?.browserOpened).toBe(true);
+      expect(state?.browserUrl).toContain("/");
       for (const url of urls) {
         const page = await fetch(url);
         expect(page.status).toBe(200);
@@ -223,6 +304,107 @@ describe("preview command line", () => {
       await shutdown(stateFile);
     }
   }, 15000);
+
+  it("suppresses the browser with --no-open-browser even on a cold daemon", async () => {
+    const dir = tempDir();
+    const { bin, marker } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "quiet.md");
+    writeFileSync(file, "# Quiet\n");
+
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"], bin);
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr.toString()).not.toContain("could not open a browser");
+      expect(existsSync(marker)).toBe(false);
+      expect(readDaemonState(stateFile)?.browserOpened).toBeUndefined();
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("lets the last browser flag on the command line win", async () => {
+    const suppressedDir = tempDir();
+    const suppressed = fakeBrowser(suppressedDir);
+    const suppressedState = join(suppressedDir, "state", "daemon.json");
+    const openDir = tempDir();
+    const opened = fakeBrowser(openDir);
+    const openState = join(openDir, "state", "daemon.json");
+    const first = join(suppressedDir, "document.md");
+    const second = join(openDir, "document.md");
+    writeFileSync(first, "# Doc\n");
+    writeFileSync(second, "# Doc\n");
+
+    try {
+      const closed = runPreview(
+        suppressedDir,
+        [first, "--open-browser", "--no-open-browser"],
+        suppressed.bin
+      );
+      expect(closed.exitCode).toBe(0);
+      expect(existsSync(suppressed.marker)).toBe(false);
+    } finally {
+      await shutdown(suppressedState);
+    }
+
+    try {
+      const force = runPreview(
+        openDir,
+        [second, "--no-open-browser", "--open-browser"],
+        opened.bin
+      );
+      expect(force.exitCode).toBe(0);
+      expect(await waitUntil(() => existsSync(opened.marker))).toBe(true);
+    } finally {
+      await shutdown(openState);
+    }
+  }, 20000);
+
+  it("focuses a connected tab on the next run instead of opening the browser again", async () => {
+    const dir = tempDir();
+    const { bin, marker } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+    const first = join(dir, "tab-first.md");
+    const second = join(dir, "tab-second.md");
+    writeFileSync(first, "# First\n");
+    writeFileSync(second, "# Second\n");
+
+    let events: Awaited<ReturnType<typeof openEvents>> | undefined;
+    try {
+      const initial = runPreview(dir, [first], bin);
+      expect(initial.exitCode).toBe(0);
+      const firstUrl = initial.stdout.toString().trim().split("\n").find(Boolean)!;
+      expect(await waitUntil(() => existsSync(marker))).toBe(true);
+
+      const state = readDaemonState(stateFile);
+      expect(state).not.toBeNull();
+      const firstSlug = decodeURIComponent(new URL(firstUrl).pathname.slice(1));
+      events = await openEvents(state!.port, firstSlug);
+      await events.next("snapshot");
+
+      const next = runPreview(dir, [second], bin);
+      expect(next.exitCode).toBe(0);
+      expect(next.stdout.toString()).toContain("tab-second");
+      expect(next.stderr.toString()).toContain("focused existing tab");
+
+      const activated = await events.next<{ slug: string; url: string }>("activate");
+      expect(activated.url).toContain("tab-second");
+      expect(readFileSync(marker, "utf8").trim().split("\n").filter(Boolean)).toEqual([
+        firstUrl,
+      ]);
+
+      // --no-open-browser suppresses focus as well as opening.
+      const quiet = runPreview(dir, [first, "--no-open-browser"], bin);
+      expect(quiet.exitCode).toBe(0);
+      await expect(events.next("activate", 700)).rejects.toThrow(/timeout/);
+      expect(readFileSync(marker, "utf8").trim().split("\n").filter(Boolean)).toEqual([
+        firstUrl,
+      ]);
+    } finally {
+      await events?.close();
+      await shutdown(stateFile);
+    }
+  }, 20000);
 
   it("opens the browser once with --open-browser after registering every file", async () => {
     const dir = tempDir();
@@ -251,12 +433,13 @@ describe("preview command line", () => {
   }, 15000);
 });
 
-describe("folder command line", () => {
-  it("is listed in --help", () => {
+describe("directory preview via path", () => {
+  it("does not list folder as a command in --help", () => {
     const result = run(tempDir(), ["--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString()).toContain("folder");
-    expect(result.stdout.toString()).toContain("Markdown file in a folder");
+    const help = result.stdout.toString();
+    expect(help).not.toContain("folder");
+    expect(help).toContain("[paths...]");
   });
 
   it("registers every Markdown file and opens index.md first", async () => {
@@ -273,7 +456,7 @@ describe("folder command line", () => {
     writeFileSync(join(docs, "sub", "nested.md"), "# Nested\n");
 
     try {
-      const result = runPreview(dir, ["folder", docs], bin);
+      const result = runPreview(dir, [docs], bin);
       expect(result.exitCode).toBe(0);
       const stdout = result.stdout.toString();
       expect(stdout).not.toContain(docs);
@@ -299,7 +482,7 @@ describe("folder command line", () => {
     }
   }, 15000);
 
-  it("uses the current directory when no folder is given", async () => {
+  it("accepts a relative path and the current directory", async () => {
     const dir = tempDir();
     const docs = join(dir, "cwd-docs");
     mkdirSync(docs);
@@ -309,7 +492,7 @@ describe("folder command line", () => {
     writeFileSync(join(docs, "a.md"), "# A\n");
 
     try {
-      const result = runPreview(dir, ["folder"], bin, docs);
+      const result = runPreview(dir, ["."], bin, docs);
       expect(result.exitCode).toBe(0);
       const lines = result.stdout.toString().trim().split("\n").filter(Boolean);
       expect(lines).toHaveLength(2);
@@ -321,12 +504,115 @@ describe("folder command line", () => {
     }
   }, 15000);
 
-  it("fails clearly when the folder has no Markdown files", () => {
+  it("applies --theme to every URL of a directory", async () => {
+    const dir = tempDir();
+    const docs = join(dir, "themed");
+    mkdirSync(docs);
+    const { bin } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+    writeFileSync(join(docs, "a.md"), "# A\n");
+
+    try {
+      const result = runPreview(dir, [docs, "--theme", "nord"], bin);
+      expect(result.exitCode).toBe(0);
+      const lines = result.stdout.toString().trim().split("\n").filter(Boolean);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("?theme=nord");
+      const url = lines[0]!.split(/\s+/)[1]!;
+      const page = await fetch(url);
+      expect(page.status).toBe(200);
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("follows a symlink that points at a directory", async () => {
+    const dir = tempDir();
+    const docs = join(dir, "real-docs");
+    const link = join(dir, "linked-docs");
+    mkdirSync(docs);
+    writeFileSync(join(docs, "a.md"), "# A\n");
+    symlinkSync(docs, link);
+    const { bin, marker } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+
+    try {
+      const result = runPreview(dir, [link], bin);
+      expect(result.exitCode).toBe(0);
+      const lines = result.stdout.toString().trim().split("\n").filter(Boolean);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]!.split(/\s+/)[0]).toBe("a.md");
+      expect(await waitUntil(() => existsSync(marker))).toBe(true);
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("treats a directory named like a Markdown file as a directory", async () => {
+    const dir = tempDir();
+    const weird = join(dir, "notes.md");
+    mkdirSync(weird);
+    writeFileSync(join(weird, "inner.md"), "# Inner\n");
+    const { bin } = fakeBrowser(dir);
+    const stateFile = join(dir, "state", "daemon.json");
+
+    try {
+      const result = runPreview(dir, ["notes.md"], bin, dir);
+      expect(result.exitCode).toBe(0);
+      const lines = result.stdout.toString().trim().split("\n").filter(Boolean);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]!.split(/\s+/)[0]).toBe("inner.md");
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("rejects a directory mixed with file paths", () => {
+    const dir = tempDir();
+    const docs = join(dir, "mixed");
+    mkdirSync(docs);
+    writeFileSync(join(docs, "a.md"), "# A\n");
+    const file = join(dir, "single.md");
+    writeFileSync(file, "# Single\n");
+
+    const result = runPreview(dir, [file, docs]);
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain(`not a file: ${docs}`);
+    expect(output(result)).toContain("on its own");
+  });
+
+  it("treats 'folder' as a path, not a command", () => {
+    const dir = tempDir();
+    const result = runPreview(dir, ["folder"], undefined, dir);
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain("path not found: folder");
+    expect(output(result)).not.toContain("Usage");
+    expect(readDaemonState(join(dir, "state", "daemon.json"))).toBeNull();
+  });
+
+  it("reports a missing path with the value given", () => {
+    const dir = tempDir();
+    const missing = join(dir, "not-here");
+    const result = runPreview(dir, [missing]);
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain(`path not found: ${missing}`);
+    expect(output(result)).not.toContain("Usage");
+    expect(readDaemonState(join(dir, "state", "daemon.json"))).toBeNull();
+  });
+
+  it("requires a path argument", () => {
+    const dir = tempDir();
+    const result = runPreview(dir, []);
+    expect(result.exitCode).toBe(1);
+    expect(output(result)).toContain("missing path argument");
+  });
+
+  it("fails clearly when the directory has no Markdown files", () => {
     const dir = tempDir();
     const docs = join(dir, "empty-docs");
     mkdirSync(docs);
     writeFileSync(join(docs, "notes.txt"), "not markdown\n");
-    const result = runPreview(dir, ["folder", docs], undefined);
+    const result = runPreview(dir, [docs], undefined);
     expect(result.exitCode).toBe(1);
     expect(output(result)).toContain("no Markdown files");
     expect(output(result)).toContain(".md");

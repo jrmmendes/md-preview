@@ -372,8 +372,9 @@ Smoke com daemon (a fixture já cobre inline code, tabela, código e Mermaid):
 ./bin/md-preview daemon stop
 ```
 
-Sem `--open-browser` o comando apenas registra o arquivo e imprime a URL; com a
-flag, ele abre o navegador uma única vez. A URL impressa já contém `?theme=<name>`. `?theme=` vence cookie e
+Sem flags, a primeira execução abre o navegador e as seguintes reaproveitam a
+aba conectada, navegando nela quando o documento muda. `--open-browser` força
+uma abertura e `--no-open-browser` só registra, sem abrir nada. A URL impressa já contém `?theme=<name>`. `?theme=` vence cookie e
 configuração; use a mesma URL para reabrir sem reiniciar o daemon. Confirme:
 
 - `theme list` mostra o nome com `builtin` ou `user` e nenhum aviso para ele;

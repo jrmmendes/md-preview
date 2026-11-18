@@ -1,33 +1,58 @@
-import type { SlugsEvent, SnapshotEvent, ThemesEvent, VersionEvent } from "../../core/contract";
+import type {
+  ActivateEvent,
+  SlugsEvent,
+  SnapshotEvent,
+  ThemesEvent,
+  VersionEvent,
+} from "../../core/contract";
 
 export interface EventMap {
   snapshot: SnapshotEvent;
   version: VersionEvent;
   slugs: SlugsEvent;
   themes: ThemesEvent;
+  activate: ActivateEvent;
   ping: { ts: number };
 }
 
 type EventType = keyof EventMap;
 type Handler<K extends EventType> = (data: EventMap[K]) => void;
 
-const TYPES: EventType[] = ["snapshot", "version", "slugs", "themes", "ping"];
+const TYPES: EventType[] = ["snapshot", "version", "slugs", "themes", "activate", "ping"];
 
 const handlers: { [K in EventType]: Set<Handler<K>> } = {
   snapshot: new Set(),
   version: new Set(),
   slugs: new Set(),
   themes: new Set(),
+  activate: new Set(),
   ping: new Set(),
 };
 
 let source: EventSource | null = null;
 
+/** Slug of the document currently shown, as the daemon knows it. */
+export function currentDocumentSlug(): string {
+  let slug = "";
+  try {
+    slug = window.location.pathname.slice(1);
+  } catch {
+    return "";
+  }
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
+}
+
 function connect(): void {
   if (source || typeof EventSource === "undefined") {
     return;
   }
-  source = new EventSource("/__events");
+  const doc = currentDocumentSlug();
+  const query = doc ? `?doc=${encodeURIComponent(doc)}` : "";
+  source = new EventSource(`/__events${query}`);
   for (const type of TYPES) {
     source.addEventListener(type, (event) => {
       const message = event as MessageEvent<string>;

@@ -169,7 +169,7 @@ describe("previewPipe", () => {
 
     const result = await previewPipe(
       content,
-      { opener: spy.opener, log: output.log },
+      { openBrowser: false, opener: spy.opener, log: output.log },
       config,
       { MDPRV_TMP_DIR: pipeDir }
     );
@@ -225,7 +225,7 @@ describe("previewPipe", () => {
 });
 
 describe("--pipe command line", () => {
-  it("registers piped Markdown without opening a browser", async () => {
+  it("suppresses the browser with --no-open-browser", async () => {
     const root = mkdtempSync(join(tmpdir(), "mdprv-pipe-cli-"));
     cliDirs.push(root);
     const { bin, marker } = fakeBrowser(root);
@@ -233,7 +233,7 @@ describe("--pipe command line", () => {
     const content = "# test\n";
 
     try {
-      const result = await runCli(["--pipe"], cliEnv(root, bin), content);
+      const result = await runCli(["--pipe", "--no-open-browser"], cliEnv(root, bin), content);
 
       expect(result.exitCode).toBe(0);
       expect(result.stderr).not.toContain("could not open a browser");
@@ -254,6 +254,26 @@ describe("--pipe command line", () => {
       const page = await fetch(urls[0]!);
       expect(page.status).toBe(200);
       expect(await page.text()).toContain("test");
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("opens the browser by default on the first pipe", async () => {
+    const root = mkdtempSync(join(tmpdir(), "mdprv-pipe-default-"));
+    cliDirs.push(root);
+    const { bin, marker } = fakeBrowser(root);
+    const stateFile = join(root, "state", "daemon.json");
+
+    try {
+      const result = await runCli(["--pipe"], cliEnv(root, bin), "# default\n");
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toContain("opened in browser");
+      const urls = result.stdout.trim().split("\n").filter(Boolean);
+      expect(urls).toHaveLength(1);
+      expect(await waitUntil(() => existsSync(marker))).toBe(true);
+      expect(readFileSync(marker, "utf8").trim()).toBe(urls[0]!);
     } finally {
       await shutdown(stateFile);
     }

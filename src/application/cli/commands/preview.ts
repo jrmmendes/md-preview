@@ -9,14 +9,16 @@ import {
 import { canonicalPath } from "../../../core/paths";
 import { encodeSlugPath, slugFor } from "../../../core/slug";
 import { writePipeDocument, type TempEnv } from "../../../core/temp";
-import { themesDir } from "../../../core/config-file";
-import { createThemeStore } from "../../../core/themes/store";
-import { openInBrowser } from "../browser";
 import { ensureDaemon, registerDocument } from "../daemon-client";
+import { present } from "../present";
+import { validateThemeOption } from "../theme-option";
 
 export interface PreviewOptions {
   theme?: string;
-  /** Open the browser once, with the first file active. Off by default. */
+  /**
+   * `undefined` (default) reuses a connected tab and opens the browser only
+   * when no tab is connected. `true` always opens, `false` never opens.
+   */
   openBrowser?: boolean;
   /** Injection point for tests; defaults to the real platform opener. */
   opener?: (url: string) => boolean;
@@ -39,18 +41,6 @@ interface PreviewDocument {
   canonical: string;
   slug: string;
   content: string;
-}
-
-function validateThemeOption(theme: string, config: Config): string {
-  const store = createThemeStore({
-    dir: themesDir(config.configDir),
-    watch: false,
-    logger: { warn: (message) => process.stderr.write(`${message}\n`) },
-  });
-  if (!store.has(theme)) {
-    throw new Error(`unknown theme: ${theme}`);
-  }
-  return theme;
 }
 
 function loadDocument(file: string): PreviewDocument {
@@ -131,12 +121,7 @@ async function registerDocuments(
     log(result.url);
   }
 
-  if (options.openBrowser) {
-    const opener = options.opener ?? openInBrowser;
-    if (!opener(results[0]!.url)) {
-      process.stderr.write(`md-preview: could not open a browser\n`);
-    }
-  }
+  await present(daemon, results[0]!, { openBrowser: options.openBrowser, opener: options.opener });
 
   return results;
 }
@@ -145,8 +130,9 @@ async function registerDocuments(
  * Register one or more Markdown files in the daemon.
  *
  * The daemon is started in the background when needed, regardless of the
- * browser flag. The browser is only opened when `openBrowser` is true, once,
- * after every file has been registered, with the first file active.
+ * browser flag. By default a connected preview tab is focused and navigated in
+ * place; the platform opener is used only for the first run or when no tab is
+ * connected. `openBrowser: true` forces opening and `false` suppresses it.
  */
 export async function preview(
   files: string | readonly string[],

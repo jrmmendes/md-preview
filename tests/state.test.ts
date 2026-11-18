@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import {
   clearDaemonState,
   readDaemonState,
+  updateDaemonState,
   writeDaemonState,
   type DaemonState,
 } from "../src/core/state";
@@ -78,6 +79,56 @@ describe("daemon state", () => {
       pid: 20,
       port: 9001,
       token: "second-token-123456789",
+    });
+  });
+
+  it("persists browser bookkeeping without losing pid, port or token", () => {
+    const dir = tempDir();
+    const file = join(dir, "daemon.json");
+    writeDaemonState(file, 42, 8123, "token-value-1234567890");
+
+    const updated = updateDaemonState(file, {
+      browserOpened: true,
+      browserOpenedAt: 1_700_000_000_000,
+      browserUrl: "/doc?theme=nord",
+    });
+    expect(updated).toEqual({
+      pid: 42,
+      port: 8123,
+      token: "token-value-1234567890",
+      browserOpened: true,
+      browserOpenedAt: 1_700_000_000_000,
+      browserUrl: "/doc?theme=nord",
+    });
+    expect(readDaemonState(file)).toEqual(updated);
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(updated);
+
+    const partial = updateDaemonState(file, { browserUrl: "/other" });
+    expect(partial?.browserOpened).toBe(true);
+    expect(partial?.browserUrl).toBe("/other");
+
+    clearDaemonState(file);
+    expect(updateDaemonState(file, { browserOpened: true })).toBeNull();
+  });
+
+  it("ignores invalid browser bookkeeping from older or damaged files", () => {
+    const dir = tempDir();
+    const file = join(dir, "daemon.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        pid: 1,
+        port: 9000,
+        token: "token-value-1234567890",
+        browserOpened: "yes",
+        browserOpenedAt: "soon",
+        browserUrl: 7,
+      })
+    );
+    expect(readDaemonState(file)).toEqual({
+      pid: 1,
+      port: 9000,
+      token: "token-value-1234567890",
     });
   });
 });

@@ -45,6 +45,17 @@ export interface VersionEvent {
 
 export type SlugsEvent = SlugInfo[];
 
+/**
+ * Sent to connected preview tabs when the CLI wants a document shown without
+ * opening a new tab. `slug` is the target document; `url` is a same-origin
+ * path (or absolute URL) the tab should navigate to when needed.
+ */
+export interface ActivateEvent {
+  slug: string;
+  url: string;
+  ts: number;
+}
+
 export interface ThemesEvent {
   names: string[];
   changed: string[];

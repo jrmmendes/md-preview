@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
@@ -13,5 +13,30 @@ export function canonicalPath(filePath: string): string {
     return realpathSync(abs);
   } catch {
     return abs;
+  }
+}
+
+/**
+ * What a command-line path currently points at.
+ *
+ * Symlinks are followed, because `md-preview link-to-dir` must behave like the
+ * directory it targets. A path can only name one filesystem entry, so a
+ * "file vs directory" ambiguity does not exist: `stat` decides, and a
+ * directory named `notes.md` is previewed as a directory.
+ */
+export type PathKind = "file" | "directory" | "missing" | "other";
+
+export function classifyPath(filePath: string): PathKind {
+  try {
+    const stats = statSync(resolve(filePath));
+    if (stats.isFile()) {
+      return "file";
+    }
+    if (stats.isDirectory()) {
+      return "directory";
+    }
+    return "other";
+  } catch {
+    return "missing";
   }
 }

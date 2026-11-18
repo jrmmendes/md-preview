@@ -1,15 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createDaemon, type DaemonHandle } from "../src/application/daemon";
 import { createSlugRegistry } from "../src/application/daemon/watch";
+import type { FolderResult } from "../src/application/cli/commands/folder";
 import { preview } from "../src/application/cli/commands/preview";
+import { previewTarget } from "../src/application/cli/commands/target";
 import type { Config } from "../src/core/config";
-import type { SnapshotEvent } from "../src/core/contract";
+import type { ActivateEvent, SnapshotEvent } from "../src/core/contract";
 import { isMarkdownExtension, isMarkdownPath } from "../src/core/extensions";
-import { slugFor } from "../src/core/slug";
+import { encodeSlugPath, slugFor } from "../src/core/slug";
 
 let dir: string;
 let daemon: DaemonHandle;
@@ -83,6 +85,84 @@ async function snapshot(): Promise<SnapshotEvent> {
   }
 }
 
+interface EventCursor {
+  next<T>(type: string, timeoutMs?: number): Promise<T>;
+  close(): Promise<void>;
+}
+
+async function openEvents(doc?: string): Promise<EventCursor> {
+  const controller = new AbortController();
+  const query = doc ? `?doc=${encodeURIComponent(doc)}` : "";
+  const response = await fetch(`${base}/__events${query}`, { signal: controller.signal });
+  const reader = response.body!.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  function parse(): { event: string; data: unknown } | null {
+    const index = buffer.indexOf("\n\n");
+    if (index < 0) {
+      return null;
+    }
+    const block = buffer.slice(0, index);
+    buffer = buffer.slice(index + 2);
+    let event = "message";
+    const data: string[] = [];
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) {
+        event = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        data.push(line.slice("data:".length).trimStart());
+      }
+    }
+    if (data.length === 0) {
+      return null;
+    }
+    try {
+      return { event, data: JSON.parse(data.join("\n")) };
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    async next<T>(type: string, timeoutMs = 4000): Promise<T> {
+      const deadline = Date.now() + timeoutMs;
+      while (true) {
+        const ready = parse();
+        if (ready) {
+          if (ready.event === type) {
+            return ready.data as T;
+          }
+          continue;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw new Error(`timeout waiting for ${type}`);
+        }
+        const outcome = await Promise.race([
+          reader.read().then((result) => ({ kind: "read" as const, result })),
+          Bun.sleep(remaining).then(() => ({ kind: "timeout" as const })),
+        ]);
+        if (outcome.kind === "timeout") {
+          throw new Error(`timeout waiting for ${type}`);
+        }
+        if (outcome.result.done) {
+          throw new Error(`stream ended waiting for ${type}`);
+        }
+        buffer += decoder.decode(outcome.result.value, { stream: true });
+      }
+    },
+    async close(): Promise<void> {
+      controller.abort();
+      try {
+        await reader.cancel();
+      } catch {
+        /* already closed */
+      }
+    },
+  };
+}
+
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "mdprv-preview-"));
   config = makeConfig(join(dir, "state", "daemon.json"));
@@ -114,7 +194,7 @@ describe("markdown extensions", () => {
 });
 
 describe("preview command", () => {
-  it("registers a .mdc file with normal frontmatter and never opens a browser by default", async () => {
+  it("opens the browser by default on a cold daemon", async () => {
     const file = join(dir, "cursor-rules.mdc");
     writeFileSync(
       file,
@@ -129,7 +209,7 @@ describe("preview command", () => {
     expect(results[0]!.slug.endsWith("cursor-rules")).toBe(true);
     expect(results[0]!.slug).not.toContain(".mdc");
     expect(output.lines).toEqual([results[0]!.url]);
-    expect(spy.calls).toEqual([]);
+    expect(spy.calls).toEqual([results[0]!.url]);
 
     const page = await fetch(results[0]!.url);
     expect(page.status).toBe(200);
@@ -192,9 +272,9 @@ describe("preview command", () => {
     const spy = browserSpy();
     const output = collector();
 
-    const first = await preview(file, { opener: spy.opener, log: output.log }, config);
-    const second = await preview(file, { opener: spy.opener, log: output.log }, config);
-    const throughAlias = await preview(alias, { opener: spy.opener, log: output.log }, config);
+    const first = await preview(file, { openBrowser: false, opener: spy.opener, log: output.log }, config);
+    const second = await preview(file, { openBrowser: false, opener: spy.opener, log: output.log }, config);
+    const throughAlias = await preview(alias, { openBrowser: false, opener: spy.opener, log: output.log }, config);
 
     expect(second[0]!.slug).toBe(first[0]!.slug);
     expect(second[0]!.url).toBe(first[0]!.url);
@@ -219,6 +299,130 @@ describe("preview command", () => {
   });
 });
 
+describe("tab activation", () => {
+  it("focuses the tab already on the document and never calls the opener", async () => {
+    const file = join(dir, "activate-same.md");
+    writeFileSync(file, "# Same\n");
+    const spy = browserSpy();
+    const output = collector();
+
+    const [result] = await preview(
+      file,
+      { openBrowser: false, opener: spy.opener, log: output.log },
+      config
+    );
+    const events = await openEvents(result!.slug);
+    try {
+      await events.next("snapshot");
+      const again = await preview(
+        file,
+        { opener: spy.opener, log: output.log },
+        config
+      );
+      expect(again[0]!.url).toBe(result!.url);
+      const event = await events.next<ActivateEvent>("activate");
+      expect(event.slug).toBe(result!.slug);
+      expect(event.url).toBe(`/${encodeSlugPath(result!.slug)}`);
+      expect(spy.calls).toEqual([]);
+    } finally {
+      await events.close();
+    }
+  });
+
+  it("navigates a connected tab to another document instead of opening a tab", async () => {
+    const first = join(dir, "activate-one.md");
+    const second = join(dir, "activate-two.md");
+    writeFileSync(first, "# One\n");
+    writeFileSync(second, "# Two\n");
+    const spy = browserSpy();
+    const output = collector();
+
+    const [firstResult] = await preview(
+      first,
+      { openBrowser: false, opener: spy.opener, log: output.log },
+      config
+    );
+    const events = await openEvents(firstResult!.slug);
+    try {
+      await events.next("snapshot");
+      const [secondResult] = await preview(
+        second,
+        { opener: spy.opener, log: output.log },
+        config
+      );
+      expect(spy.calls).toEqual([]);
+      const event = await events.next<ActivateEvent>("activate");
+      expect(event.slug).toBe(secondResult!.slug);
+      expect(event.url).toBe(`/${encodeSlugPath(secondResult!.slug)}`);
+    } finally {
+      await events.close();
+    }
+  });
+});
+
+describe("path target", () => {
+  it("dispatches a directory to the folder preview and opens the index", async () => {
+    const docs = join(dir, "target-docs");
+    mkdirSync(docs);
+    writeFileSync(join(docs, "b.md"), "# B\n");
+    writeFileSync(join(docs, "index.md"), "# Index\n");
+    const spy = browserSpy();
+    const output = collector();
+
+    const result = await previewTarget(
+      docs,
+      { theme: "nord", opener: spy.opener, log: output.log },
+      config
+    );
+
+    expect(Array.isArray(result)).toBe(false);
+    const folder = result as FolderResult;
+    expect(folder.entries.map((entry) => entry.name)).toEqual(["b.md", "index.md"]);
+    expect(folder.opened).toBe(folder.entries[1]!.url);
+    expect(folder.opened).toContain("?theme=nord");
+    expect(spy.calls).toEqual([folder.opened]);
+    expect(output.lines).toHaveLength(2);
+
+    const page = await fetch(folder.opened);
+    expect(page.status).toBe(200);
+  });
+
+  it("dispatches a file to the file preview", async () => {
+    const file = join(dir, "target-file.md");
+    writeFileSync(file, "# Target\n");
+    const output = collector();
+
+    const result = await previewTarget(file, { log: output.log }, config);
+
+    expect(Array.isArray(result)).toBe(true);
+    const results = result as Array<{ url: string }>;
+    expect(results).toHaveLength(1);
+    const page = await fetch(results[0]!.url);
+    expect(page.status).toBe(200);
+  });
+
+  it("rejects missing paths and directories mixed with files", async () => {
+    const docs = join(dir, "mixed-docs");
+    mkdirSync(docs);
+    writeFileSync(join(docs, "a.md"), "# A\n");
+    const file = join(dir, "mixed-file.md");
+    writeFileSync(file, "# File\n");
+
+    await expect(previewTarget(join(dir, "nope.md"), {}, config)).rejects.toThrow(
+      /path not found/
+    );
+    await expect(previewTarget([file, docs], {}, config)).rejects.toThrow(/on its own/);
+  });
+
+  it("rejects a directory without Markdown files", async () => {
+    const empty = join(dir, "empty-target");
+    mkdirSync(empty);
+    writeFileSync(join(empty, "notes.txt"), "not markdown\n");
+
+    await expect(previewTarget(empty, {}, config)).rejects.toThrow(/no Markdown files/);
+  });
+});
+
 describe("slug registry deduplication", () => {
   it("keys entries by real path and reloads without creating another tab", () => {
     const file = join(dir, "registry.md");
@@ -237,11 +441,13 @@ describe("slug registry deduplication", () => {
       expect(registry.list()).toHaveLength(1);
       expect(registry.findByPath(file)).toBe(slug);
       expect(registry.findByPath(alias)).toBe(slug);
-      expect(registry.get(slug)!.version).toBe(version + 3);
+      // Identical content must not bump the version: a repeated CLI call
+      // points the open tab at the document instead of reloading it.
+      expect(registry.get(slug)!.version).toBe(version);
       expect(registry.get(slug)!.path).toBe(file);
 
       expect(registry.register("registry", file, "# Changed\n")).toBe(slug);
-      expect(registry.get(slug)!.version).toBe(version + 4);
+      expect(registry.get(slug)!.version).toBe(version + 1);
       expect(registry.list()).toHaveLength(1);
     } finally {
       registry.close();

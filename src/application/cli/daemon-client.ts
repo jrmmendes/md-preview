@@ -71,6 +71,48 @@ export interface RegisterPayload {
   content: string;
 }
 
+export type ActivateAction = "focused" | "navigated" | "opened";
+
+export interface ActivateResult {
+  action: ActivateAction;
+  /** Connected preview tabs at decision time. */
+  clients: number;
+  /** True when no browser had been opened yet in this daemon session. */
+  first?: boolean;
+}
+
+/**
+ * Ask the daemon to show `url` in an already connected tab.
+ *
+ * `opened` means no tab is connected and the caller should use the platform
+ * opener. `focused`/`navigated` mean a tab received the `activate` event.
+ */
+export async function activateDocument(
+  port: number,
+  token: string,
+  payload: { slug: string; url: string }
+): Promise<ActivateResult> {
+  const res = await fetch(`http://127.0.0.1:${port}/__activate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-mdprv-token": token },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(2500),
+  });
+  if (!res.ok) {
+    throw new Error(`activate failed with status ${res.status}`);
+  }
+  const data = (await res.json()) as { action?: unknown; clients?: unknown; first?: unknown };
+  const action = data.action;
+  if (action !== "focused" && action !== "navigated" && action !== "opened") {
+    throw new Error("activate returned an invalid action");
+  }
+  return {
+    action,
+    clients: typeof data.clients === "number" ? data.clients : 0,
+    first: data.first === true,
+  };
+}
+
 export async function registerDocument(
   port: number,
   payload: RegisterPayload,

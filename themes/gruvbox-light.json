@@ -16,6 +16,18 @@
     "code-fg": "#3c3836",
     "quote": "#928374"
   },
+  "charts": {
+    "palette": [
+      "#076678",
+      "#79740e",
+      "#8f3f71",
+      "#b57614",
+      "#427b58",
+      "#9d0006",
+      "#af3a03",
+      "#3c3836"
+    ]
+  },
   "shiki": {
     "light": "gruvbox-light-medium",
     "dark": "gruvbox-light-medium"

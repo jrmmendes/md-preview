@@ -50,6 +50,251 @@ export const TABLE_MIN_COLUMN_WIDTH = 48;
 export const EMPTY_VALUE_KEY = "—";
 
 /**
+ * Default chart palettes used when a theme does not declare `charts.palette`
+ * (or declares an invalid/unknown value). Kept here, next to the chart model,
+ * so the browser island and the theme validator share one fallback.
+ */
+export const DEFAULT_CHART_PALETTE_LIGHT: readonly string[] = [
+  "#4c78a8",
+  "#f58518",
+  "#e45756",
+  "#72b7b2",
+  "#54a24b",
+  "#b58900",
+  "#b279a2",
+  "#8c6d31",
+];
+
+export const DEFAULT_CHART_PALETTE_DARK: readonly string[] = [
+  "#79aede",
+  "#ff9f45",
+  "#ff7b78",
+  "#8fd6d1",
+  "#7bc86f",
+  "#f2d65b",
+  "#d29bca",
+  "#c9a58c",
+];
+
+/** Maximum number of chart colors accepted from a theme. */
+export const CHART_PALETTE_MAX = 12;
+
+const CHART_COLOR_RE = /^(?:#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\([0-9.%\s,/+-]+\))$/;
+
+function isChartColor(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 64 &&
+    CHART_COLOR_RE.test(value)
+  );
+}
+
+/**
+ * Resolve a theme chart palette. Anything missing, non-array, empty, too long
+ * or containing an unsafe color falls back to the built-in palette for the
+ * active color scheme, so an old theme without `charts` keeps working.
+ */
+export function resolveChartPalette(
+  value: unknown,
+  scheme: "light" | "dark" = "light"
+): string[] {
+  const fallback =
+    scheme === "dark" ? DEFAULT_CHART_PALETTE_DARK : DEFAULT_CHART_PALETTE_LIGHT;
+  if (!Array.isArray(value) || value.length === 0 || value.length > CHART_PALETTE_MAX) {
+    return [...fallback];
+  }
+  if (!value.every(isChartColor)) {
+    return [...fallback];
+  }
+  return [...value];
+}
+
+/** Chart kinds supported by the built-in SVG renderer. */
+export type ChartKind = "bar" | "hbar" | "line" | "area" | "pie" | "scatter";
+
+export interface ChartColumn {
+  index: number;
+  /** Header label, or the spreadsheet letter when there is no header row. */
+  label: string;
+}
+
+export interface ChartSeries {
+  name: string;
+  /** `null` for empty/non-numeric cells so lines can break at gaps. */
+  values: Array<number | null>;
+}
+
+export interface ChartData {
+  categories: string[];
+  series: ChartSeries[];
+  categoryLabel: string;
+  valueLabel: string;
+}
+
+export interface ChartBuildOptions {
+  categoryColumn?: number;
+  valueColumn?: number;
+}
+
+/**
+ * Columns that read as numeric in the displayed rows. The chart popover uses
+ * this list for its series picker; the first entry is the default series.
+ */
+export function numericChartColumns(model: TableModel): ChartColumn[] {
+  const columns = model.rows.reduce(
+    (widest, row) => Math.max(widest, row.length),
+    model.header.length
+  );
+  const out: ChartColumn[] = [];
+  const headerless = model.header.length === 0;
+  for (let column = 0; column < columns; column += 1) {
+    const values = model.rows.map((row) => row[column] ?? "");
+    // With the first-row header disabled, the old header line is displayed as
+    // data. Tolerate that single text row so the chart stays usable: the text
+    // cell becomes a gap instead of disqualifying the whole numeric column.
+    const numeric =
+      isNumericColumn(values) ||
+      (headerless && values.length > 1 && isNumericColumn(values.slice(1)));
+    if (numeric) {
+      out.push({
+        index: column,
+        label: (model.header[column] ?? "").trim() || columnLetter(column),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Build the chart model from the rows currently visible on screen. Series are
+ * taken from one numeric column; the category column defaults to the first.
+ * Non-numeric cells become `null` gaps instead of being silently coerced to 0.
+ */
+export function buildChartData(
+  model: TableModel,
+  options: ChartBuildOptions = {}
+): ChartData | null {
+  if (model.rows.length === 0) {
+    return null;
+  }
+  const columns = numericChartColumns(model);
+  if (columns.length === 0) {
+    return null;
+  }
+  const categoryColumn = options.categoryColumn ?? 0;
+  let valueColumn = options.valueColumn;
+  if (
+    valueColumn === undefined ||
+    valueColumn === null ||
+    !columns.some((column) => column.index === valueColumn)
+  ) {
+    valueColumn =
+      columns.find((column) => column.index !== categoryColumn)?.index ??
+      columns[0]!.index;
+  }
+  const categories = model.rows.map((row) => {
+    const label = (row[categoryColumn] ?? "").replace(/\s+/g, " ").trim();
+    return label === "" ? EMPTY_VALUE_KEY : label;
+  });
+  const series: ChartSeries = {
+    name: (model.header[valueColumn] ?? "").trim() || columnLetter(valueColumn),
+    values: model.rows.map((row) => numericKey(row[valueColumn] ?? "")),
+  };
+  return {
+    categories,
+    series: [series],
+    categoryLabel:
+      (model.header[categoryColumn] ?? "").trim() || columnLetter(categoryColumn),
+    valueLabel: series.name,
+  };
+}
+
+/**
+ * Why a chart kind cannot represent this data, or `null` when it can. The
+ * popover disables the option and uses the string as its `title`.
+ */
+export function chartUnavailableReason(kind: ChartKind, data: ChartData): string | null {
+  const values = data.series.flatMap((series) => series.values);
+  const numeric = values.filter((value): value is number => value !== null);
+  if (numeric.length === 0) {
+    return "A coluna escolhida não tem valores numéricos.";
+  }
+  if (kind === "pie") {
+    const positive = numeric.filter((value) => value > 0);
+    if (positive.length === 0) {
+      return "Pizza/rosca precisa de valores positivos.";
+    }
+    if (numeric.some((value) => value < 0)) {
+      return "Pizza/rosca não aceita valores negativos.";
+    }
+    if (positive.length > 12) {
+      return "Pizza/rosca aceita no máximo 12 categorias.";
+    }
+  }
+  if ((kind === "line" || kind === "area" || kind === "scatter") && numeric.length < 2) {
+    return "Este gráfico precisa de pelo menos dois valores.";
+  }
+  return null;
+}
+
+/**
+ * Prefix spreadsheet formula triggers (CWE-1236) with an apostrophe before
+ * export. Pure numbers — including negative numbers such as `-3,5` — are left
+ * untouched so data stays usable after pasting into a spreadsheet.
+ */
+export function sanitizeSpreadsheetCell(text: string): string {
+  if (!/^[=+\-@\t\r]/.test(text)) {
+    return text;
+  }
+  // Only plain negative numbers (e.g. "-3,5") are safe to keep as formulas
+  // would not run on them; everything else that starts with a trigger gets the
+  // apostrophe that forces text interpretation.
+  if (text.startsWith("-") && numericKey(text) !== null) {
+    return text;
+  }
+  return `'${text}`;
+}
+
+function csvField(text: string): string {
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+export interface CsvOptions {
+  /** CRLF is the RFC 4180 default; LF matches the rest of the app's exports. */
+  eol?: "\n" | "\r\n";
+  /** Formula-injection mitigation on by default (CWE-1236). */
+  mitigateFormulas?: boolean;
+}
+
+/**
+ * Serialize rows as RFC 4180-compatible CSV: comma separator, quotes around
+ * fields containing commas/quotes/line breaks, doubled quotes inside quoted
+ * fields. Line endings default to LF (no BOM), matching the TSV and Markdown
+ * copy paths; pass `eol: "\r\n"` for strict RFC 4180 output.
+ */
+export function serializeCsv(
+  rows: readonly (readonly string[])[],
+  options: CsvOptions = {}
+): string {
+  if (rows.length === 0) {
+    return "";
+  }
+  const eol = options.eol ?? "\n";
+  const mitigate = options.mitigateFormulas ?? true;
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const value = mitigate ? sanitizeSpreadsheetCell(cell) : cell;
+          return csvField(value);
+        })
+        .join(",")
+    )
+    .join(eol);
+}
+
+/**
  * Lowercase, strip diacritics and collapse whitespace. Used for search and
  * value matching, never for display.
  */
@@ -388,9 +633,14 @@ export function normalizeRange(range: TableRange): TableRange {
 
 /**
  * Serialize a rectangle (or every row when no range is given) as TSV.
- * Out-of-bounds coordinates are clamped.
+ * Out-of-bounds coordinates are clamped. Formula triggers are prefixed with an
+ * apostrophe by default (CWE-1236), matching the CSV export.
  */
-export function serializeTsv(rows: readonly (readonly string[])[], range?: TableRange | null): string {
+export function serializeTsv(
+  rows: readonly (readonly string[])[],
+  range?: TableRange | null,
+  options: { mitigateFormulas?: boolean } = {}
+): string {
   if (rows.length === 0) {
     return "";
   }
@@ -403,11 +653,13 @@ export function serializeTsv(rows: readonly (readonly string[])[], range?: Table
   if (r2 < r1 || c2 < c1) {
     return "";
   }
+  const mitigate = options.mitigateFormulas ?? true;
   const lines: string[] = [];
   for (let r = r1; r <= r2; r += 1) {
     const values: string[] = [];
     for (let c = c1; c <= c2; c += 1) {
-      values.push(rows[r]?.[c] ?? "");
+      const value = rows[r]?.[c] ?? "";
+      values.push(mitigate ? sanitizeSpreadsheetCell(value) : value);
     }
     lines.push(values.join("\t"));
   }

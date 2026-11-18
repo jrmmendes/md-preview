@@ -78,12 +78,19 @@ function armRestore(button: HTMLElement, run: () => void): void {
   timers.set(button, timer);
 }
 
-/** Swap a button to the check icon and tint it, then restore it. */
-export function flashCopied(button: HTMLElement, copiedClass = "mdprv-copied"): void {
+/**
+ * Swap a button to the check icon and tint it, then restore it. `restoreIcon`
+ * lets buttons with a custom icon (CSV) come back to their own glyph.
+ */
+export function flashCopied(
+  button: HTMLElement,
+  copiedClass = "mdprv-copied",
+  restoreIcon = COPY_ICON
+): void {
   button.innerHTML = CHECK_ICON;
   button.classList.add(copiedClass);
   armRestore(button, () => {
-    button.innerHTML = COPY_ICON;
+    button.innerHTML = restoreIcon;
     button.classList.remove(copiedClass);
   });
 }

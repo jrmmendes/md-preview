@@ -1,5 +1,7 @@
+import { resolveChartPalette } from "../../shared/table";
 import { DEFAULT_FONT_STACK } from "../fonts";
 import type {
+  ThemeCharts,
   ThemeColors,
   ThemeEffects,
   ThemeLayout,
@@ -52,6 +54,11 @@ export const DEFAULT_EFFECTS: ThemeEffects = {
   easing: "ease",
 };
 
+/** Scheme-aware fallback used when `charts.palette` is absent or invalid. */
+export function defaultThemeCharts(kind: "light" | "dark"): ThemeCharts {
+  return { palette: resolveChartPalette(undefined, kind) };
+}
+
 export const DEFAULT_OPTIONAL_COLORS = {
   "surface-raised": "",
   "border-strong": "",
@@ -71,13 +78,16 @@ export function withDefaults(
   radii: Partial<ThemeRadii> | undefined,
   typography: Partial<ThemeTypography> | undefined,
   layout: Partial<ThemeLayout> | undefined,
-  effects: Partial<ThemeEffects> | undefined
+  effects: Partial<ThemeEffects> | undefined,
+  charts: Partial<ThemeCharts> | undefined,
+  kind: "light" | "dark"
 ): {
   colors: ThemeColors;
   radii: ThemeRadii;
   typography: ThemeTypography;
   layout: ThemeLayout;
   effects: ThemeEffects;
+  charts: ThemeCharts;
 } {
   return {
     colors: {
@@ -104,5 +114,8 @@ export function withDefaults(
     typography: { ...DEFAULT_TYPOGRAPHY, ...typography },
     layout: { ...DEFAULT_LAYOUT, ...layout },
     effects: { ...DEFAULT_EFFECTS, ...effects },
+    charts: {
+      palette: resolveChartPalette(charts?.palette, kind),
+    },
   };
 }

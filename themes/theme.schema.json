@@ -122,6 +122,13 @@
         "easing": { "type": "string", "minLength": 1 }
       }
     },
+    "charts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "palette": { "$ref": "#/$defs/chartPalette" }
+      }
+    },
     "shiki": {
       "type": "object",
       "additionalProperties": false,
@@ -169,6 +176,7 @@
             { "required": ["typography"] },
             { "required": ["layout"] },
             { "required": ["effects"] },
+            { "required": ["charts"] },
             { "required": ["shiki"] },
             { "required": ["mermaid"] }
           ]
@@ -196,6 +204,12 @@
       "minLength": 1,
       "maxLength": 64,
       "pattern": "^(transparent|#[0-9a-fA-F]{3,8}|(rgba?|hsla?)\\([0-9.%\\s,/+-]+\\))$"
+    },
+    "chartPalette": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/color" }
     },
     "radius": {
       "type": "integer",

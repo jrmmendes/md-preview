@@ -16,6 +16,18 @@
     "code-fg": "#24292f",
     "quote": "#57606a"
   },
+  "charts": {
+    "palette": [
+      "#0969da",
+      "#1a7f37",
+      "#bf3989",
+      "#9a6700",
+      "#8250df",
+      "#cf222e",
+      "#0a3069",
+      "#57606a"
+    ]
+  },
   "shiki": {
     "light": "github-light",
     "dark": "github-light"

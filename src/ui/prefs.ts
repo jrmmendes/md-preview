@@ -33,6 +33,7 @@ const KEYS = {
   right: "mdprv_right_collapsed",
   loaderIntent: "mdprv_loader_pending",
   diffView: "mdprv_diff_view",
+  simpleTables: "mdprv_simple_table",
 } as const;
 
 const LEGACY_KEYS = {
@@ -311,6 +312,15 @@ export function getDiffView(): DiffView {
 
 export function setDiffView(view: DiffView): void {
   localSet(KEYS.diffView, view === "split" ? "split" : "inline");
+}
+
+/** Simple table mode hides the spreadsheet gutters and frame globally. */
+export function getSimpleTables(): boolean {
+  return localGet(KEYS.simpleTables) === "1";
+}
+
+export function setSimpleTables(value: boolean): void {
+  localSet(KEYS.simpleTables, value ? "1" : "0");
 }
 
 function currentPath(): string {

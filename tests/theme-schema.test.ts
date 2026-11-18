@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
+import {
+  DEFAULT_CHART_PALETTE_DARK,
+  DEFAULT_CHART_PALETTE_LIGHT,
+} from "../src/shared/table";
 import { validateTheme, type FixedTheme } from "../src/core/themes/tokens";
 
 const COLORS = {
@@ -45,6 +49,29 @@ describe("validateTheme", () => {
     expect(theme.colors.link).toBe(COLORS.accent);
     expect(theme.colors["accent-fg"]).toBe(COLORS.background);
     expect(theme.colors["surface-raised"]).toBe(COLORS.surface);
+    expect(theme.charts.palette).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
+  });
+
+  it("uses a valid charts.palette verbatim", () => {
+    const theme = validateTheme(
+      "sample",
+      fixed({ charts: { palette: ["#111111", "rgb(1, 2, 3)"] } })
+    ) as FixedTheme;
+    expect(theme.charts.palette).toEqual(["#111111", "rgb(1, 2, 3)"]);
+  });
+
+  it("falls back to the built-in palette when charts is invalid", () => {
+    const missing = validateTheme("sample", fixed()) as FixedTheme;
+    const invalid = validateTheme(
+      "sample",
+      fixed({ charts: { palette: ["red", "url(x)"] } })
+    ) as FixedTheme;
+    const empty = validateTheme("sample", fixed({ charts: { palette: [] } })) as FixedTheme;
+    const light = validateTheme("sample", fixed({ kind: "light" })) as FixedTheme;
+    expect(missing.charts.palette).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
+    expect(invalid.charts.palette).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
+    expect(empty.charts.palette).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
+    expect(light.charts.palette).toEqual([...DEFAULT_CHART_PALETTE_LIGHT]);
   });
 
   it("accepts rgb, hsl and transparent colors", () => {
@@ -75,6 +102,7 @@ describe("validateTheme", () => {
     ["unsafe length", fixed({ layout: { "content-width": "calc(1px + 2px)" } }), "sample"],
     ["long duration", fixed({ effects: { "duration-fast": "3s" } }), "sample"],
     ["unknown shiki", fixed({ shiki: { light: "unknown", dark: "nord" } }), "sample"],
+    ["unknown charts key", fixed({ charts: { series: [] } }), "sample"],
     [
       "unsafe mermaid key",
       fixed({ mermaid: { theme: "neutral", overrides: { "bad-key": "x" } } }),

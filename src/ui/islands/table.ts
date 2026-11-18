@@ -12,7 +12,9 @@
  */
 
 import {
+  buildChartData,
   buildColumnValues,
+  chartUnavailableReason,
   clampColumnWidth,
   columnLetter,
   filterRows,
@@ -20,20 +22,32 @@ import {
   normalizeCellText,
   normalizeRange,
   normalizeValueKey,
+  numericChartColumns,
   pivotTable,
   resolveRawMode,
+  serializeCsv,
   serializeMarkdownTable,
   serializeTsv,
   sortOrder,
   TABLE_COLLATOR,
   TABLE_MIN_COLUMN_WIDTH,
+  type ChartColumn,
+  type ChartData,
+  type ChartKind,
   type SortDirection,
   type TableAlign,
   type TableModel,
   type TableRange,
   type TableValue,
 } from "../../shared/table";
+import { CSV_ICON } from "../../shared/copy-icons";
 import { copyText, flashCopied, flashCopyError } from "./clipboard";
+import {
+  CHART_KIND_LABELS,
+  CHART_PREVIEWS,
+  chartPaletteTokens,
+  renderChart,
+} from "./table-chart";
 
 interface CellPosition {
   r: number;
@@ -75,6 +89,8 @@ interface TableController {
   reposition(): void;
   closePopover(refocus: boolean): void;
   popoverOpen(): boolean;
+  chartPopoverOpen(): boolean;
+  closeChartPopover(refocus: boolean): void;
   setGlobalRaw(raw: boolean): void;
 }
 
@@ -229,6 +245,13 @@ function setupTable(block: HTMLElement): TableController | null {
   const copyButton = block.querySelector<HTMLButtonElement>(
     '[data-mdprv-table-action="copy"]'
   );
+  const csvButton = block.querySelector<HTMLButtonElement>(
+    '[data-mdprv-table-action="copy-csv"]'
+  );
+  const chartButton = block.querySelector<HTMLButtonElement>(
+    '[data-mdprv-table-action="chart"]'
+  );
+  const chartContainer = block.querySelector<HTMLElement>("[data-mdprv-chart-container]");
   const fullscreenButton = block.querySelector<HTMLButtonElement>(
     '[data-mdprv-table-action="fullscreen"]'
   );
@@ -304,6 +327,15 @@ function setupTable(block: HTMLElement): TableController | null {
   let popoverList: HTMLElement | null = null;
   let popoverEmpty: HTMLElement | null = null;
 
+  /* ---------- chart state ---------- */
+  let chartPopover: HTMLElement | null = null;
+  let chartAnchor: HTMLButtonElement | null = null;
+  let chartKind: ChartKind = "bar";
+  let chartValueColumn: number | null = null;
+  let chartActive = false;
+  let chartColumns: ChartColumn[] = [];
+  let chartCurrentData: ChartData | null = null;
+
   const announce = (message: string): void => {
     if (statusEl) {
       statusEl.textContent = message;
@@ -331,6 +363,11 @@ function setupTable(block: HTMLElement): TableController | null {
     const gutter = block.querySelector<HTMLElement>("[data-mdprv-rowhead]");
     if (gutter) {
       total += gutter.getBoundingClientRect().width / zoomFactor(block);
+    }
+    if (chartActive) {
+      // The chart's viewBox is 720px wide; keep the fullscreen frame at least
+      // that wide so the plot is never squeezed by a narrow table.
+      total = Math.max(total, 720);
     }
     return Math.ceil(total + 2);
   };
@@ -952,6 +989,9 @@ function setupTable(block: HTMLElement): TableController | null {
     });
     buildRowHead();
     requestSync();
+    if (chartActive) {
+      refreshChart();
+    }
   };
 
   const clearSort = (): void => {
@@ -1349,6 +1389,302 @@ function setupTable(block: HTMLElement): TableController | null {
     updateFunnels();
   }
 
+  /* ---------- chart view ---------- */
+  let chartOptionSignature = "";
+
+  /** Model of the rows currently visible on screen (filter + sort + pivot). */
+  const chartModel = (): TableModel => ({
+    header: state.headerRow ? headerCells().map((cell) => textOf(cell)) : [],
+    rows: Array.from(tbody.rows)
+      .filter((row) => !row.hidden)
+      .map((row) => Array.from(row.cells).map((cell) => textOf(cell))),
+    align: [],
+  });
+
+  function setChartView(next: boolean): void {
+    if (chartActive === next) {
+      if (next) {
+        refreshChart();
+      }
+      return;
+    }
+    chartActive = next;
+    block.setAttribute("data-mdprv-table-view", next ? "chart" : "table");
+    if (chartContainer) {
+      chartContainer.hidden = !next;
+      if (!next) {
+        chartContainer.replaceChildren();
+      }
+    }
+    chartButton?.setAttribute("aria-pressed", next ? "true" : "false");
+    if (next) {
+      closePopover(false);
+      if (searchIsOpen()) {
+        closeSearch(false);
+      }
+      refreshChart();
+    } else {
+      requestSync();
+    }
+    updateToolbarState();
+    syncLightboxGeometry();
+  }
+
+  function refreshChart(): void {
+    if (!chartActive || !chartContainer) {
+      return;
+    }
+    const model = chartModel();
+    chartColumns = numericChartColumns(model);
+    if (
+      chartValueColumn === null ||
+      !chartColumns.some((column) => column.index === chartValueColumn)
+    ) {
+      chartValueColumn =
+        chartColumns.find((column) => column.index !== 0)?.index ??
+        chartColumns[0]?.index ??
+        null;
+    }
+    const data: ChartData | null =
+      chartValueColumn === null
+        ? null
+        : buildChartData(model, { categoryColumn: 0, valueColumn: chartValueColumn });
+    chartCurrentData = data;
+    const reason = data ? chartUnavailableReason(chartKind, data) : "Sem coluna numérica.";
+    if (!data || reason) {
+      chartContainer.replaceChildren();
+      const empty = document.createElement("p");
+      empty.className = "mdprv-chart-empty";
+      empty.textContent = reason ?? "Sem dados para o gráfico.";
+      chartContainer.append(empty);
+    } else {
+      renderChart(chartContainer, chartKind, data, chartPaletteTokens());
+    }
+    syncChartPopover(reason);
+  }
+
+  const ensureChartPopover = (): HTMLElement => {
+    if (chartPopover) {
+      return chartPopover;
+    }
+    const el = document.createElement("div");
+    el.className = "mdprv-table-popover mdprv-chart-popover";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", "Visualização em gráfico");
+    el.tabIndex = -1;
+    el.hidden = true;
+    const selectId = `${block.getAttribute("data-mdprv-table-id") ?? "mdprv-table"}-chart-series`;
+    const options = (Object.keys(CHART_KIND_LABELS) as ChartKind[])
+      .map(
+        (kind) =>
+          `<button type="button" class="mdprv-chart-option" data-chart-kind="${kind}" aria-pressed="false">` +
+          `<span class="mdprv-chart-thumb">${CHART_PREVIEWS[kind]}</span>` +
+          `<span class="mdprv-chart-option-label">${CHART_KIND_LABELS[kind]}</span>` +
+          `</button>`
+      )
+      .join("");
+    el.innerHTML =
+      '<p class="mdprv-table-pop-title">Visualização em gráfico</p>' +
+      `<div class="mdprv-chart-kinds" role="group" aria-label="Tipo de gráfico">${options}</div>` +
+      `<label class="mdprv-chart-field" for="${selectId}">Série numérica</label>` +
+      `<select id="${selectId}" class="mdprv-chart-select" data-chart-column aria-label="Coluna numérica do gráfico"></select>` +
+      '<p class="mdprv-chart-note" data-chart-note hidden></p>' +
+      '<div class="mdprv-table-pop-actions">' +
+      '<button type="button" data-chart-back>Voltar para tabela</button>' +
+      "</div>";
+    document.body.append(el);
+    chartPopover = el;
+
+    el.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const option = target.closest<HTMLButtonElement>("[data-chart-kind]");
+      if (option) {
+        if (option.disabled) {
+          return;
+        }
+        const kind = option.getAttribute("data-chart-kind") as ChartKind | null;
+        if (kind && kind in CHART_KIND_LABELS) {
+          chartKind = kind;
+          setChartView(true);
+          syncChartPopover();
+          announce(`Gráfico: ${CHART_KIND_LABELS[kind]}.`);
+        }
+        return;
+      }
+      if (target.closest("[data-chart-back]")) {
+        setChartView(false);
+        syncChartPopover();
+        announce("Tabela exibida novamente.");
+      }
+    });
+    el.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLSelectElement) || !target.matches("[data-chart-column]")) {
+        return;
+      }
+      const index = Number.parseInt(target.value, 10);
+      chartValueColumn = Number.isFinite(index) ? index : null;
+      refreshChart();
+    });
+    el.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeChartPopover(true);
+      }
+    });
+    return el;
+  };
+
+  const syncChartPopover = (reason?: string | null): void => {
+    if (!chartPopover) {
+      return;
+    }
+    for (const button of Array.from(
+      chartPopover.querySelectorAll<HTMLButtonElement>("[data-chart-kind]")
+    )) {
+      const kind = button.getAttribute("data-chart-kind") as ChartKind | null;
+      if (!kind) {
+        continue;
+      }
+      button.setAttribute("aria-pressed", kind === chartKind ? "true" : "false");
+      const unavailable = chartCurrentData
+        ? chartUnavailableReason(kind, chartCurrentData)
+        : "Sem coluna numérica.";
+      button.disabled = unavailable !== null;
+      button.title = unavailable ?? "";
+    }
+    const select = chartPopover.querySelector<HTMLSelectElement>("[data-chart-column]");
+    if (select) {
+      const signature = chartColumns.map((column) => column.index).join(",");
+      if (signature !== chartOptionSignature) {
+        chartOptionSignature = signature;
+        select.replaceChildren(
+          ...chartColumns.map((column) => {
+            const option = document.createElement("option");
+            option.value = String(column.index);
+            option.textContent = column.label;
+            return option;
+          })
+        );
+      }
+      select.value = chartValueColumn === null ? "" : String(chartValueColumn);
+      select.disabled = chartColumns.length === 0;
+    }
+    const note = chartPopover.querySelector<HTMLElement>("[data-chart-note]");
+    if (note) {
+      note.hidden = !reason;
+      note.textContent = reason ?? "";
+    }
+    const back = chartPopover.querySelector<HTMLButtonElement>("[data-chart-back]");
+    if (back) {
+      back.disabled = !chartActive;
+    }
+    chartButton?.setAttribute(
+      "aria-expanded",
+      chartPopover.hidden ? "false" : "true"
+    );
+  };
+
+  const positionChartPopover = (): void => {
+    if (!chartPopover || chartPopover.hidden || !chartAnchor) {
+      return;
+    }
+    const rect = chartAnchor.getBoundingClientRect();
+    const width = chartPopover.offsetWidth;
+    const height = chartPopover.offsetHeight;
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight;
+    const margin = 8;
+    let left = rect.right - width;
+    if (left + width + margin > viewportWidth) {
+      left = viewportWidth - width - margin;
+    }
+    if (left < margin) {
+      left = margin;
+    }
+    let top = rect.bottom + 4;
+    if (rect.bottom + height + margin + 4 > viewportHeight) {
+      const above = rect.top - height - 4;
+      top = above >= margin ? above : Math.max(margin, viewportHeight - height - margin);
+    }
+    chartPopover.style.left = `${Math.round(left)}px`;
+    chartPopover.style.top = `${Math.round(top)}px`;
+  };
+
+  const onChartViewportChange = (): void => {
+    positionChartPopover();
+  };
+
+  const openChartPopover = (anchor: HTMLButtonElement): void => {
+    for (const close of POPOVER_CLOSERS) {
+      close(false);
+    }
+    if (searchIsOpen()) {
+      closeSearch(false);
+    }
+    const el = ensureChartPopover();
+    const host = block.closest(".mdprv-table-lightbox") ?? document.body;
+    if (el.parentNode !== host) {
+      host.append(el);
+    }
+    chartAnchor = anchor;
+    if (!chartActive) {
+      // Keep the option availability in sync with the current view even before
+      // a chart is chosen.
+      const model = chartModel();
+      chartColumns = numericChartColumns(model);
+      if (
+        chartValueColumn === null ||
+        !chartColumns.some((column) => column.index === chartValueColumn)
+      ) {
+        chartValueColumn =
+          chartColumns.find((column) => column.index !== 0)?.index ??
+          chartColumns[0]?.index ??
+          null;
+      }
+      chartCurrentData =
+        chartValueColumn === null
+          ? null
+          : buildChartData(model, { categoryColumn: 0, valueColumn: chartValueColumn });
+    }
+    el.hidden = false;
+    el.style.visibility = "hidden";
+    syncChartPopover(
+      chartCurrentData
+        ? chartUnavailableReason(chartKind, chartCurrentData)
+        : "Sem coluna numérica."
+    );
+    positionChartPopover();
+    el.style.visibility = "";
+    window.addEventListener("scroll", onChartViewportChange, { passive: true });
+    window.addEventListener("resize", onChartViewportChange);
+    const focusTarget =
+      el.querySelector<HTMLButtonElement>("[data-chart-kind]:not([disabled])") ??
+      el.querySelector<HTMLButtonElement>("[data-chart-back]");
+    focusTarget?.focus({ preventScroll: true });
+  };
+
+  function closeChartPopover(refocus: boolean): void {
+    if (!chartPopover || chartPopover.hidden) {
+      return;
+    }
+    const anchor = chartAnchor;
+    chartPopover.hidden = true;
+    chartAnchor = null;
+    window.removeEventListener("scroll", onChartViewportChange);
+    window.removeEventListener("resize", onChartViewportChange);
+    chartButton?.setAttribute("aria-expanded", "false");
+    if (refocus) {
+      anchor?.focus({ preventScroll: true });
+    }
+  }
+
+  const chartPopoverOpen = (): boolean => chartPopover !== null && !chartPopover.hidden;
+
   /* ---------- filtering + search ---------- */
   const applyFilter = (): void => {
     const visible = filterRows(view.rows, {
@@ -1373,6 +1709,9 @@ function setupTable(block: HTMLElement): TableController | null {
     requestSync();
     updateFunnels();
     paint();
+    if (chartActive) {
+      refreshChart();
+    }
   };
 
   const runFilter = debounce(() => applyFilter(), 100);
@@ -1465,6 +1804,22 @@ function setupTable(block: HTMLElement): TableController | null {
       copyButton.setAttribute("aria-label", label);
       copyButton.title = label;
     }
+    if (csvButton) {
+      const label = mode.raw ? "Copiar CSV como texto" : "Copiar tabela como CSV";
+      csvButton.setAttribute("aria-label", label);
+      csvButton.title = label;
+    }
+    if (chartButton) {
+      chartButton.disabled = mode.raw;
+      chartButton.setAttribute("aria-pressed", chartActive ? "true" : "false");
+      chartButton.setAttribute(
+        "aria-expanded",
+        chartPopover && !chartPopover.hidden ? "true" : "false"
+      );
+      const label = mode.raw ? "Gráfico indisponível no modo raw" : "Visualizar como gráfico";
+      chartButton.setAttribute("aria-label", label);
+      chartButton.title = label;
+    }
   }
 
   const activeRange = (): TableRange | null => {
@@ -1486,6 +1841,35 @@ function setupTable(block: HTMLElement): TableController | null {
       rows.push(values);
     }
     return rows;
+  };
+
+  /**
+   * Every row currently rendered (header included), in display order. Unlike
+   * `textOf`, embedded line breaks are preserved so CSV export can quote them
+   * instead of silently collapsing real multi-line cell data.
+   */
+  const exportText = (cell: Element): string =>
+    (cell.textContent ?? "").replace(/\r\n?/g, "\n").trim();
+
+  const displayedRows = (): string[][] =>
+    Array.from(table.rows)
+      .filter((row) => !row.hidden)
+      .map((row) => Array.from(row.cells).map((cell) => exportText(cell)));
+
+  const copyCsv = (): void => {
+    if (!csvButton) {
+      return;
+    }
+    const mode = rawMode();
+    const payload =
+      mode.raw && rawView ? rawView.textContent ?? "" : serializeCsv(displayedRows());
+    copyText(payload).then(
+      () => {
+        flashCopied(csvButton, "mdprv-copied", CSV_ICON);
+        announce("Tabela copiada como CSV.");
+      },
+      () => flashCopyError(csvButton, "Não foi possível copiar")
+    );
   };
 
   const copy = (): void => {
@@ -1648,6 +2032,10 @@ function setupTable(block: HTMLElement): TableController | null {
     }
     if (mode.raw) {
       closePopover(false);
+      closeChartPopover(false);
+      if (chartActive) {
+        setChartView(false);
+      }
       if (searchIsOpen()) {
         closeSearch(false);
       }
@@ -2111,6 +2499,19 @@ function setupTable(block: HTMLElement): TableController | null {
       case "copy":
         copy();
         break;
+      case "copy-csv":
+        copyCsv();
+        break;
+      case "chart":
+        if (rawMode().raw) {
+          break;
+        }
+        if (chartPopoverOpen()) {
+          closeChartPopover(true);
+        } else {
+          openChartPopover(button);
+        }
+        break;
       case "fullscreen":
         if (block.closest(".mdprv-table-lightbox")) {
           closeLightbox();
@@ -2134,6 +2535,9 @@ function setupTable(block: HTMLElement): TableController | null {
       return true;
     }
     if (popover && !popover.hidden && popover.contains(target)) {
+      return true;
+    }
+    if (chartPopover && !chartPopover.hidden && chartPopover.contains(target)) {
       return true;
     }
     const dialog = block.closest(".mdprv-table-lightbox");
@@ -2176,6 +2580,14 @@ function setupTable(block: HTMLElement): TableController | null {
       closePopover(false);
       if (!focusable && funnel) {
         window.setTimeout(() => funnel.focus({ preventScroll: true }), 0);
+      }
+    }
+    if (chartPopover && !chartPopover.hidden) {
+      if (
+        !chartPopover.contains(target) &&
+        !target.closest('[data-mdprv-table-action="chart"]')
+      ) {
+        closeChartPopover(false);
       }
     }
     if (!searchIsOpen()) {
@@ -2243,6 +2655,8 @@ function setupTable(block: HTMLElement): TableController | null {
     reposition: repositionPopover,
     closePopover,
     popoverOpen: () => popover !== null && !popover.hidden,
+    chartPopoverOpen,
+    closeChartPopover,
     setGlobalRaw: (raw: boolean) => {
       if (state.globalRaw === raw) {
         return;
@@ -2828,6 +3242,7 @@ function openLightbox(block: HTMLElement): void {
   }
   lightboxFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   controller.closePopover(false);
+  controller.closeChartPopover(false);
   lightboxMarker = document.createComment("mdprv-table-home");
   block.parentNode?.insertBefore(lightboxMarker, block);
   frame.append(block);
@@ -2884,6 +3299,7 @@ function closeLightbox(): void {
   const block = lightboxBlock;
   const controller = CONTROLLERS.get(block) ?? null;
   controller?.closePopover(false);
+  controller?.closeChartPopover(false);
   // Flush a keyboard resize that is still inside the debounce window; closing
   // without resetting keeps the saved size for the next open.
   persistLightboxSize();
@@ -3129,6 +3545,10 @@ function setupLightbox(): void {
         controller.closePopover(true);
         return;
       }
+      if (controller?.chartPopoverOpen()) {
+        controller.closeChartPopover(true);
+        return;
+      }
       event.preventDefault();
       closeLightbox();
       return;
@@ -3203,14 +3623,24 @@ export function initTable(): void {
 
     const root = document.documentElement;
     let globalRaw = root.classList.contains("mdprv-raw-open");
+    let simple = root.classList.contains("mdprv-simple-tables");
     const observer = new MutationObserver(() => {
-      const next = root.classList.contains("mdprv-raw-open");
-      if (next === globalRaw) {
-        return;
+      const nextRaw = root.classList.contains("mdprv-raw-open");
+      if (nextRaw !== globalRaw) {
+        globalRaw = nextRaw;
+        for (const controller of instances) {
+          controller.setGlobalRaw(globalRaw);
+        }
       }
-      globalRaw = next;
-      for (const controller of instances) {
-        controller.setGlobalRaw(globalRaw);
+      const nextSimple = root.classList.contains("mdprv-simple-tables");
+      if (nextSimple !== simple) {
+        simple = nextSimple;
+        // CSS hides/shows the gutters; the island only has to re-measure so the
+        // fullscreen frame and the chart keep the correct natural width.
+        for (const controller of instances) {
+          controller.sync();
+          controller.reposition();
+        }
       }
     });
     observer.observe(root, { attributes: true, attributeFilter: ["class"] });

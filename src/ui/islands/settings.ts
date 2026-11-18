@@ -1,4 +1,11 @@
-import { getZoomSensitivity, setTheme, setZoomSensitivity, writeLoaderIntent } from "../prefs";
+import {
+  getSimpleTables,
+  getZoomSensitivity,
+  setSimpleTables,
+  setTheme,
+  setZoomSensitivity,
+  writeLoaderIntent,
+} from "../prefs";
 import * as loader from "../services/loader";
 import { initFontPicker } from "./font-picker";
 
@@ -85,9 +92,26 @@ function setupZoom(): void {
   input.addEventListener("blur", commit);
 }
 
+function setupSimpleTables(): void {
+  const input = document.getElementById("mdprv-simple-table") as HTMLInputElement | null;
+  if (!input) {
+    return;
+  }
+  const apply = (value: boolean): void => {
+    document.documentElement.classList.toggle("mdprv-simple-tables", value);
+  };
+  input.checked = getSimpleTables();
+  apply(input.checked);
+  input.addEventListener("change", () => {
+    setSimpleTables(input.checked);
+    apply(input.checked);
+  });
+}
+
 export function initSettings(): void {
   setupPanel();
   setupTheme();
   initFontPicker();
   setupZoom();
+  setupSimpleTables();
 }

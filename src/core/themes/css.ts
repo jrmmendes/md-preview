@@ -46,6 +46,9 @@ function fixedCss(theme: FixedTheme, scheme: string): string {
   for (const [key, value] of Object.entries(theme.effects)) {
     vars.push(`--mdprv-${key}:${value}`);
   }
+  theme.charts.palette.forEach((color, index) => {
+    vars.push(`--mdprv-chart-${index + 1}:${color}`);
+  });
   vars.push(`color-scheme:${scheme}`);
   return vars.join(";");
 }

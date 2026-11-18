@@ -16,6 +16,18 @@
     "code-fg": "#d8dee9",
     "quote": "#7b88a1"
   },
+  "charts": {
+    "palette": [
+      "#88c0d0",
+      "#a3be8c",
+      "#b48ead",
+      "#ebcb8b",
+      "#81a1c1",
+      "#bf616a",
+      "#5e81ac",
+      "#d08770"
+    ]
+  },
   "shiki": {
     "light": "nord",
     "dark": "nord"

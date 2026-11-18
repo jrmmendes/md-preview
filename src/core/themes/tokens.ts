@@ -16,6 +16,7 @@ export type {
   FixedTheme,
   ResolvedTheme,
   Theme,
+  ThemeCharts,
   ThemeColors,
   ThemeEffects,
   ThemeError,

@@ -58,6 +58,10 @@ describe("builtin themes", () => {
       expect(fixed.radii.md).toBe(6);
       expect(fixed.typography["base-size"]).toBe(17);
       expect(fixed.layout["content-width"]).toBe("46rem");
+      expect(fixed.charts.palette.length).toBeGreaterThanOrEqual(6);
+      for (const color of fixed.charts.palette) {
+        expect(color).toMatch(COLOR);
+      }
       expect(SHIKI_THEME_NAMES).toContain(fixed.shiki.light);
       expect(SHIKI_THEME_NAMES).toContain(fixed.shiki.dark);
       for (const value of Object.values(fixed.mermaid.overrides)) {
@@ -86,6 +90,7 @@ describe("themeCss", () => {
     expect(fixedCss).toContain("--mdprv-font-stack:");
     expect(fixedCss).toContain("--mdprv-content-width:46rem");
     expect(fixedCss).toContain("--mdprv-shadow-panel:");
+    expect(fixedCss).toContain("--mdprv-chart-1:");
     expect(fixedCss).toContain("color-scheme:dark");
     expect(fixedCss).toBe(`:root{${tokenCss(nord.light)}}`);
     expect(fixedCss).not.toContain("prefers-color-scheme");

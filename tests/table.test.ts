@@ -1,20 +1,28 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  buildChartData,
   buildColumnValues,
+  chartUnavailableReason,
   clampColumnWidth,
   columnLetter,
+  DEFAULT_CHART_PALETTE_DARK,
+  DEFAULT_CHART_PALETTE_LIGHT,
   escapeMarkdownCell,
   filterRows,
   isNumericColumn,
   normalizeCellText,
   normalizeRange,
   normalizeValueKey,
+  numericChartColumns,
   numericKey,
   parseCsv,
   parseMarkdownTable,
   pivotTable,
+  resolveChartPalette,
   resolveRawMode,
+  sanitizeSpreadsheetCell,
+  serializeCsv,
   serializeMarkdownTable,
   serializeTsv,
   sortOrder,
@@ -157,6 +165,153 @@ describe("serializeTsv", () => {
 
   it("returns an empty string for an empty table", () => {
     expect(serializeTsv([], { r1: 0, c1: 0, r2: 2, c2: 2 })).toBe("");
+  });
+
+  it("mitigates formula injection while keeping negative numbers", () => {
+    expect(serializeTsv([["=SUM(A1)", "-1", "@cmd"]])).toBe(
+      "'=SUM(A1)\t-1\t'@cmd"
+    );
+    expect(
+      serializeTsv([["=1"]], null, { mitigateFormulas: false })
+    ).toBe("=1");
+  });
+});
+
+describe("serializeCsv", () => {
+  it("writes comma-separated rows with LF by default and no BOM", () => {
+    const csv = serializeCsv([
+      ["Nome", "Receita"],
+      ["Ana", "1.200"],
+    ]);
+    expect(csv).toBe("Nome,Receita\nAna,1.200");
+    expect(csv.startsWith("\uFEFF")).toBe(false);
+  });
+
+  it("quotes commas, quotes and line breaks and doubles inner quotes", () => {
+    const csv = serializeCsv([["Silva, Ana", 'diz "oi"', "linha 1\nlinha 2"]]);
+    expect(csv).toBe('"Silva, Ana","diz ""oi""","linha 1\nlinha 2"');
+  });
+
+  it("supports CRLF output explicitly", () => {
+    expect(serializeCsv([["a"], ["b"]], { eol: "\r\n" })).toBe("a\r\nb");
+  });
+
+  it("mitigates formula injection and keeps plain negative numbers", () => {
+    expect(
+      serializeCsv([["=1+1", "-3,5", "+4", "@x", "ok"]])
+    ).toBe("'=1+1,\"-3,5\",'+4,'@x,ok");
+    expect(sanitizeSpreadsheetCell("-42")).toBe("-42");
+    expect(sanitizeSpreadsheetCell("-R$ 3")).toBe("'-R$ 3");
+    expect(sanitizeSpreadsheetCell("\tcmd")).toBe("'\tcmd");
+    expect(sanitizeSpreadsheetCell("texto")).toBe("texto");
+  });
+
+  it("returns an empty string for no rows", () => {
+    expect(serializeCsv([])).toBe("");
+  });
+});
+
+describe("chart model", () => {
+  const model = {
+    header: ["Cidade", "Receita", "Custo"],
+    rows: [
+      ["São Paulo", "120", "80"],
+      ["Rio", "90", ""],
+      ["Recife", "-10", "30"],
+    ],
+    align: [],
+  };
+
+  it("finds numeric columns and falls back to the letter as label", () => {
+    expect(numericChartColumns(model)).toEqual([
+      { index: 1, label: "Receita" },
+      { index: 2, label: "Custo" },
+    ]);
+  });
+
+  it("builds categories and one numeric series", () => {
+    const data = buildChartData(model, { categoryColumn: 0, valueColumn: 1 });
+    expect(data).not.toBeNull();
+    expect(data?.categories).toEqual(["São Paulo", "Rio", "Recife"]);
+    expect(data?.series).toEqual([{ name: "Receita", values: [120, 90, -10] }]);
+    expect(data?.valueLabel).toBe("Receita");
+    expect(data?.categoryLabel).toBe("Cidade");
+  });
+
+  it("keeps gaps as null and labels empty categories", () => {
+    const data = buildChartData(
+      { header: ["Cidade", "Receita"], rows: [["", "1"], ["B", ""]], align: [] },
+      { valueColumn: 1 }
+    );
+    expect(data?.categories).toEqual(["—", "B"]);
+    expect(data?.series[0]?.values).toEqual([1, null]);
+  });
+
+  it("keeps charts usable when the first-row header is disabled", () => {
+    const headerless = {
+      header: [] as string[],
+      rows: [
+        ["Cidade", "Receita"],
+        ["São Paulo", "120"],
+        ["Rio", "90"],
+      ],
+      align: [],
+    };
+    expect(numericChartColumns(headerless)).toEqual([{ index: 1, label: "B" }]);
+    const data = buildChartData(headerless, { valueColumn: 1 });
+    expect(data?.categories).toEqual(["Cidade", "São Paulo", "Rio"]);
+    expect(data?.series[0]?.values).toEqual([null, 120, 90]);
+  });
+
+  it("returns null when there is no numeric series", () => {
+    expect(
+      buildChartData({ header: ["A"], rows: [["texto"]], align: [] })
+    ).toBeNull();
+  });
+
+  it("disables pie for negatives and too many categories", () => {
+    const data = buildChartData(model, { valueColumn: 1 })!;
+    expect(chartUnavailableReason("pie", data)).toContain("negativos");
+    const many = buildChartData(
+      {
+        header: ["Categoria", "Valor"],
+        rows: Array.from({ length: 13 }, (_, index) => [`C${index}`, "1"]),
+        align: [],
+      },
+      { valueColumn: 1 }
+    )!;
+    expect(chartUnavailableReason("pie", many)).toContain("12 categorias");
+    expect(chartUnavailableReason("bar", many)).toBeNull();
+  });
+
+  it("requires two points for line, area and scatter", () => {
+    const single = buildChartData(
+      { header: ["Categoria", "Valor"], rows: [["A", "1"]], align: [] },
+      { valueColumn: 1 }
+    )!;
+    expect(chartUnavailableReason("line", single)).not.toBeNull();
+    expect(chartUnavailableReason("bar", single)).toBeNull();
+  });
+});
+
+describe("resolveChartPalette", () => {
+  it("uses the light/dark built-in palette when absent", () => {
+    expect(resolveChartPalette(undefined, "light")).toEqual([
+      ...DEFAULT_CHART_PALETTE_LIGHT,
+    ]);
+    expect(resolveChartPalette(undefined, "dark")).toEqual([
+      ...DEFAULT_CHART_PALETTE_DARK,
+    ]);
+  });
+
+  it("accepts a valid palette and falls back for invalid values", () => {
+    expect(resolveChartPalette(["#fff", "rgb(1, 2, 3)"])).toEqual([
+      "#fff",
+      "rgb(1, 2, 3)",
+    ]);
+    expect(resolveChartPalette(["red"], "dark")).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
+    expect(resolveChartPalette([], "dark")).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
+    expect(resolveChartPalette("nope")).toEqual([...DEFAULT_CHART_PALETTE_LIGHT]);
   });
 });
 

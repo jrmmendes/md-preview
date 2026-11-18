@@ -8,7 +8,7 @@
  * for the per-block Raw view.
  */
 
-import { COPY_ICON } from "../../shared/copy-icons";
+import { COPY_ICON, CSV_ICON } from "../../shared/copy-icons";
 import {
   isNumericColumn,
   parseCsv,
@@ -36,6 +36,9 @@ const PIVOT_ICON =
 
 const FULLSCREEN_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>';
+
+const CHART_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V11"></path><path d="M10 20V4"></path><path d="M16 20v-6"></path><path d="M22 20H2"></path></svg>';
 
 function escapeText(value: string): string {
   return value
@@ -65,7 +68,9 @@ function toolbarHtml(id: string, kind: TableKind): string {
     `<button type="button" class="mdprv-table-btn mdprv-table-btn--label" data-mdprv-table-action="header-col" aria-pressed="false">1ª coluna</button>` +
     rawButton +
     `<button type="button" class="mdprv-table-btn mdprv-table-btn--pivot" data-mdprv-table-action="pivot" aria-pressed="false" aria-label="Pivotar tabela" title="Pivotar tabela">${PIVOT_ICON}</button>` +
+    `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="chart" aria-pressed="false" aria-haspopup="dialog" aria-expanded="false" aria-label="Visualizar como gráfico" title="Visualizar como gráfico">${CHART_ICON}</button>` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="copy" aria-label="Copiar tabela como Markdown" title="Copiar tabela como Markdown">${COPY_ICON}</button>` +
+    `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="copy-csv" aria-label="Copiar tabela como CSV" title="Copiar tabela como CSV">${CSV_ICON}</button>` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="fullscreen" aria-label="Abrir tabela em tela cheia" title="Abrir tabela em tela cheia">${FULLSCREEN_ICON}</button>` +
     `</div>` +
     `</div>`
@@ -88,6 +93,7 @@ function sheetCloseHtml(): string {
 
 function shellEndHtml(): string {
   return (
+    `<div class="mdprv-table-chart" data-mdprv-chart-container hidden></div>` +
     `<p class="mdprv-table-empty" data-mdprv-table-empty hidden>Nenhuma linha corresponde ao filtro.</p>` +
     `<div class="mdprv-table-status" data-mdprv-table-status role="status" aria-live="polite"></div>` +
     `</div>`

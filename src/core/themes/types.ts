@@ -66,6 +66,11 @@ export interface ThemeEffects {
   easing: string;
 }
 
+export interface ThemeCharts {
+  /** Ordered series colors as safe CSS colors; themes may omit the group. */
+  palette: string[];
+}
+
 export interface ThemeShiki {
   light: ShikiThemeName;
   dark: ShikiThemeName;
@@ -93,6 +98,7 @@ export interface FixedTheme extends BaseTheme {
   typography: ThemeTypography;
   layout: ThemeLayout;
   effects: ThemeEffects;
+  charts: ThemeCharts;
   shiki: ThemeShiki;
   mermaid: ThemeMermaid;
 }

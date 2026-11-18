@@ -1,3 +1,4 @@
+import { resolveChartPalette } from "../../shared/table";
 import { sanitizeFamily } from "../fonts";
 import {
   MERMAID_THEMES,
@@ -11,6 +12,7 @@ import type {
   AutoTheme,
   FixedTheme,
   Theme,
+  ThemeCharts,
   ThemeColors,
   ThemeEffects,
   ThemeLayout,
@@ -95,6 +97,7 @@ const EFFECTS_KEYS = [
   "duration-ui",
   "easing",
 ] as const;
+const CHARTS_KEYS = ["palette"] as const;
 
 interface Context {
   fileName: string;
@@ -321,6 +324,19 @@ function validateEffects(ctx: Context, raw: unknown): ThemeEffects {
   return out as ThemeEffects;
 }
 
+/**
+ * `charts` is optional and backwards compatible: absent, non-object or invalid
+ * palettes fall back to the scheme's built-in palette. Unknown keys are still
+ * rejected so typos do not pass silently.
+ */
+function validateCharts(ctx: Context, raw: unknown, kind: "light" | "dark"): ThemeCharts {
+  if (!isRecord(raw)) {
+    return { palette: resolveChartPalette(undefined, kind) };
+  }
+  checkKeys(ctx, "charts", raw, CHARTS_KEYS);
+  return { palette: resolveChartPalette(raw.palette, kind) };
+}
+
 function validateShiki(ctx: Context, raw: unknown): ThemeShiki {
   if (!isRecord(raw)) {
     fail(ctx, "shiki must be an object");
@@ -381,6 +397,7 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
     "typography",
     "layout",
     "effects",
+    "charts",
     "shiki",
     "mermaid",
   ]);
@@ -391,7 +408,16 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
     fail(ctx, `name must equal the file name (${fileName})`);
   }
   if (raw.kind === "auto") {
-    for (const forbidden of ["colors", "radii", "typography", "layout", "effects", "shiki", "mermaid"]) {
+    for (const forbidden of [
+      "colors",
+      "radii",
+      "typography",
+      "layout",
+      "effects",
+      "charts",
+      "shiki",
+      "mermaid",
+    ]) {
       if (forbidden in raw) {
         fail(ctx, `auto themes cannot define ${forbidden}`);
       }
@@ -429,7 +455,16 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
   const typography = "typography" in raw ? validateTypography(ctx, raw.typography) : undefined;
   const layout = "layout" in raw ? validateLayout(ctx, raw.layout) : undefined;
   const effects = "effects" in raw ? validateEffects(ctx, raw.effects) : undefined;
-  const normalized = withDefaults(colors, radii, typography, layout, effects);
+  const charts = "charts" in raw ? validateCharts(ctx, raw.charts, raw.kind) : undefined;
+  const normalized = withDefaults(
+    colors,
+    radii,
+    typography,
+    layout,
+    effects,
+    charts,
+    raw.kind
+  );
   const fixed: FixedTheme = {
     schemaVersion: 1,
     name: raw.name,
@@ -439,6 +474,7 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
     typography: normalized.typography,
     layout: normalized.layout,
     effects: normalized.effects,
+    charts: normalized.charts,
     shiki: validateShiki(ctx, raw.shiki),
     mermaid: validateMermaid(ctx, raw.mermaid),
   };

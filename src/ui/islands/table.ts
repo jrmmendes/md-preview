@@ -5,7 +5,10 @@
  * with a hidden toolbar. This island adds the sheet gutters, selection, keyboard
  * navigation, resize/autofit, per-column value funnels, global search, sorting,
  * pivoting, clipboard output and the fullscreen dialog. Table state lives only
- * in memory for the lifetime of the page.
+ * in memory for the lifetime of the page, except the frame size chosen with the
+ * fullscreen resize handles, which is kept in sessionStorage per document and
+ * table (see `lightboxSizeKey`), so a reload restores it but a new tab starts
+ * from the default size.
  */
 
 import {
@@ -90,6 +93,17 @@ const CLOSE_ICON =
 const LIGHTBOX_MIN_ZOOM = 0.6;
 const LIGHTBOX_MAX_ZOOM = 2.2;
 const LIGHTBOX_STEP = 0.15;
+/**
+ * sessionStorage key prefix for the fullscreen frame size.
+ *
+ * The full key is `mdprv:table-lb:v1:<pathname>:<tableId>`: the version lives in
+ * the key, the document in the pathname and the block in `data-mdprv-table-id`.
+ * sessionStorage is deliberate — closing the tab drops the value and a fresh
+ * tab/session opens at the default size, while a reload keeps it.
+ */
+const LIGHTBOX_STORAGE_PREFIX = "mdprv:table-lb:v1:";
+/** Rejects absurd/stale pixel values written by older or corrupted sessions. */
+const LIGHTBOX_STORAGE_MAX_PX = 100_000;
 const ROW_HEIGHT_FALLBACK = 26;
 
 const CONTROLLERS = new Map<HTMLElement, TableController>();
@@ -281,6 +295,7 @@ function setupTable(block: HTMLElement): TableController | null {
   } | null = null;
   let rafSync = 0;
   let rafPosition = 0;
+  let suppressColheadClick = false;
   let popover: HTMLElement | null = null;
   let popoverCol: number | null = null;
   let popoverFunnel: HTMLButtonElement | null = null;
@@ -324,8 +339,22 @@ function setupTable(block: HTMLElement): TableController | null {
     if (lightboxBlock !== block) {
       return;
     }
-    block.style.width = `${naturalWidth()}px`;
-    window.requestAnimationFrame(() => fitToStage());
+    const next = naturalWidth();
+    // Column resizing changes the natural width. Keep a user-resized viewport
+    // growing by the same delta instead of snapping back to "fit".
+    const manuallySized =
+      lightboxWidth !== null &&
+      lightboxBaseWidth > 0 &&
+      Math.abs(lightboxWidth - lightboxBaseWidth) > 0.5;
+    lightboxWidth = manuallySized
+      ? Math.max(1, (lightboxWidth ?? next) + (next - lightboxBaseWidth))
+      : next;
+    lightboxBaseWidth = next;
+    applyLightboxSize();
+    window.requestAnimationFrame(() => {
+      fitToStage();
+      syncHandleAria();
+    });
   };
 
   const applyCellAlignment = (
@@ -614,6 +643,27 @@ function setupTable(block: HTMLElement): TableController | null {
     return cellAt(preferred.r, preferred.c) ? preferred : null;
   };
 
+  /**
+   * Roving entry point for the grid when nothing is selected. Prefers the first
+   * body cell (data row, or the stray header row when the first line is not a
+   * header) and falls back to the column header, so Tab can always reach the
+   * grid without leaving a cell highlighted at boot.
+   */
+  const entryPosition = (): CellPosition | null => {
+    const rows = Array.from(tbody.rows);
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index]!;
+      if (row.hidden || row.cells.length === 0) {
+        continue;
+      }
+      return { r: index + 1, c: 0 };
+    }
+    if (cellAt(0, 0)) {
+      return { r: 0, c: 0 };
+    }
+    return null;
+  };
+
   const paint = (): void => {
     table
       .querySelectorAll<HTMLElement>(
@@ -659,14 +709,17 @@ function setupTable(block: HTMLElement): TableController | null {
     });
 
     table
-      .querySelectorAll<HTMLElement>("td[tabindex], th[role='rowheader'][tabindex]")
+      .querySelectorAll<HTMLElement>(
+        "[role='gridcell'], [role='rowheader'], [role='columnheader']"
+      )
       .forEach((cell) => {
         cell.tabIndex = -1;
       });
-    if (state.active) {
-      const active = cellAt(state.active.r, state.active.c);
-      if (active) {
-        active.tabIndex = 0;
+    const stop = state.active ?? entryPosition();
+    if (stop) {
+      const cell = cellAt(stop.r, stop.c);
+      if (cell) {
+        cell.tabIndex = 0;
       }
     }
     updateToolbarState();
@@ -1319,6 +1372,7 @@ function setupTable(block: HTMLElement): TableController | null {
     buildRowHead();
     requestSync();
     updateFunnels();
+    paint();
   };
 
   const runFilter = debounce(() => applyFilter(), 100);
@@ -1665,6 +1719,32 @@ function setupTable(block: HTMLElement): TableController | null {
     state.dragging = false;
   });
 
+  /* Activate the focused cell when the grid is entered without a prior
+     selection (Tab or programmatic focus), so the roving tab stop and the
+     arrow-key handler always have an anchor. */
+  table.addEventListener("focusin", (event) => {
+    if (state.active) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const cell = target.closest<HTMLTableCellElement>(
+      "[role='gridcell'], [role='rowheader'], [role='columnheader']"
+    );
+    const row = cell?.parentElement as HTMLTableRowElement | null;
+    if (!cell || !row || event.target !== cell) {
+      return;
+    }
+    if (!cellAt(rowIndexOf(row), cell.cellIndex)) {
+      return;
+    }
+    state.active = { r: rowIndexOf(row), c: cell.cellIndex };
+    state.anchor = state.active;
+    paint();
+  });
+
   /* ---------- keyboard ---------- */
   const lightboxOpen = (): boolean =>
     block.closest(".mdprv-table-lightbox") !== null;
@@ -1674,7 +1754,9 @@ function setupTable(block: HTMLElement): TableController | null {
     if (!(target instanceof Element)) {
       return;
     }
-    const cell = target.closest<HTMLTableCellElement>("[role='gridcell'], [role='rowheader']");
+    const cell = target.closest<HTMLTableCellElement>(
+      "[role='gridcell'], [role='rowheader'], [role='columnheader']"
+    );
     if (!cell) {
       return;
     }
@@ -1687,6 +1769,7 @@ function setupTable(block: HTMLElement): TableController | null {
     const maxR = rowCount();
     const maxC = colCount();
     const minR = thead.rows[0]?.cells.length ? 0 : 1;
+    const isColumnHeader = cell.getAttribute("role") === "columnheader";
     let next: CellPosition | null = null;
 
     switch (event.key) {
@@ -1715,7 +1798,7 @@ function setupTable(block: HTMLElement): TableController | null {
         next = { r: Math.min(maxR, r + 5), c };
         break;
       case "Tab": {
-        if (lightboxOpen()) {
+        if (lightboxOpen() || isColumnHeader) {
           return;
         }
         event.preventDefault();
@@ -1726,6 +1809,10 @@ function setupTable(block: HTMLElement): TableController | null {
         break;
       }
       case "Enter":
+        if (isColumnHeader) {
+          // Header cells sort with Enter/Space; keep the active cell put.
+          return;
+        }
         event.preventDefault();
         next = { r: Math.min(maxR, r + 1), c };
         break;
@@ -1771,6 +1858,10 @@ function setupTable(block: HTMLElement): TableController | null {
 
   /* ---------- gutter interactions ---------- */
   colhead.addEventListener("click", (event) => {
+    if (suppressColheadClick) {
+      suppressColheadClick = false;
+      return;
+    }
     const target = event.target;
     if (!(target instanceof Element) || target.closest(".mdprv-sheet-resize")) {
       return;
@@ -1871,6 +1962,10 @@ function setupTable(block: HTMLElement): TableController | null {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       if (moved) {
+        suppressColheadClick = true;
+        window.setTimeout(() => {
+          suppressColheadClick = false;
+        }, 0);
         announce("Coluna redimensionada.");
       }
     };
@@ -2029,6 +2124,39 @@ function setupTable(block: HTMLElement): TableController | null {
   });
 
   /* ---------- outside clicks ---------- */
+  /**
+   * The component owns the table block, its portal-ed popover and, when the
+   * table is expanded, the fullscreen dialog. Anything else is "outside" and
+   * drops the selection, so the default (nothing selected) is restored.
+   */
+  const ownsTarget = (target: Element): boolean => {
+    if (block.contains(target)) {
+      return true;
+    }
+    if (popover && !popover.hidden && popover.contains(target)) {
+      return true;
+    }
+    const dialog = block.closest(".mdprv-table-lightbox");
+    return dialog !== null && dialog.contains(target);
+  };
+
+  const clearOnOutsidePress = (event: Event): void => {
+    if (state.ranges.length === 0 && !state.active && !state.anchor) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element) || ownsTarget(target)) {
+      return;
+    }
+    clearSelection();
+  };
+
+  if ("onpointerdown" in document.documentElement) {
+    document.addEventListener("pointerdown", clearOnOutsidePress, true);
+  } else {
+    document.addEventListener("mousedown", clearOnOutsidePress, true);
+  }
+
   document.addEventListener("mousedown", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -2093,9 +2221,6 @@ function setupTable(block: HTMLElement): TableController | null {
   pivotButton?.setAttribute("aria-pressed", "false");
   ensureColgroup();
   buildSheetChrome();
-  state.active = defaultActive();
-  state.anchor = state.active;
-  state.ranges = [];
   paint();
   applyFilter();
   syncFunnels();
@@ -2133,14 +2258,358 @@ function setupTable(block: HTMLElement): TableController | null {
 /* ---------- fullscreen dialog ---------- */
 let lightbox: HTMLElement | null = null;
 let stage: HTMLElement | null = null;
+let frame: HTMLElement | null = null;
 let lightboxTitle: HTMLElement | null = null;
 let lightboxBlock: HTMLElement | null = null;
 let lightboxMarker: Comment | null = null;
 let lightboxFocus: HTMLElement | null = null;
 let lightboxZoom = 1;
+/** Pan offset in screen pixels, applied as a transform on the frame. */
+let lightboxPanX = 0;
+let lightboxPanY = 0;
+/** Explicit viewport size in the block's zoom-relative (layout) pixels. */
+let lightboxWidth: number | null = null;
+let lightboxHeight: number | null = null;
+/** Natural width of the block when the dialog opened (before user resizing). */
+let lightboxBaseWidth = 0;
+let lightboxSpace = false;
+let lightboxSuppressClick = false;
+let lightboxSizeFrame = 0;
+let lightboxPan: {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+  startLeft: number;
+  startTop: number;
+  moved: boolean;
+} | null = null;
+let lightboxResize: {
+  pointerId: number;
+  handle: string;
+  startX: number;
+  startY: number;
+  width: number;
+  height: number;
+  zoom: number;
+  horizontal: number;
+  vertical: number;
+  moved: boolean;
+} | null = null;
+/** True when the frame size changed since the last successful persistence. */
+let lightboxSizeDirty = false;
+let lightboxSaveTimer = 0;
+
+interface StoredLightboxSize {
+  width: number | null;
+  height: number | null;
+}
+
+function validStoredPx(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    value <= LIGHTBOX_STORAGE_MAX_PX
+  );
+}
+
+/** Returns null when storage is blocked (privacy mode, quota, no window). */
+function lightboxStorage(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function lightboxDocumentPath(): string {
+  try {
+    return window.location.pathname || "/";
+  } catch {
+    return "/";
+  }
+}
+
+function lightboxSizeKey(tableId: string): string {
+  return `${LIGHTBOX_STORAGE_PREFIX}${lightboxDocumentPath()}:${tableId}`;
+}
+
+/** Reads and validates one table's saved frame size; never throws. */
+function readSavedLightboxSize(tableId: string): StoredLightboxSize | null {
+  if (!tableId) {
+    return null;
+  }
+  const storage = lightboxStorage();
+  if (!storage) {
+    return null;
+  }
+  const key = lightboxSizeKey(tableId);
+  let raw: string | null = null;
+  try {
+    raw = storage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (raw === null || raw === "") {
+    return null;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    // Corrupted payload: drop it so the table opens at the default size.
+    try {
+      storage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+  const record = value as { w?: unknown; h?: unknown };
+  const width = validStoredPx(record.w) ? record.w : null;
+  const height = validStoredPx(record.h) ? record.h : null;
+  if (width === null && height === null) {
+    // Shape is wrong or every dimension is invalid: discard the entry.
+    try {
+      storage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+  return { width, height };
+}
+
+/** Writes the frame size for one table; storage failures degrade silently. */
+function writeSavedLightboxSize(
+  tableId: string,
+  width: number | null,
+  height: number | null
+): void {
+  if (!tableId) {
+    return;
+  }
+  const storage = lightboxStorage();
+  if (!storage) {
+    return;
+  }
+  const payload: { w?: number; h?: number } = {};
+  if (width !== null && validStoredPx(width)) {
+    payload.w = Math.round(width * 100) / 100;
+  }
+  if (height !== null && validStoredPx(height)) {
+    payload.h = Math.round(height * 100) / 100;
+  }
+  try {
+    if (payload.w === undefined && payload.h === undefined) {
+      storage.removeItem(lightboxSizeKey(tableId));
+      return;
+    }
+    storage.setItem(lightboxSizeKey(tableId), JSON.stringify(payload));
+  } catch {
+    /* storage full or blocked: keep working with the in-memory size */
+  }
+}
+
+function clearSavedLightboxSize(tableId: string): void {
+  if (!tableId) {
+    return;
+  }
+  const storage = lightboxStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.removeItem(lightboxSizeKey(tableId));
+  } catch {
+    /* ignore */
+  }
+}
+
+function currentLightboxTableId(): string {
+  return lightboxBlock?.getAttribute("data-mdprv-table-id") ?? "";
+}
+
+/**
+ * Clamp a restored value with the same bounds as a resize gesture: the floor is
+ * the current size when that size is already below the 40% stage minimum (small
+ * tables), and the ceiling is always the 200% stage maximum.
+ */
+function clampStoredSize(
+  value: number,
+  limits: { min: number; max: number }
+): number {
+  return clampValue(value, Math.min(limits.min, value), limits.max);
+}
+
+/** Persists the current frame size. Called on gesture end and on dialog close. */
+function persistLightboxSize(): void {
+  if (lightboxSaveTimer) {
+    window.clearTimeout(lightboxSaveTimer);
+    lightboxSaveTimer = 0;
+  }
+  if (!lightboxSizeDirty || !lightboxBlock) {
+    return;
+  }
+  const tableId = currentLightboxTableId();
+  lightboxSizeDirty = false;
+  if (!tableId) {
+    return;
+  }
+  writeSavedLightboxSize(tableId, lightboxWidth, lightboxHeight);
+}
+
+/** Keyboard nudges arrive in bursts; coalesce them into one write. */
+function scheduleLightboxSizeSave(): void {
+  if (!lightboxBlock) {
+    return;
+  }
+  lightboxSizeDirty = true;
+  if (lightboxSaveTimer) {
+    window.clearTimeout(lightboxSaveTimer);
+  }
+  lightboxSaveTimer = window.setTimeout(() => {
+    lightboxSaveTimer = 0;
+    persistLightboxSize();
+  }, 180);
+}
+
+function forgetLightboxSize(): void {
+  lightboxSizeDirty = false;
+  if (lightboxSaveTimer) {
+    window.clearTimeout(lightboxSaveTimer);
+    lightboxSaveTimer = 0;
+  }
+  clearSavedLightboxSize(currentLightboxTableId());
+}
 
 function activeController(): TableController | null {
   return lightboxBlock ? CONTROLLERS.get(lightboxBlock) ?? null : null;
+}
+
+function clampValue(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/** Center of the stage's content box, in viewport coordinates. */
+function stageCenter(): { x: number; y: number } {
+  if (!stage) {
+    return { x: 0, y: 0 };
+  }
+  const rect = stage.getBoundingClientRect();
+  // `scrollbar-gutter: stable both-edges` keeps both gutters equal, so the
+  // border-box center is also the layout center of the flex content.
+  return {
+    x: rect.left + rect.width / 2 - stage.scrollLeft,
+    y: rect.top + rect.height / 2 - stage.scrollTop,
+  };
+}
+
+/** Keeps a meaningful slice of the table inside the stage. */
+function clampLightboxPan(): void {
+  if (!frame || !stage) {
+    return;
+  }
+  const rect = frame.getBoundingClientRect();
+  const centre = stageCenter();
+  const stageRect = stage.getBoundingClientRect();
+  const minVisible = Math.min(
+    120,
+    Math.max(48, Math.min(rect.width, rect.height) * 0.3)
+  );
+  const minX = stageRect.left + minVisible - centre.x - rect.width / 2;
+  const maxX = stageRect.right - minVisible - centre.x + rect.width / 2;
+  const minY = stageRect.top + minVisible - centre.y - rect.height / 2;
+  const maxY = stageRect.bottom - minVisible - centre.y + rect.height / 2;
+  lightboxPanX =
+    minX > maxX ? (minX + maxX) / 2 : clampValue(lightboxPanX, minX, maxX);
+  lightboxPanY =
+    minY > maxY ? (minY + maxY) / 2 : clampValue(lightboxPanY, minY, maxY);
+}
+
+function applyLightboxPan(): void {
+  if (!frame) {
+    return;
+  }
+  frame.style.transform = `translate(${lightboxPanX.toFixed(2)}px, ${lightboxPanY.toFixed(2)}px)`;
+}
+
+/** Visual limits for resize handles. They are divided by the zoom below. */
+function resizeLimits(zoom: number): {
+  minWidth: number;
+  maxWidth: number;
+  minHeight: number;
+  maxHeight: number;
+  width: { min: number; max: number };
+  height: { min: number; max: number };
+} {
+  const stageWidth = stage?.clientWidth ?? 960;
+  const stageHeight = stage?.clientHeight ?? 720;
+  const minWidth = Math.max(280, stageWidth * 0.4);
+  const maxWidth = Math.max(minWidth + 40, stageWidth * 2);
+  const minHeight = Math.max(160, stageHeight * 0.4);
+  const maxHeight = Math.max(minHeight + 40, stageHeight * 2);
+  return {
+    minWidth,
+    maxWidth,
+    minHeight,
+    maxHeight,
+    width: { min: minWidth / zoom, max: maxWidth / zoom },
+    height: { min: minHeight / zoom, max: maxHeight / zoom },
+  };
+}
+
+function syncHandleAria(): void {
+  if (!frame || !lightboxBlock) {
+    return;
+  }
+  const zoom = zoomFactor(lightboxBlock);
+  const rect = lightboxBlock.getBoundingClientRect();
+  const limits = resizeLimits(zoom);
+  frame.querySelectorAll<HTMLElement>("[data-lb-handle]").forEach((handle) => {
+    const kind = handle.getAttribute("data-lb-handle") ?? "";
+    const horizontal = kind.includes("left") || kind.includes("right");
+    const now = horizontal ? rect.width : rect.height;
+    handle.setAttribute("aria-valuenow", String(Math.round(now)));
+    handle.setAttribute(
+      "aria-valuemin",
+      String(Math.round(horizontal ? limits.minWidth : limits.minHeight))
+    );
+    handle.setAttribute(
+      "aria-valuemax",
+      String(Math.round(horizontal ? limits.maxWidth : limits.maxHeight))
+    );
+  });
+}
+
+function applyLightboxSize(): void {
+  const block = lightboxBlock;
+  if (!block) {
+    return;
+  }
+  block.style.width =
+    lightboxWidth !== null ? `${lightboxWidth.toFixed(2)}px` : "";
+  block.style.height =
+    lightboxHeight !== null ? `${lightboxHeight.toFixed(2)}px` : "";
+  const controller = activeController();
+  if (controller && !lightboxSizeFrame) {
+    lightboxSizeFrame = window.requestAnimationFrame(() => {
+      lightboxSizeFrame = 0;
+      controller.sync();
+      controller.reposition();
+      syncHandleAria();
+    });
+  }
 }
 
 function applyLightboxZoom(): void {
@@ -2152,10 +2621,13 @@ function applyLightboxZoom(): void {
   if (reset) {
     reset.textContent = `${Math.round(lightboxZoom * 100)}%`;
   }
+  clampLightboxPan();
+  applyLightboxPan();
   const controller = activeController();
-  if (controller) {
-    window.requestAnimationFrame(() => controller.reposition());
-  }
+  window.requestAnimationFrame(() => {
+    controller?.reposition();
+    syncHandleAria();
+  });
 }
 
 function lightboxNaturalWidth(): number {
@@ -2168,15 +2640,186 @@ function fitToStage(): void {
     return;
   }
   const padding = Number.parseFloat(window.getComputedStyle(stage).paddingLeft || "20") || 20;
-  const available = stage.clientWidth - padding * 2;
-  const natural = lightboxNaturalWidth();
+  const available = Math.max(1, stage.clientWidth - padding * 2);
+  const natural = lightboxWidth ?? lightboxNaturalWidth();
   const fit = natural > 0 && natural > available ? available / natural : 1;
-  lightboxZoom = Math.max(LIGHTBOX_MIN_ZOOM, Math.min(1, fit));
+  lightboxZoom = clampValue(fit, LIGHTBOX_MIN_ZOOM, 1);
   applyLightboxZoom();
 }
 
+/** Recenters and optionally drops the manual size and the zoom. */
+function resetLightboxView(resetZoom: boolean): void {
+  if (!lightboxBlock) {
+    return;
+  }
+  // An explicit reset (double click or the 100% button) forgets the saved size
+  // instead of persisting the default one, so the next open starts fresh.
+  forgetLightboxSize();
+  lightboxPanX = 0;
+  lightboxPanY = 0;
+  lightboxHeight = null;
+  lightboxWidth = lightboxNaturalWidth() || lightboxBaseWidth || null;
+  if (resetZoom) {
+    lightboxZoom = 1;
+    applyLightboxZoom();
+  } else {
+    applyLightboxPan();
+  }
+  applyLightboxSize();
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  return /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName);
+}
+
+function canStartPan(event: PointerEvent): boolean {
+  const target = event.target;
+  if (!(target instanceof Element) || !lightboxBlock) {
+    return false;
+  }
+  if (target.closest("[data-lb-handle]")) {
+    return false;
+  }
+  if (event.button === 1) {
+    return true;
+  }
+  if (event.button !== 0) {
+    return false;
+  }
+  if (lightboxSpace) {
+    return true;
+  }
+  if (target === stage || target === lightbox) {
+    return true;
+  }
+  if (target.closest("#mdprv-table-lb-title")) {
+    return true;
+  }
+  // The toolbar strip is the closest thing to a title band on the component
+  // itself; dragging its background moves the table, its buttons stay buttons.
+  if (target.closest(".mdprv-table-toolbar")) {
+    return (
+      target.closest("button, a, input, select, textarea, [role='separator']") ===
+      null
+    );
+  }
+  return false;
+}
+
+function onLightboxPointerMove(event: PointerEvent): void {
+  if (lightboxResize) {
+    const gesture = lightboxResize;
+    if (event.pointerId !== gesture.pointerId) {
+      return;
+    }
+    const limits = resizeLimits(gesture.zoom);
+    let width = gesture.width;
+    let height = gesture.height;
+    if (gesture.horizontal !== 0) {
+      // Symmetric resize: both edges move by the drag delta. Never force the
+      // view to grow just because the zoomed-down view is below the 40% floor.
+      width = clampValue(
+        gesture.width +
+          (2 * (event.clientX - gesture.startX) * gesture.horizontal) / gesture.zoom,
+        Math.min(limits.width.min, gesture.width),
+        limits.width.max
+      );
+    }
+    if (gesture.vertical !== 0) {
+      height = clampValue(
+        gesture.height +
+          (2 * (event.clientY - gesture.startY) * gesture.vertical) / gesture.zoom,
+        Math.min(limits.height.min, gesture.height),
+        limits.height.max
+      );
+    }
+    if (
+      Math.abs(event.clientX - gesture.startX) > 2 ||
+      Math.abs(event.clientY - gesture.startY) > 2
+    ) {
+      gesture.moved = true;
+    }
+    lightboxWidth = width;
+    if (gesture.vertical !== 0) {
+      lightboxHeight = height;
+    }
+    applyLightboxSize();
+    event.preventDefault();
+    return;
+  }
+  if (!lightboxPan) {
+    return;
+  }
+  const gesture = lightboxPan;
+  if (event.pointerId !== gesture.pointerId) {
+    return;
+  }
+  lightboxPanX = gesture.originX + (event.clientX - gesture.startX);
+  lightboxPanY = gesture.originY + (event.clientY - gesture.startY);
+  if (
+    Math.abs(event.clientX - gesture.startX) > 3 ||
+    Math.abs(event.clientY - gesture.startY) > 3
+  ) {
+    gesture.moved = true;
+  }
+  clampLightboxPan();
+  applyLightboxPan();
+  // A scrollbar appearing mid-gesture changes the flex centering by half its
+  // thickness. Correct the pan once so the dragged content tracks the pointer.
+  if (lightboxBlock) {
+    const rect = lightboxBlock.getBoundingClientRect();
+    const driftX = event.clientX - gesture.startX - (rect.left - gesture.startLeft);
+    const driftY = event.clientY - gesture.startY - (rect.top - gesture.startTop);
+    if (Math.abs(driftX) > 0.25 || Math.abs(driftY) > 0.25) {
+      lightboxPanX += driftX;
+      lightboxPanY += driftY;
+      clampLightboxPan();
+      applyLightboxPan();
+    }
+  }
+  activeController()?.reposition();
+  event.preventDefault();
+}
+
+function onLightboxPointerUp(event: PointerEvent): void {
+  if (lightboxResize && event.pointerId === lightboxResize.pointerId) {
+    const moved = lightboxResize.moved;
+    lightboxResize = null;
+    lightbox?.classList.remove("mdprv-table-resizing");
+    lightboxSuppressClick = moved;
+    window.setTimeout(() => {
+      lightboxSuppressClick = false;
+    }, 0);
+    activeController()?.reposition();
+    syncHandleAria();
+    // Persist once per gesture (not on every pointermove): a plain click on the
+    // handle is not a resize and must not overwrite a saved size.
+    if (moved) {
+      lightboxSizeDirty = true;
+      persistLightboxSize();
+    }
+    return;
+  }
+  if (lightboxPan && event.pointerId === lightboxPan.pointerId) {
+    const moved = lightboxPan.moved;
+    lightboxPan = null;
+    lightbox?.classList.remove("mdprv-table-panning");
+    lightboxSuppressClick = moved;
+    window.setTimeout(() => {
+      lightboxSuppressClick = false;
+    }, 0);
+    activeController()?.reposition();
+  }
+}
+
 function openLightbox(block: HTMLElement): void {
-  if (!lightbox || !stage || lightboxBlock === block) {
+  if (!lightbox || !stage || !frame || lightboxBlock === block) {
     return;
   }
   const controller = CONTROLLERS.get(block);
@@ -2187,19 +2830,49 @@ function openLightbox(block: HTMLElement): void {
   controller.closePopover(false);
   lightboxMarker = document.createComment("mdprv-table-home");
   block.parentNode?.insertBefore(lightboxMarker, block);
-  stage.append(block);
+  frame.append(block);
   lightboxBlock = block;
   lightboxZoom = 1;
-  block.style.width = `${lightboxNaturalWidth()}px`;
+  lightboxPanX = 0;
+  lightboxPanY = 0;
+  lightboxHeight = null;
+  lightboxSizeDirty = false;
+  const natural = controller.naturalWidth();
+  lightboxBaseWidth = natural;
+  lightboxWidth = natural > 0 ? natural : null;
+  const saved = readSavedLightboxSize(
+    block.getAttribute("data-mdprv-table-id") ?? ""
+  );
+  if (saved) {
+    // Same bounds as the resize handles, evaluated at zoom 1 (the dialog always
+    // opens there; fitToStage adjusts the zoom afterwards if the frame is wide).
+    const limits = resizeLimits(1);
+    if (saved.width !== null) {
+      lightboxWidth = clampStoredSize(saved.width, limits.width);
+    }
+    if (saved.height !== null) {
+      lightboxHeight = clampStoredSize(saved.height, limits.height);
+    }
+  }
+  block.style.width =
+    lightboxWidth !== null ? `${lightboxWidth.toFixed(2)}px` : "";
+  block.style.height =
+    lightboxHeight !== null ? `${lightboxHeight.toFixed(2)}px` : "";
+  block.style.zoom = "1";
+  frame.style.transform = "";
+  stage.scrollTop = 0;
+  stage.scrollLeft = 0;
   if (lightboxTitle) {
     lightboxTitle.textContent = "Tabela em tela cheia";
   }
   lightbox.classList.add("mdprv-open");
   lightbox.setAttribute("aria-hidden", "false");
   document.body.classList.add("mdprv-table-lock");
+  applyLightboxPan();
   window.setTimeout(() => {
     controller.sync();
     fitToStage();
+    syncHandleAria();
     lightbox?.querySelector<HTMLElement>("[data-lb-close]")?.focus();
   }, reducedMotion() ? 0 : 60);
 }
@@ -2211,17 +2884,49 @@ function closeLightbox(): void {
   const block = lightboxBlock;
   const controller = CONTROLLERS.get(block) ?? null;
   controller?.closePopover(false);
+  // Flush a keyboard resize that is still inside the debounce window; closing
+  // without resetting keeps the saved size for the next open.
+  persistLightboxSize();
+  if (lightboxSizeFrame) {
+    window.cancelAnimationFrame(lightboxSizeFrame);
+    lightboxSizeFrame = 0;
+  }
+  lightboxPan = null;
+  lightboxResize = null;
+  lightboxSpace = false;
+  lightboxSuppressClick = false;
+  lightboxSizeDirty = false;
+  if (lightboxSaveTimer) {
+    window.clearTimeout(lightboxSaveTimer);
+    lightboxSaveTimer = 0;
+  }
+  lightbox?.classList.remove(
+    "mdprv-table-panning",
+    "mdprv-table-resizing",
+    "mdprv-table-space"
+  );
   block.style.zoom = "";
   block.style.width = "";
+  block.style.height = "";
+  frame?.style.removeProperty("transform");
   if (lightboxMarker?.parentNode) {
     lightboxMarker.parentNode.insertBefore(block, lightboxMarker);
     lightboxMarker.parentNode.removeChild(lightboxMarker);
-  } else if (block.parentNode === stage) {
-    stage?.removeChild(block);
+  } else if (frame && block.parentNode === frame) {
+    frame.removeChild(block);
   }
   lightboxMarker = null;
   lightboxBlock = null;
   lightboxZoom = 1;
+  lightboxPanX = 0;
+  lightboxPanY = 0;
+  lightboxWidth = null;
+  lightboxHeight = null;
+  lightboxBaseWidth = 0;
+  if (stage) {
+    stage.scrollTop = 0;
+    stage.scrollLeft = 0;
+  }
   lightbox.classList.remove("mdprv-open");
   lightbox.setAttribute("aria-hidden", "true");
   document.body.classList.remove("mdprv-table-lock");
@@ -2256,8 +2961,9 @@ function lightboxFocusables(): HTMLElement[] {
 function setupLightbox(): void {
   lightbox = document.getElementById("mdprv-table-lightbox");
   stage = document.getElementById("mdprv-table-stage");
+  frame = document.getElementById("mdprv-table-frame");
   lightboxTitle = document.getElementById("mdprv-table-lb-title");
-  if (!lightbox || !stage) {
+  if (!lightbox || !stage || !frame) {
     return;
   }
   const close = lightbox.querySelector<HTMLElement>("[data-lb-close]");
@@ -2265,7 +2971,106 @@ function setupLightbox(): void {
     close.innerHTML = CLOSE_ICON;
   }
 
+  /* --- resize handles: pointer drag + keyboard nudge --- */
+  frame.querySelectorAll<HTMLElement>("[data-lb-handle]").forEach((handle) => {
+    handle.addEventListener("pointerdown", (event) => {
+      if (!lightboxBlock || event.button !== 0) {
+        return;
+      }
+      const kind = handle.getAttribute("data-lb-handle") ?? "";
+      const zoom = zoomFactor(lightboxBlock);
+      const rect = lightboxBlock.getBoundingClientRect();
+      lightboxResize = {
+        pointerId: event.pointerId,
+        handle: kind,
+        startX: event.clientX,
+        startY: event.clientY,
+        width: rect.width / zoom,
+        height: rect.height / zoom,
+        zoom,
+        horizontal: kind.includes("right") ? 1 : kind.includes("left") ? -1 : 0,
+        vertical: kind.includes("bottom") ? 1 : kind.includes("top") ? -1 : 0,
+        moved: false,
+      };
+      lightbox?.classList.add("mdprv-table-resizing");
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    handle.addEventListener("keydown", (event) => {
+      if (!lightboxBlock) {
+        return;
+      }
+      const step = 16;
+      const kind = handle.getAttribute("data-lb-handle") ?? "";
+      const horizontal =
+        (kind.includes("right") ? 1 : kind.includes("left") ? -1 : 0) *
+        (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0);
+      const vertical =
+        (kind.includes("bottom") ? 1 : kind.includes("top") ? -1 : 0) *
+        (event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0);
+      if (horizontal === 0 && vertical === 0) {
+        return;
+      }
+      const zoom = zoomFactor(lightboxBlock);
+      const rect = lightboxBlock.getBoundingClientRect();
+      const limits = resizeLimits(zoom);
+      if (horizontal !== 0) {
+        lightboxWidth = clampValue(
+          rect.width / zoom + (horizontal * step) / zoom,
+          Math.min(limits.width.min, rect.width / zoom),
+          limits.width.max
+        );
+      }
+      if (vertical !== 0) {
+        lightboxHeight = clampValue(
+          rect.height / zoom + (vertical * step) / zoom,
+          Math.min(limits.height.min, rect.height / zoom),
+          limits.height.max
+        );
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      lightboxSizeDirty = true;
+      applyLightboxSize();
+      scheduleLightboxSizeSave();
+    });
+  });
+
+  /* --- pan: left on title/toolbar strip, middle anywhere, Space + drag --- */
+  lightbox.addEventListener("pointerdown", (event) => {
+    if (!lightbox?.classList.contains("mdprv-open")) {
+      return;
+    }
+    if (lightboxPan || lightboxResize || !canStartPan(event)) {
+      return;
+    }
+    event.preventDefault();
+    const block = lightboxBlock;
+    const rect = block?.getBoundingClientRect();
+    lightboxPan = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: lightboxPanX,
+      originY: lightboxPanY,
+      startLeft: rect?.left ?? 0,
+      startTop: rect?.top ?? 0,
+      moved: false,
+    };
+    lightbox.classList.add("mdprv-table-panning");
+    window.getSelection()?.removeAllRanges();
+  });
+
+  document.addEventListener("pointermove", onLightboxPointerMove);
+  document.addEventListener("pointerup", onLightboxPointerUp);
+  document.addEventListener("pointercancel", onLightboxPointerUp);
+
   lightbox.addEventListener("click", (event) => {
+    if (lightboxSuppressClick) {
+      lightboxSuppressClick = false;
+      return;
+    }
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
@@ -2285,13 +3090,33 @@ function setupLightbox(): void {
       return;
     }
     if (target.closest("[data-lb-zoom-reset]")) {
-      lightboxZoom = 1;
-      applyLightboxZoom();
+      resetLightboxView(true);
       return;
     }
     if (target === lightbox || target === stage) {
       closeLightbox();
     }
+  });
+
+  /* Double click on the table, title or toolbar strip recenters the view and
+     drops the manual size (the zoom is kept). */
+  lightbox.addEventListener("dblclick", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (
+      target.closest(
+        "button, a, input, select, textarea, [data-lb-handle], [data-lb-close], .mdprv-table-lb-tools"
+      )
+    ) {
+      return;
+    }
+    if (target === lightbox) {
+      return;
+    }
+    event.preventDefault();
+    resetLightboxView(false);
   });
 
   document.addEventListener("keydown", (event) => {
@@ -2306,6 +3131,12 @@ function setupLightbox(): void {
       }
       event.preventDefault();
       closeLightbox();
+      return;
+    }
+    if (event.code === "Space" && !isTypingTarget(event.target)) {
+      lightboxSpace = true;
+      lightbox.classList.add("mdprv-table-space");
+      event.preventDefault();
       return;
     }
     if (event.key !== "Tab") {
@@ -2331,14 +3162,33 @@ function setupLightbox(): void {
     }
   });
 
-  window.addEventListener("resize", debounce(() => {
-    if (lightbox?.classList.contains("mdprv-open")) {
-      fitToStage();
+  document.addEventListener("keyup", (event) => {
+    if (event.code !== "Space") {
+      return;
     }
-  }, 150));
+    lightboxSpace = false;
+    lightbox?.classList.remove("mdprv-table-space");
+  });
 
+  window.addEventListener("blur", () => {
+    lightboxSpace = false;
+    lightbox?.classList.remove("mdprv-table-space");
+  });
+
+  // A reload or tab close can land inside the keyboard debounce window.
+  window.addEventListener("pagehide", () => persistLightboxSize());
+
+  window.addEventListener(
+    "resize",
+    debounce(() => {
+      if (lightbox?.classList.contains("mdprv-open")) {
+        clampLightboxPan();
+        applyLightboxPan();
+        syncHandleAria();
+      }
+    }, 150)
+  );
 }
-
 export function initTable(): void {
   function run(): void {
     setupLightbox();

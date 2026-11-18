@@ -289,13 +289,21 @@
   font-weight: var(--mdprv-font-weight-bold, 600);
 }
 
-/* Column resize handle, anchored on the letter tag. */
+/* Column resize handle: a narrow strip centered exactly on the right border of
+   the letter tag, i.e. on the boundary between column N and N+1. It must be
+   anchored with `right` (not left/margin-left): the tag is a centered flex
+   container, so an absolutely positioned child with `left: auto` would sit at
+   the centered static position and steal clicks from the middle of the header.
+   The strip covers only the letter band (tag height), never the table body.
+   An absolutely positioned child is laid out against the tag's padding box,
+   which stops at the 1px right border, hence -6px (5px + the border) keeps the
+   center on the column edge instead of 1px inside it. */
 .mdprv-sheet-resize {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 9px;
-  margin-left: -5px;
+  right: -6px;
+  width: 10px;
   cursor: col-resize;
   z-index: 5;
   touch-action: none;
@@ -307,8 +315,9 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 4px;
+  left: 50%;
   width: 1px;
+  margin-left: -.5px;
   background: transparent;
   transition: background var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease);
 }
@@ -755,27 +764,205 @@
   pointer-events: auto;
 }
 
+/* The stage centers the frame on both axes. Centering happens before any pan
+   transform, so the frame starts exactly in the middle even when it is larger
+   than the visible area; the stage keeps its own scroll for oversized content
+   and the pan gesture can still reveal the clipped side. */
 .mdprv-table-stage {
   width: 94vw;
   height: 88vh;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: auto;
+  /* Reserve the scrollbar on both edges. Flex centering then keeps a stable
+     center when scrolling appears/disappears (zoom, pan, resize). */
+  scrollbar-gutter: stable both-edges;
   padding: 1.25rem;
+}
+
+/* Positioned wrapper for the moved block: owns the pan transform and the
+   resize handles without touching the block's own frame (border, radius and
+   shadow stay exactly as in document mode). */
+.mdprv-table-frame {
+  position: relative;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: none;
+  will-change: transform;
 }
 
 .mdprv-table-lightbox .mdprv-table {
   width: auto;
   max-width: none;
   margin: 0;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
+  border: 1px solid var(--mdprv-border);
+  border-radius: var(--mdprv-radius-md, 6px);
+  overflow: hidden;
   background: var(--mdprv-bg);
   box-shadow: var(--mdprv-shadow-panel);
+  /* Column layout so an explicit resize height gives the sheet a bounded
+     scroll area instead of overflowing the frame. */
+  display: flex;
+  flex-direction: column;
+}
+
+.mdprv-table-lightbox .mdprv-sheet {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .mdprv-table-lightbox .mdprv-sheet-body {
-  overflow: visible;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* --- resize handles (symmetric: the center stays fixed) --- */
+.mdprv-table-handle {
+  position: absolute;
+  z-index: 5;
+  opacity: 0;
+  background: transparent;
+  border-radius: var(--mdprv-radius-sm, 5px);
+  touch-action: none;
+  transition: opacity var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease);
+}
+
+.mdprv-table-handle::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  background: var(--mdprv-accent);
+  box-shadow: 0 0 0 1px var(--mdprv-bg);
+}
+
+.mdprv-table-handle[data-lb-handle="left"],
+.mdprv-table-handle[data-lb-handle="right"] {
+  top: 14px;
+  bottom: 14px;
+  width: 14px;
+  cursor: col-resize;
+}
+
+.mdprv-table-handle[data-lb-handle="left"] {
+  left: -7px;
+}
+
+.mdprv-table-handle[data-lb-handle="right"] {
+  right: -7px;
+}
+
+.mdprv-table-handle[data-lb-handle="left"]::after,
+.mdprv-table-handle[data-lb-handle="right"]::after {
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 2px;
+}
+
+.mdprv-table-handle[data-lb-handle="top"],
+.mdprv-table-handle[data-lb-handle="bottom"] {
+  left: 14px;
+  right: 14px;
+  height: 14px;
+  cursor: row-resize;
+}
+
+.mdprv-table-handle[data-lb-handle="top"] {
+  top: -7px;
+}
+
+.mdprv-table-handle[data-lb-handle="bottom"] {
+  bottom: -7px;
+}
+
+.mdprv-table-handle[data-lb-handle="top"]::after,
+.mdprv-table-handle[data-lb-handle="bottom"]::after {
+  left: 0;
+  right: 0;
+  top: 6px;
+  height: 2px;
+}
+
+.mdprv-table-handle[data-lb-handle="nw"],
+.mdprv-table-handle[data-lb-handle="ne"],
+.mdprv-table-handle[data-lb-handle="sw"],
+.mdprv-table-handle[data-lb-handle="se"] {
+  width: 16px;
+  height: 16px;
+}
+
+.mdprv-table-handle[data-lb-handle="nw"] {
+  top: -8px;
+  left: -8px;
+  cursor: nwse-resize;
+}
+
+.mdprv-table-handle[data-lb-handle="ne"] {
+  top: -8px;
+  right: -8px;
+  cursor: nesw-resize;
+}
+
+.mdprv-table-handle[data-lb-handle="sw"] {
+  bottom: -8px;
+  left: -8px;
+  cursor: nesw-resize;
+}
+
+.mdprv-table-handle[data-lb-handle="se"] {
+  bottom: -8px;
+  right: -8px;
+  cursor: nwse-resize;
+}
+
+.mdprv-table-handle[data-lb-handle="nw"]::after,
+.mdprv-table-handle[data-lb-handle="ne"]::after,
+.mdprv-table-handle[data-lb-handle="sw"]::after,
+.mdprv-table-handle[data-lb-handle="se"]::after {
+  inset: 6px;
+  border-radius: 2px;
+}
+
+.mdprv-table-lightbox.mdprv-open .mdprv-table-frame:hover .mdprv-table-handle {
+  opacity: .4;
+}
+
+.mdprv-table-handle:hover,
+.mdprv-table-handle:focus-visible {
+  opacity: 1 !important;
+}
+
+.mdprv-table-handle:focus-visible {
+  outline: 2px solid var(--mdprv-accent);
+  outline-offset: 2px;
+}
+
+/* --- pan affordances --- */
+.mdprv-table-lb-title {
+  cursor: grab;
+  user-select: none;
+}
+
+.mdprv-table-lightbox.mdprv-table-space .mdprv-table-stage,
+.mdprv-table-lightbox.mdprv-table-space .mdprv-table-frame,
+.mdprv-table-lightbox.mdprv-table-space .mdprv-table-lb-title {
+  cursor: grab;
+}
+
+.mdprv-table-lightbox.mdprv-table-panning,
+.mdprv-table-lightbox.mdprv-table-panning .mdprv-table-stage,
+.mdprv-table-lightbox.mdprv-table-panning .mdprv-table-frame,
+.mdprv-table-lightbox.mdprv-table-panning .mdprv-table-lb-title {
+  cursor: grabbing;
+}
+
+.mdprv-table-lightbox.mdprv-table-panning .mdprv-table-frame {
+  user-select: none;
+}
+
+.mdprv-table-lightbox.mdprv-table-resizing .mdprv-table-frame {
+  user-select: none;
 }
 
 .mdprv-table-lightbox .mdprv-sheet-colhead,
@@ -922,7 +1109,8 @@ body.mdprv-table-lock {
   .mdprv-table-sort-icon,
   .mdprv-table-lightbox,
   .mdprv-table-search,
-  .mdprv-table-lb-status {
+  .mdprv-table-lb-status,
+  .mdprv-table-handle {
     transition: none;
   }
 

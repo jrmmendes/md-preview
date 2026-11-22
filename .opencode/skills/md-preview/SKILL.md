@@ -11,7 +11,9 @@ description: >
 # md-preview — uso da CLI
 
 O `md-preview` registra arquivos Markdown em um daemon local e serve uma URL em
-`http://127.0.0.1:8766/<slug>`. Sem `--open-browser`, só imprime a URL.
+`http://127.0.0.1:8766/<slug>`. Por padrão ele reutiliza a aba já conectada
+(foca ou navega nela) e só abre o navegador quando nenhuma aba está conectada.
+Use `--no-open-browser` para registrar sem abrir nem focar nada.
 
 Documentação publicada: <https://github.com/jrmmendes/md-preview#readme>.
 
@@ -28,10 +30,11 @@ Não use para editar o documento no lugar do autor. O preview é somente leitura
 ## Comandos mínimos
 
 ```sh
-md-preview arquivo.md                    # registra e imprime a URL
+md-preview arquivo.md                    # registra; abre só se não houver aba
 md-preview a.md b.md --open-browser      # abre uma vez, no primeiro arquivo
+md-preview a.md b.md --no-open-browser   # só registra: nunca abre nem foca
 md-preview arquivo.md --theme nord       # valida o tema e usa ?theme=nord
-md-preview --version                     # 1.3.0 nesta instalação
+md-preview --version                     # versão instalada
 
 comando | md-preview --pipe              # temporário observado, slug temp-<uuid>.md
 comando | md-preview register --stdin --slug docs/relatorio
@@ -41,8 +44,29 @@ comando | md-preview register --stdin --slug docs/relatorio --path /abs/relatori
 - `--pipe` recusa arquivos posicionais, TTY e stdin vazio.
 - `register` exige `--stdin` e `--slug`; imprime somente o slug final e nunca
   abre o navegador. `--path` habilita watch e imagens relativas.
+- `--no-open-browser` também desliga o foco da aba conectada: é a flag para
+  testes automatizados e validação manual.
 - Arquivos repetidos (inclusive por symlink) são deduplicados pelo caminho real.
 - Extensões aceitas: `.md`, `.markdown`, `.mdc`.
+
+## Validação manual (Playwright)
+
+Nunca deixe a CLI abrir o navegador do sistema: registre com
+`--no-open-browser` e abra as URLs pelo Playwright.
+
+O padrão para validar troca de abas usa **quatro arquivos** numa única chamada:
+
+```sh
+md-preview um.md dois.md tres.md quatro.md --no-open-browser
+```
+
+- o stdout traz as quatro URLs, uma por linha;
+- abra cada URL em uma aba do mesmo contexto Playwright;
+- alterne as abas e valide estado ativo, foco, título, live reload e ativação
+  pelo daemon;
+- para revalidar após editar, repita a chamada com a flag — ela não abre nem
+  foca nada;
+- não use `--open-browser` em validação manual.
 
 ## Daemon
 
@@ -64,6 +88,15 @@ registre de novo. Apagar o estado com o processo vivo tem o mesmo efeito.
 ## Recursos do Markdown
 
 - GFM: tabelas, riscado, task lists, footnotes, linkify, typographer, âncoras;
+- tabelas GFM/CSV são interativas: ordenar, filtrar, pivotar, copiar
+  Markdown/CSV, visualizar em gráfico e abrir em tela cheia;
+- na toolbar, os toggles de cabeçalho (1ª linha/1ª coluna) são botões de ícone;
+  clique no fundo da barra limpa a seleção de células;
+- tela cheia da tabela: arraste para mover, controles de zoom, redimensionamento
+  simétrico pelas 4 bordas e pelos 4 cantos; o tamanho fica em `sessionStorage`
+  por documento/tabela e a barra de rolagem do palco fica oculta;
+- duplo clique na tabela ou na toolbar recentraliza e descarta o tamanho manual
+  (mantém o zoom);
 - frontmatter YAML vira cartão de metadados e título da aba;
 - Shiki realça `js`, `ts`, `json`, `lua`, `bash`, `html`, `css`, `md`, `py`,
   `rust`, `go`, `yaml`, `tsx`, `jsx`, `sql` e `xml`;

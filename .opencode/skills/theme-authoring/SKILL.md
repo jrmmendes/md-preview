@@ -43,6 +43,8 @@ para ver os caminhos efetivos. Nome do tema = basename do arquivo (sem `.json`)
   (compilado, requer `bun run build`).
 - Extração visual pelo **MCP do Playwright** (`playwright_browser_*`), como em
   `docs/bdd-scenarios.md`. Playwright não é dependência do projeto.
+- Ao registrar documentos para extração, use `--no-open-browser` para não abrir
+  o navegador do sistema; o Playwright navega pelas URLs impressas.
 
 ## Fluxo
 

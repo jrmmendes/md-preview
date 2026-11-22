@@ -40,6 +40,14 @@ const FULLSCREEN_ICON =
 const CHART_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V11"></path><path d="M10 20V4"></path><path d="M16 20v-6"></path><path d="M22 20H2"></path></svg>';
 
+/** Table with its first row highlighted: toggles the header row. */
+const HEADER_ROW_ICON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M3.5 9.5h17"></path><rect x="4.9" y="5.9" width="14.2" height="2.2" rx=".6" fill="currentColor" stroke="none"></rect></svg>';
+
+/** Table with its first column highlighted: toggles the header column. */
+const HEADER_COL_ICON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M9.5 4.5v15"></path><rect x="4.9" y="5.9" width="3.3" height="12.4" rx=".6" fill="currentColor" stroke="none"></rect></svg>';
+
 function escapeText(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -64,8 +72,8 @@ function toolbarHtml(id: string, kind: TableKind): string {
     `</div>` +
     `<span class="mdprv-table-count" data-mdprv-table-count role="status" aria-live="polite"></span>` +
     `<div class="mdprv-table-tools" role="group" aria-label="Controles da tabela">` +
-    `<button type="button" class="mdprv-table-btn mdprv-table-btn--label" data-mdprv-table-action="header-row" aria-pressed="true">1ª linha</button>` +
-    `<button type="button" class="mdprv-table-btn mdprv-table-btn--label" data-mdprv-table-action="header-col" aria-pressed="false">1ª coluna</button>` +
+    `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="header-row" aria-pressed="true" aria-label="Usar 1ª linha como cabeçalho" title="Usar 1ª linha como cabeçalho">${HEADER_ROW_ICON}</button>` +
+    `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="header-col" aria-pressed="false" aria-label="Usar 1ª coluna como cabeçalho" title="Usar 1ª coluna como cabeçalho">${HEADER_COL_ICON}</button>` +
     rawButton +
     `<button type="button" class="mdprv-table-btn mdprv-table-btn--pivot" data-mdprv-table-action="pivot" aria-pressed="false" aria-label="Pivotar tabela" title="Pivotar tabela">${PIVOT_ICON}</button>` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="chart" aria-pressed="false" aria-haspopup="dialog" aria-expanded="false" aria-label="Visualizar como gráfico" title="Visualizar como gráfico">${CHART_ICON}</button>` +

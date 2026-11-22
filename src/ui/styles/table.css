@@ -1020,10 +1020,17 @@ html.mdprv-simple-tables .mdprv-table-chart {
   align-items: center;
   justify-content: center;
   overflow: auto;
-  /* Reserve the scrollbar on both edges. Flex centering then keeps a stable
-     center when scrolling appears/disappears (zoom, pan, resize). */
-  scrollbar-gutter: stable both-edges;
+  /* The stage can overflow when the frame is resized or zoomed past the
+     viewport, but pan/zoom already provides navigation. Hide the scrollbar
+     on every engine without disabling wheel/trackpad scrolling, and avoid the
+     gutter so the frame stays centered. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   padding: 1.25rem;
+}
+
+.mdprv-table-stage::-webkit-scrollbar {
+  display: none;
 }
 
 /* Positioned wrapper for the moved block: owns the pan transform and the
@@ -1184,21 +1191,14 @@ html.mdprv-simple-tables .mdprv-table-chart {
 }
 
 /* --- pan affordances --- */
-.mdprv-table-lb-title {
-  cursor: grab;
-  user-select: none;
-}
-
 .mdprv-table-lightbox.mdprv-table-space .mdprv-table-stage,
-.mdprv-table-lightbox.mdprv-table-space .mdprv-table-frame,
-.mdprv-table-lightbox.mdprv-table-space .mdprv-table-lb-title {
+.mdprv-table-lightbox.mdprv-table-space .mdprv-table-frame {
   cursor: grab;
 }
 
 .mdprv-table-lightbox.mdprv-table-panning,
 .mdprv-table-lightbox.mdprv-table-panning .mdprv-table-stage,
-.mdprv-table-lightbox.mdprv-table-panning .mdprv-table-frame,
-.mdprv-table-lightbox.mdprv-table-panning .mdprv-table-lb-title {
+.mdprv-table-lightbox.mdprv-table-panning .mdprv-table-frame {
   cursor: grabbing;
 }
 
@@ -1304,18 +1304,6 @@ html.mdprv-simple-tables .mdprv-table-chart {
 .mdprv-table-lb-tools button:focus-visible {
   outline: 2px solid var(--mdprv-accent);
   outline-offset: 2px;
-}
-
-.mdprv-table-lb-title {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  padding: .3rem .6rem;
-  border: 1px solid var(--mdprv-border);
-  border-radius: var(--mdprv-radius-md, 6px);
-  background: var(--mdprv-bg);
-  color: var(--mdprv-fg);
-  font-size: var(--mdprv-font-size-small, 11.5px);
 }
 
 .mdprv-table-lb-status {

@@ -1773,11 +1773,15 @@ function setupTable(block: HTMLElement): TableController | null {
     const range = activeRange();
     if (headerRowButton) {
       headerRowButton.disabled = state.pivot || mode.raw;
-      headerRowButton.title = state.pivot ? "Indisponível no modo pivotado" : "";
+      headerRowButton.title = state.pivot
+        ? "Indisponível no modo pivotado"
+        : "Usar 1ª linha como cabeçalho";
     }
     if (headerColButton) {
       headerColButton.disabled = state.pivot || mode.raw;
-      headerColButton.title = state.pivot ? "Indisponível no modo pivotado" : "";
+      headerColButton.title = state.pivot
+        ? "Indisponível no modo pivotado"
+        : "Usar 1ª coluna como cabeçalho";
     }
     if (pivotButton) {
       pivotButton.disabled = mode.raw;
@@ -2561,6 +2565,27 @@ function setupTable(block: HTMLElement): TableController | null {
     document.addEventListener("mousedown", clearOnOutsidePress, true);
   }
 
+  // The toolbar strip is the table's title band: a plain click on its
+  // background drops the cell selection, while its controls keep their jobs.
+  toolbar?.addEventListener("click", (event) => {
+    if (lightboxSuppressClick) {
+      // A pan that started on the strip ends with a synthetic click.
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (
+      target.closest(
+        "button, a, input, select, textarea, [role='separator'], .mdprv-table-search"
+      )
+    ) {
+      return;
+    }
+    clearSelection();
+  });
+
   document.addEventListener("mousedown", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -2673,7 +2698,6 @@ function setupTable(block: HTMLElement): TableController | null {
 let lightbox: HTMLElement | null = null;
 let stage: HTMLElement | null = null;
 let frame: HTMLElement | null = null;
-let lightboxTitle: HTMLElement | null = null;
 let lightboxBlock: HTMLElement | null = null;
 let lightboxMarker: Comment | null = null;
 let lightboxFocus: HTMLElement | null = null;
@@ -2921,8 +2945,8 @@ function stageCenter(): { x: number; y: number } {
     return { x: 0, y: 0 };
   }
   const rect = stage.getBoundingClientRect();
-  // `scrollbar-gutter: stable both-edges` keeps both gutters equal, so the
-  // border-box center is also the layout center of the flex content.
+  // Scrollbars are hidden, so there are no asymmetric gutters: the border-box
+  // center is also the layout center of the flex content.
   return {
     x: rect.left + rect.width / 2 - stage.scrollLeft,
     y: rect.top + rect.height / 2 - stage.scrollTop,
@@ -2983,6 +3007,25 @@ function resizeLimits(zoom: number): {
   };
 }
 
+/**
+ * Axis direction of each resize handle. Corners combine both axes, so the same
+ * gesture logic used by the edges also works on the four corners.
+ */
+const LIGHTBOX_HANDLE_DIRECTIONS: Record<string, { x: number; y: number }> = {
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+  top: { x: 0, y: -1 },
+  bottom: { x: 0, y: 1 },
+  nw: { x: -1, y: -1 },
+  ne: { x: 1, y: -1 },
+  sw: { x: -1, y: 1 },
+  se: { x: 1, y: 1 },
+};
+
+function handleDirection(kind: string): { x: number; y: number } {
+  return LIGHTBOX_HANDLE_DIRECTIONS[kind] ?? { x: 0, y: 0 };
+}
+
 function syncHandleAria(): void {
   if (!frame || !lightboxBlock) {
     return;
@@ -2992,7 +3035,8 @@ function syncHandleAria(): void {
   const limits = resizeLimits(zoom);
   frame.querySelectorAll<HTMLElement>("[data-lb-handle]").forEach((handle) => {
     const kind = handle.getAttribute("data-lb-handle") ?? "";
-    const horizontal = kind.includes("left") || kind.includes("right");
+    const direction = handleDirection(kind);
+    const horizontal = direction.x !== 0;
     const now = horizontal ? rect.width : rect.height;
     handle.setAttribute("aria-valuenow", String(Math.round(now)));
     handle.setAttribute(
@@ -3003,6 +3047,16 @@ function syncHandleAria(): void {
       "aria-valuemax",
       String(Math.round(horizontal ? limits.maxWidth : limits.maxHeight))
     );
+    // A corner adjusts both axes, so a single value would hide half of what the
+    // handle does. The text alternative exposes width and height together.
+    if (direction.x !== 0 && direction.y !== 0) {
+      handle.setAttribute(
+        "aria-valuetext",
+        `${Math.round(rect.width)} × ${Math.round(rect.height)} px`
+      );
+    } else {
+      handle.removeAttribute("aria-valuetext");
+    }
   });
 }
 
@@ -3112,9 +3166,6 @@ function canStartPan(event: PointerEvent): boolean {
   if (target === stage || target === lightbox) {
     return true;
   }
-  if (target.closest("#mdprv-table-lb-title")) {
-    return true;
-  }
   // The toolbar strip is the closest thing to a title band on the component
   // itself; dragging its background moves the table, its buttons stay buttons.
   if (target.closest(".mdprv-table-toolbar")) {
@@ -3184,8 +3235,8 @@ function onLightboxPointerMove(event: PointerEvent): void {
   }
   clampLightboxPan();
   applyLightboxPan();
-  // A scrollbar appearing mid-gesture changes the flex centering by half its
-  // thickness. Correct the pan once so the dragged content tracks the pointer.
+  // Keep the dragged content tracking the pointer despite subpixel layout
+  // shifts (zoom, clamping, sticky headers changing the scroll extent).
   if (lightboxBlock) {
     const rect = lightboxBlock.getBoundingClientRect();
     const driftX = event.clientX - gesture.startX - (rect.left - gesture.startLeft);
@@ -3277,9 +3328,6 @@ function openLightbox(block: HTMLElement): void {
   frame.style.transform = "";
   stage.scrollTop = 0;
   stage.scrollLeft = 0;
-  if (lightboxTitle) {
-    lightboxTitle.textContent = "Tabela em tela cheia";
-  }
   lightbox.classList.add("mdprv-open");
   lightbox.setAttribute("aria-hidden", "false");
   document.body.classList.add("mdprv-table-lock");
@@ -3378,7 +3426,6 @@ function setupLightbox(): void {
   lightbox = document.getElementById("mdprv-table-lightbox");
   stage = document.getElementById("mdprv-table-stage");
   frame = document.getElementById("mdprv-table-frame");
-  lightboxTitle = document.getElementById("mdprv-table-lb-title");
   if (!lightbox || !stage || !frame) {
     return;
   }
@@ -3394,6 +3441,7 @@ function setupLightbox(): void {
         return;
       }
       const kind = handle.getAttribute("data-lb-handle") ?? "";
+      const direction = handleDirection(kind);
       const zoom = zoomFactor(lightboxBlock);
       const rect = lightboxBlock.getBoundingClientRect();
       lightboxResize = {
@@ -3404,8 +3452,8 @@ function setupLightbox(): void {
         width: rect.width / zoom,
         height: rect.height / zoom,
         zoom,
-        horizontal: kind.includes("right") ? 1 : kind.includes("left") ? -1 : 0,
-        vertical: kind.includes("bottom") ? 1 : kind.includes("top") ? -1 : 0,
+        horizontal: direction.x,
+        vertical: direction.y,
         moved: false,
       };
       lightbox?.classList.add("mdprv-table-resizing");
@@ -3419,11 +3467,12 @@ function setupLightbox(): void {
       }
       const step = 16;
       const kind = handle.getAttribute("data-lb-handle") ?? "";
+      const direction = handleDirection(kind);
       const horizontal =
-        (kind.includes("right") ? 1 : kind.includes("left") ? -1 : 0) *
+        direction.x *
         (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0);
       const vertical =
-        (kind.includes("bottom") ? 1 : kind.includes("top") ? -1 : 0) *
+        direction.y *
         (event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0);
       if (horizontal === 0 && vertical === 0) {
         return;
@@ -3453,7 +3502,7 @@ function setupLightbox(): void {
     });
   });
 
-  /* --- pan: left on title/toolbar strip, middle anywhere, Space + drag --- */
+  /* --- pan: left on toolbar strip, middle anywhere, Space + drag --- */
   lightbox.addEventListener("pointerdown", (event) => {
     if (!lightbox?.classList.contains("mdprv-open")) {
       return;
@@ -3514,7 +3563,7 @@ function setupLightbox(): void {
     }
   });
 
-  /* Double click on the table, title or toolbar strip recenters the view and
+  /* Double click on the table or toolbar strip recenters the view and
      drops the manual size (the zoom is kept). */
   lightbox.addEventListener("dblclick", (event) => {
     const target = event.target;

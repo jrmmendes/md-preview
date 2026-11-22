@@ -1,11 +1,11 @@
 ---
 title: Showcase do md-preview
-date: 2026-10-26
+date: 2026-11-17
 tags:
   - showcase
   - markdown
+  - tabelas
   - mermaid
-  - wiki
 author:
   name: Equipe md-preview
   role: maintainer
@@ -13,79 +13,171 @@ author:
 
 # Showcase do md-preview
 
-Esta página reúne os recursos que aparecem nas capturas da wiki. Ela é
-renderizada pelo próprio `md-preview`, sem conteúdo artificial: tudo abaixo
-passa pelo mesmo pipeline usado no dia a dia. O objetivo é ter uma fixture
-**longa o bastante** para gerar um sumário com rolagem e **variada o bastante**
-para cobrir frontmatter, código, tabelas, tarefas, notas de rodapé, diagramas
-e imagens relativas.
+Uma fixture com um exemplo curto de cada recurso do renderizador.
 
-## Visão geral
+## Frontmatter
 
-- Renderização de Markdown com tabelas GFM e listas de tarefas.
-- Realce de sintaxe com Shiki e diagramas Mermaid no tema ativo.
-- Árvores de diretórios interativas a partir de blocos `tree`.
+O bloco YAML no topo vira um cartão `<details>` e `title` também nomeia a aba.
 
-> O preview roda em um daemon local, escuta apenas em `127.0.0.1` e abre o
-> navegador somente quando isso é pedido explicitamente.
+```yaml
+---
+title: Relatório semanal
+date: 2026-03-14
+tags: [produto, pesquisa]
+author:
+  name: Ana Ribeiro
+  role: analista
+---
+```
 
-## Formatação essencial
+## Títulos e sumário
 
-A lista de tarefas abaixo mistura itens concluídos e pendentes. Ela é renderizada
-com caixas de seleção reais, sem JavaScript adicional.
+Títulos de `h1` a `h6` recebem `id` e aparecem no sumário lateral.
 
-- [x] Criar a fixture de showcase
-- [x] Registrar o documento no daemon
-- [ ] Revisar as capturas em tema claro
-- [ ] Revisar as capturas em tema escuro
+### Nível três
 
-Este parágrafo existe para mostrar ~~trecho removido~~ ao lado de **ênfase
-forte**, *ênfase simples* e `const preview = true`. O link para a
-[documentação do Markdown](https://commonmark.org/) continua clicável.
+Texto da subseção.
 
-| Recurso | Suporte | Observação |
-| --- | --- | --- |
-| Frontmatter | Sim | Cartão expansível no topo |
-| Tabelas GFM | Sim | Cabeçalho com fundo próprio |
-| Task lists | Sim | Itens marcados e desmarcados |
-| Mermaid | Sim | Flowchart, sequence e architecture |
-| Exportação em PDF | Não | Fora do escopo atual |
+#### Nível quatro
 
-A nota de rodapé referencia o comportamento do daemon.[^daemon]
+Texto da subseção.
 
-## Código com Shiki
+## Listas
 
-### TypeScript
+Listas ordenadas, não ordenadas e aninhadas.
+
+- Documento
+  - Frontmatter
+  - Corpo
+- Interface
+  1. Sumário
+  2. Recent
+
+## Tarefas
+
+Task lists viram checkboxes somente leitura.
+
+- [x] Registrar a fixture no daemon
+- [x] Revisar o tema claro
+- [ ] Revisar o tema escuro
+- [ ] Conferir o sumário em tela estreita
+
+## Citação
+
+Blockquotes preservam parágrafos e formatação inline.
+
+> O preview é renderizado no servidor; o navegador cuida do sumário, das tabelas e dos diagramas.
+>
+> Salvar o arquivo recarrega a página aberta.
+
+## Linha horizontal
+
+Separa blocos de conteúdo.
+
+---
+
+## Texto inline
+
+Ênfase, riscado e código inline.
+
+Parágrafo com **negrito**, *itálico*, ~~trecho removido~~ e `const preview = true`.
+
+## Links
+
+Links Markdown, autolinks e URLs soltas (linkify).
+
+- [Documentação do CommonMark](https://commonmark.org/)
+- Autolink: <https://example.com/equipe>
+- URL solta: https://example.com/painel
+
+## Tabela GFM
+
+Toda tabela GFM vira uma grade interativa; o alinhamento vem dos dois-pontos.
+
+| Recurso | Suporte | Documentos |
+| :--- | :---: | ---: |
+| Tabelas | Sim | 128 |
+| CSV | Sim | 14 |
+| Mermaid | Sim | 9 |
+
+## Tabela interativa
+
+Grade com funil por coluna, pesquisa, ordenação, pivô, cópia e tela cheia.
+
+| Contrato | Cliente | Regional | Valor | Reajuste | Ativos | Última revisão | Situação |
+| :--- | :--- | :---: | ---: | ---: | ---: | :---: | :---: |
+| [CT-2026-001](https://example.com/contratos/CT-2026-001) | Instituto Aurora | Sudeste | R$ 128.450,00 | 4,8% | 32 | 12/03/2026 | Ativo |
+| [CT-2026-002](https://example.com/contratos/CT-2026-002) | Fundação Horizonte | Nordeste | R$ 98.320,50 | 3,2% | 18 | 05/04/2026 | Ativo |
+| [CT-2025-087](https://example.com/contratos/CT-2025-087) | Rede Brisa | Sul | R$ 74.900,00 | | 12 | 18/04/2026 | Em revisão |
+| [CT-2026-003](https://example.com/contratos/CT-2026-003) | Colégio Ipê Amarelo | Sudeste | R$ 56.780,00 | 6,1% | 24 | 22/04/2026 | Ativo |
+| [CT-2025-064](https://example.com/contratos/CT-2025-064) | Associação Vereda | Centro-Oeste | R$ 41.250,00 | 2,5% | 9 | 29/04/2026 | Suspenso |
+| [CT-2026-004](https://example.com/contratos/CT-2026-004) | Clínica Bem Viver | Norte | R$ 35.900,00 | 5,0% | 15 | 03/05/2026 | Ativo |
+| [CT-2026-005](https://example.com/contratos/CT-2026-005) | Transportes Vila Nova | Sudeste | R$ 212.000,00 | 7,3% | 48 | 09/05/2026 | Ativo |
+| [CT-2024-102](https://example.com/contratos/CT-2024-102) | Gráfica Ponto Certo | Sul | R$ 19.480,90 | | 6 | 14/05/2026 | Encerrado |
+| [CT-2026-007](https://example.com/contratos/CT-2026-007) | Condomínio Pedra Clara | Nordeste | R$ 63.780,00 | 4,4% | 21 | 17/05/2026 | Ativo |
+| [CT-2026-008](https://example.com/contratos/CT-2026-008) | Mercado Bom Dia | Centro-Oeste | R$ 87.600,00 | 3,9% | 28 | 21/05/2026 | Em revisão |
+
+A grade é somente leitura: não há edição de célula.[^tabela]
+
+## Fence csv
+
+O separador é detectado na primeira linha; aspas aceitam `;` e quebras de linha.
+
+```csv
+codigo;cliente;valor;reajuste;data;situacao
+CT-2026-001;Instituto Aurora;128450,00;4,8;12/03/2026;Ativo
+CT-2026-002;"Rede Brisa; Sul";98320,50;3,2;05/04/2026;"Aditivo em análise:
+aguardando assinatura"
+CT-2026-003;Colégio Ipê Amarelo;56780,00;;22/04/2026;Ativo
+CT-2026-004;Fundação Horizonte;74900,00;6,1;18/04/2026;Em revisão
+```
+
+## Fence tree
+
+Árvore interativa com comentários depois de `#` e contadores por pasta.
+
+```tree
+md-preview
+├── src
+│   ├── core
+│   │   ├── render.ts        # pipeline markdown-it
+│   │   └── tables.ts        # grade e CSV
+│   └── ui
+│       └── table.ts         # filtros e pivot
+├── docs
+│   └── wiki-showcase.md     # esta fixture
+└── package.json             # scripts e dependências
+
+4 directories, 5 files
+```
+
+## Código
+
+Blocos com Shiki usam o tema ativo; sem linguagem, o texto fica sem realce.
 
 ```ts
 interface PreviewInput {
   title: string;
   body: string;
-  themeName: "auto" | "github-light" | "github-dark";
 }
 
-export function describePreview(input: PreviewInput): string {
-  const lines = input.body.split("\n").filter((line) => line.trim() !== "");
-  return `${input.title} — ${lines.length} linhas em ${input.themeName}`;
+export function lineCount(input: PreviewInput): number {
+  return input.body.split("\n").filter((line) => line.trim() !== "").length;
 }
-
-const sample: PreviewInput = {
-  title: "Showcase",
-  body: "Markdown → HTML",
-  themeName: "github-light",
-};
-console.log(describePreview(sample));
 ```
-
-### Shell
 
 ```bash
-# Captura reprodutível das imagens da wiki
-MDPRV_PORT=8791 bun run capture
-ls -lh ../../docs/wiki/static/img/features/*.png
+md-preview docs/fixtures/wiki-showcase.md
+md-preview --theme github-dark relatorio.md
 ```
 
-### Texto puro
+```json
+{
+  "theme": "auto",
+  "loader": "dots",
+  "zoomSensitivity": 1.35
+}
+```
 
 ```
 saída bruta
@@ -93,93 +185,88 @@ saída bruta
   e uma linha final
 ```
 
-## Diagrama Mermaid
+## Diff
 
-O diagrama abaixo descreve o caminho de uma página até o navegador.
+Saída unificada com as visões Inline e Lado a lado.
 
-```mermaid
-flowchart TD
-  A[Abrir Markdown] --> B[Renderizar HTML]
-  B --> C{Metadados?}
-  C -->|sim| D[Cartão de frontmatter]
-  C -->|não| E[Conteúdo direto]
-  D --> F[TOC + Shiki + Mermaid]
-  E --> F
-  F --> G[Preview no navegador]
+```diff ts
+diff --git a/src/core/render.ts b/src/core/render.ts
+index 3f1c2a0..8b7d4e1 100644
+--- a/src/core/render.ts
++++ b/src/core/render.ts
+@@ -12,7 +12,8 @@ export function render(source: string) {
+   const tokens = parse(source);
+   if (tokens.length === 0) {
+-    return "";
++    return null;
+   }
++  return format(tokens);
+ }
 ```
 
-Clique no ícone de tela cheia para abrir o diagrama no lightbox, com zoom por
-scroll e arraste para deslocar a imagem.
+## Mermaid
 
-## Árvore de arquivos
+Dois tipos de diagrama, desenhados no navegador com as cores do tema.
 
-O bloco `tree` vira uma árvore interativa. A raiz e o primeiro nível começam
-abertos; pastas mais profundas começam recolhidas.
+```mermaid
+flowchart LR
+  A[Markdown] --> B{Tipo de fence}
+  B -->|csv| C[Grade]
+  B -->|tree| D[Árvore]
+  B -->|outro| E[Shiki]
+```
 
-```tree
-md-preview
-├── src
-│   ├── application
-│   │   ├── cli
-│   │   │   └── index.ts
-│   │   └── daemon
-│   │       └── index.ts
-│   ├── core
-│   │   └── markdown
-│   │       └── render.ts
-│   └── ui
-│       └── main.ts
-├── docs
-│   ├── fixtures
-│   │   └── wiki-showcase.md
-│   └── wiki
-│       └── static
-├── themes
-│   └── auto.json
-└── package.json
-
-10 directories, 12 files
+```mermaid
+sequenceDiagram
+  participant U as Usuário
+  participant C as CLI
+  participant D as Daemon
+  U->>C: md-preview relatorio.md
+  C->>D: registra o documento
+  D-->>C: URL do preview
+  C-->>U: abre o navegador
 ```
 
 ## Imagem relativa
 
-A imagem abaixo usa um caminho relativo ao próprio documento. O daemon resolve
-o arquivo dentro da pasta registrada e bloqueia qualquer tentativa de escapar
-dela.
+Caminhos relativos são servidos a partir da pasta do documento.
 
-![Foto de referência](img/foto.png)
+![Equipe revisando a fixture](img/foto.png)
 
-O caminho `img/foto.png` é reescrito para uma rota interna do preview, sem
-depender de servidor externo.
+## Links entre documentos
 
-## Fluxo de captura
+Links para um `.md` irmão abrem o preview do destino.
 
-### Preparação e execução
+Veja a [fixture de referência](reference.md).
 
-O script garante que o daemon esteja disponível, registra esta fixture, a
-referência e o README, e só então abre o Chromium headless. Cada captura navega
-para a URL com o tema desejado, aguarda as fontes, o Shiki, o Mermaid e o
-sumário, e desliga as animações antes de tirar a foto.
+## HTML inline
 
-## Acessibilidade e atalhos
+Tags de formatação funcionam; scripts e handlers não executam.
 
-### Teclado
+Use <kbd>Ctrl</kbd> + <kbd>K</kbd> para abrir a pesquisa.
 
-A tecla `z` alterna o modo zen, escondendo as barras laterais e os controles.
-`Esc` fecha o lightbox do Mermaid. Com `prefers-reduced-motion: reduce`, as
-transições de painel e os indicadores de carregamento deixam de animar.
+<details>
+<summary>Detalhes</summary>
 
-## Limitações conhecidas
+Conteúdo dentro de um `details` escrito em HTML.
 
-- Não há busca full-text entre documentos.
-- Não há exportação para PDF.
+</details>
+
+## Raw
+
+O botão Raw no topo mostra o source completo; fences `csv` e `tree` têm Raw próprio.[^raw]
+
+## Limitações
+
+- Não há edição de célula: a grade é somente leitura.
+- Não há exportação em PDF.
 - Admonitions e KaTeX não fazem parte do renderizador.
-- O painel de recentes lista apenas documentos registrados no daemon atual.
+- Não há busca full-text entre documentos; a pesquisa filtra linhas da tabela.
+- Filtros, ordenação, pivô e seleção não persistem ao recarregar.
+- Um `.csv` só existe como fence; o arquivo não é registrado como documento.
+- Tabelas GFM não têm Raw por bloco.
+- Links `.md` em subpastas e imagens fora do diretório do documento não são reescritos.
 
-## Próximos passos
+[^tabela]: O pivô troca linhas e colunas; por isso a primeira coluna deve conter um rótulo.
 
-1. Manter esta fixture alinhada aos recursos realmente entregues.
-2. Reexecutar as capturas sempre que um tema ou componente mudar.
-
-[^daemon]: O daemon grava um arquivo de estado com PID, porta e token, e encerra
-    sozinho depois do período de inatividade configurado.
+[^raw]: O source viaja no payload da página e é realçado pelo daemon sob demanda.

@@ -191,12 +191,18 @@ describe("previewPipe", () => {
 
   it("creates a new temp document for every pipe", async () => {
     const output = collector();
-    const first = await previewPipe("# First\n", { log: output.log }, config, {
-      MDPRV_TMP_DIR: pipeDir,
-    });
-    const second = await previewPipe("# Second\n", { log: output.log }, config, {
-      MDPRV_TMP_DIR: pipeDir,
-    });
+    const first = await previewPipe(
+      "# First\n",
+      { openBrowser: false, log: output.log },
+      config,
+      { MDPRV_TMP_DIR: pipeDir }
+    );
+    const second = await previewPipe(
+      "# Second\n",
+      { openBrowser: false, log: output.log },
+      config,
+      { MDPRV_TMP_DIR: pipeDir }
+    );
 
     expect(first.path).not.toBe(second.path);
     expect(first.slug).not.toBe(second.slug);

@@ -392,7 +392,11 @@ describe("path target", () => {
     writeFileSync(file, "# Target\n");
     const output = collector();
 
-    const result = await previewTarget(file, { log: output.log }, config);
+    const result = await previewTarget(
+      file,
+      { openBrowser: false, log: output.log },
+      config
+    );
 
     expect(Array.isArray(result)).toBe(true);
     const results = result as Array<{ url: string }>;

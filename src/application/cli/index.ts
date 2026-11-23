@@ -18,9 +18,12 @@ const program = new Command();
 
 program
   .name("md-preview")
-  .description("Register Markdown files or a directory in a local preview daemon")
+  .description("Register Markdown files, any text file, or a directory in a local preview daemon")
   .version(VERSION)
-  .argument("[paths...]", "Markdown files (.md, .markdown or .mdc) or a directory")
+  .argument(
+    "[paths...]",
+    "Markdown files (.md, .markdown or .mdc), any text file, or a directory"
+  )
   .option("--theme <name>", "theme for this preview")
   .option("--open-browser", "always open the first file in the default browser")
   .option(

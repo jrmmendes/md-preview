@@ -12,6 +12,8 @@ import { resolveThemeName } from "../../core/themes/resolve";
 import type { ThemeStore } from "../../core/themes/store";
 import { VERSION } from "../../core/version";
 import { parseFrontmatter } from "../../core/frontmatter";
+import { isMarkdownPath } from "../../core/extensions";
+import { languageForFile, previewSourceFor } from "../../core/wrapper";
 import { mermaidAsset } from "./assets";
 import { createDocLinkResolver, resolveDocFile } from "./doc-links";
 import { createFontCatalog, type FontCatalog } from "./fonts";
@@ -441,6 +443,13 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     }
 
     const content = entryContent(entry);
+    const source = previewSourceFor(entry.path, content);
+    if (!source.previewable) {
+      return text(
+        `not previewable: ${entry.path ? basename(entry.path) : slug} (binary or larger than 1 MiB)`,
+        415
+      );
+    }
 
     const themeName = resolveThemeName(
       url.searchParams.get("theme"),
@@ -448,7 +457,10 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       config.theme,
       themes
     );
-    const { data, body: markdownBody } = parseFrontmatter(content);
+    // Markdown: frontmatter as before. Wrapped: no frontmatter, body = fence.
+    const { data, body: markdownBody } = source.wrapped
+      ? { data: {} as Record<string, unknown>, body: source.markdown }
+      : parseFrontmatter(content);
     const metaTitle =
       typeof data.title === "string" || typeof data.title === "number"
         ? String(data.title).trim()
@@ -499,7 +511,9 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       themes
     );
     await warmup();
-    const html = codeToHtml(entryContent(entry), "markdown", themeName);
+    const language =
+      entry.path === "" || isMarkdownPath(entry.path) ? "markdown" : languageForFile(entry.path);
+    const html = codeToHtml(entryContent(entry), language, themeName);
     return new Response(head ? null : html, {
       headers: baseHeaders("text/html; charset=utf-8"),
     });

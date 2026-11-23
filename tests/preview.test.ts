@@ -286,12 +286,12 @@ describe("preview command", () => {
     expect(entries).toHaveLength(1);
   });
 
-  it("rejects unsupported extensions and missing files", async () => {
-    const text = join(dir, "notes.txt");
-    writeFileSync(text, "not markdown\n");
+  it("rejects binary files and missing files", async () => {
+    const binary = join(dir, "photo.png");
+    writeFileSync(binary, Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x00, 0x01));
     const spy = browserSpy();
 
-    await expect(preview(text, { opener: spy.opener }, config)).rejects.toThrow(/\.mdc/);
+    await expect(preview(binary, { opener: spy.opener }, config)).rejects.toThrow(/binary file/);
     await expect(preview(join(dir, "missing.md"), { opener: spy.opener }, config)).rejects.toThrow(
       /not a file/
     );

@@ -1,14 +1,12 @@
 import { readFileSync, statSync } from "node:fs";
-import { extname, resolve } from "node:path";
+import { resolve } from "node:path";
 
 import { loadConfig, type Config } from "../../../core/config";
-import {
-  isMarkdownExtension,
-  MARKDOWN_EXTENSIONS_LABEL,
-} from "../../../core/extensions";
+import { isMarkdownPath } from "../../../core/extensions";
 import { canonicalPath } from "../../../core/paths";
 import { encodeSlugPath, slugFor } from "../../../core/slug";
 import { writePipeDocument, type TempEnv } from "../../../core/temp";
+import { inspectContent, MAX_WRAPPED_BYTES } from "../../../core/wrapper";
 import { ensureDaemon, registerDocument } from "../daemon-client";
 import { present } from "../present";
 import { validateThemeOption } from "../theme-option";
@@ -55,10 +53,23 @@ function loadDocument(file: string): PreviewDocument {
     throw new Error(`not a file: ${file}`);
   }
 
-  const ext = extname(abs).toLowerCase();
-  if (!isMarkdownExtension(ext)) {
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(abs);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? "unknown";
+    throw new Error(`cannot read file: ${file} (${code})`);
+  }
+
+  const inspected = isMarkdownPath(abs)
+    ? { kind: "text" as const, text: bytes.toString("utf8") }
+    : inspectContent(bytes);
+  if (inspected.kind === "binary") {
+    throw new Error(`binary file: ${file}`);
+  }
+  if (inspected.kind === "too-large") {
     throw new Error(
-      `unsupported file extension: ${ext || "(none)"} (expected ${MARKDOWN_EXTENSIONS_LABEL})`
+      `file too large: ${file} (${inspected.bytes} bytes > ${MAX_WRAPPED_BYTES / (1024 * 1024)} MiB)`
     );
   }
 
@@ -67,7 +78,7 @@ function loadDocument(file: string): PreviewDocument {
     path: abs,
     canonical: canonicalPath(abs),
     slug: slugFor(abs),
-    content: readFileSync(abs, "utf8"),
+    content: inspected.text,
   };
 }
 

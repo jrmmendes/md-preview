@@ -2,6 +2,7 @@ import { readFileSync, watch, type FSWatcher } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 
 import type { SlugInfo } from "../../core/contract";
+import { isMarkdownPath } from "../../core/extensions";
 import { parseFrontmatter } from "../../core/frontmatter";
 import { canonicalPath } from "../../core/paths";
 
@@ -52,7 +53,7 @@ function titleFor(entry: SlugEntry): string {
   if (content === null || content === undefined) {
     content = entry.path ? readDisk(entry.path) : null;
   }
-  if (typeof content === "string") {
+  if (typeof content === "string" && (!entry.path || isMarkdownPath(entry.path))) {
     try {
       const { data } = parseFrontmatter(content);
       const raw = data.title;

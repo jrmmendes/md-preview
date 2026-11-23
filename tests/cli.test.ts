@@ -245,26 +245,27 @@ describe("theme and config commands", () => {
 });
 
 describe("preview command line", () => {
-  it("documents .mdc, multiple paths, both browser flags and --pipe", () => {
+  it("documents .mdc, any text file, multiple paths, both browser flags and --pipe", () => {
     const result = run(tempDir(), ["--help"]);
     expect(result.exitCode).toBe(0);
     const help = result.stdout.toString();
     expect(help).toContain("[paths...]");
     expect(help).toContain("or a directory");
     expect(help).toContain(".mdc");
+    expect(help).toContain("text file");
     expect(help).toContain("--open-browser");
     expect(help).toContain("--no-open-browser");
     expect(help).toContain("--pipe");
   });
 
-  it("rejects unsupported extensions with the accepted list", () => {
+  it("rejects binary files with a clear message", () => {
     const dir = tempDir();
-    const file = join(dir, "notes.txt");
-    writeFileSync(file, "not markdown\n");
+    const file = join(dir, "photo.png");
+    writeFileSync(file, Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x00, 0x01));
     const result = run(dir, [file]);
     expect(result.exitCode).toBe(1);
-    expect(output(result)).toContain(".mdc");
-    expect(output(result)).toContain(".markdown");
+    expect(output(result)).toContain("binary file:");
+    expect(readDaemonState(join(dir, "state", "daemon.json"))).toBeNull();
   });
 
   it("opens the browser by default after registering every file", async () => {
@@ -427,6 +428,155 @@ describe("preview command line", () => {
       expect(await waitUntil(() => existsSync(marker))).toBe(true);
       const opened = readFileSync(marker, "utf8").trim().split("\n").filter(Boolean);
       expect(opened).toEqual([urls[0]]);
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+});
+
+describe("wrapped documents", () => {
+  it("renders a JSON file as a single json fence with the file name as title", async () => {
+    const dir = tempDir();
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "data.json");
+    writeFileSync(file, '{"answer": 42}\n');
+
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"]);
+      expect(result.exitCode).toBe(0);
+      const url = result.stdout.toString().trim().split("\n").find(Boolean)!;
+      const response = await fetch(url);
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain("<title>data.json</title>");
+      expect(html).toContain('class="shiki');
+      expect(html).toContain('\\"answer\\": 42');
+      expect(html).not.toContain("<h1");
+      expect((html.match(/class="shiki/g) ?? []).length).toBe(1);
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("does not render headings from a .txt file", async () => {
+    const dir = tempDir();
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "notes.txt");
+    writeFileSync(file, "# não é título\n");
+
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"]);
+      expect(result.exitCode).toBe(0);
+      const url = result.stdout.toString().trim().split("\n").find(Boolean)!;
+      const html = await (await fetch(url)).text();
+      expect(html).not.toContain("<h1");
+      expect(html).toContain("não é título");
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("treats .mdx as a fenced document instead of rendering JSX", async () => {
+    const dir = tempDir();
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "notes.mdx");
+    writeFileSync(file, "<Component />\n");
+
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"]);
+      expect(result.exitCode).toBe(0);
+      const url = result.stdout.toString().trim().split("\n").find(Boolean)!;
+      const html = await (await fetch(url)).text();
+      expect(html).not.toContain("<h1");
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("keeps Markdown headings intact", async () => {
+    const dir = tempDir();
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "doc.md");
+    writeFileSync(file, "# Título\n");
+
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"]);
+      expect(result.exitCode).toBe(0);
+      const url = result.stdout.toString().trim().split("\n").find(Boolean)!;
+      const html = await (await fetch(url)).text();
+      expect(html).toContain("<h1");
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("highlights the raw view with the detected language", async () => {
+    const dir = tempDir();
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "data.json");
+    writeFileSync(file, '{"answer": 42}\n');
+
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"]);
+      expect(result.exitCode).toBe(0);
+      const url = result.stdout.toString().trim().split("\n").find(Boolean)!;
+      const slug = decodeURIComponent(new URL(url).pathname.slice(1));
+      const state = readDaemonState(stateFile);
+      expect(state).not.toBeNull();
+      const response = await fetch(
+        `http://127.0.0.1:${state!.port}/__raw-highlight?slug=${encodeURIComponent(slug)}`
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('class="shiki');
+    } finally {
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("re-renders the fence on live reload without duplicating it", async () => {
+    const dir = tempDir();
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "data.json");
+    writeFileSync(file, '{"answer": 42}\n');
+
+    let events: Awaited<ReturnType<typeof openEvents>> | undefined;
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"]);
+      expect(result.exitCode).toBe(0);
+      const url = result.stdout.toString().trim().split("\n").find(Boolean)!;
+      const slug = decodeURIComponent(new URL(url).pathname.slice(1));
+      const state = readDaemonState(stateFile);
+      expect(state).not.toBeNull();
+
+      events = await openEvents(state!.port, slug);
+      await events.next("snapshot");
+
+      writeFileSync(file, '{"answer": 43}\n');
+      await events.next("version");
+
+      const html = await (await fetch(url)).text();
+      expect(html).toContain('\\"answer\\": 43');
+      expect(html).not.toContain('\\"answer\\": 42');
+      expect((html.match(/class="shiki/g) ?? []).length).toBe(1);
+    } finally {
+      await events?.close();
+      await shutdown(stateFile);
+    }
+  }, 15000);
+
+  it("wraps an extension-less file such as Makefile", async () => {
+    const dir = tempDir();
+    const stateFile = join(dir, "state", "daemon.json");
+    const file = join(dir, "Makefile");
+    writeFileSync(file, "all:\n\t@echo hi\n");
+
+    try {
+      const result = runPreview(dir, [file, "--no-open-browser"]);
+      expect(result.exitCode).toBe(0);
+      const url = result.stdout.toString().trim().split("\n").find(Boolean)!;
+      const html = await (await fetch(url)).text();
+      expect(html).not.toContain("<h1");
+      expect(html).toContain("@echo hi");
     } finally {
       await shutdown(stateFile);
     }

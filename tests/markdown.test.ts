@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
 import { normalizeContent, renderMarkdown, warmup } from "../src/core/markdown/render";
+import {
+  renderGfmTableClose,
+  renderGfmTableOpen,
+  renderTableRawHtml,
+} from "../src/core/markdown/table";
 
 const SAMPLE = `# Título
 
@@ -126,7 +131,7 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain("language-tree");
   }, 30000);
 
-  it("wraps GFM tables in the spreadsheet shell without a raw toggle", async () => {
+  it("wraps GFM tables in the spreadsheet shell with a raw toggle", async () => {
     const html = await renderMarkdown(
       "| Nome | Valor |\n| :--- | ---: |\n| A | 1 |\n",
       "auto",
@@ -142,10 +147,60 @@ describe("renderMarkdown", () => {
     expect(html).toContain('<th style="text-align:left">Nome</th>');
     expect(html).toContain('<td style="text-align:right">1</td>');
     expect(html).toContain("</table>\n</div></div>");
-    // GFM keeps the original table; the per-block Raw toggle is CSV-only.
-    expect(html).not.toContain('data-mdprv-table-action="raw"');
-    expect(html).not.toContain("data-mdprv-table-raw-view");
+    // GFM keeps the original table and exposes its source behind the Raw toggle.
+    expect(html).toContain('data-mdprv-table-action="raw"');
+    expect(html).toContain('class="mdprv-table-btn mdprv-table-btn--label" data-mdprv-table-action="raw" aria-pressed="false"');
+    // Raw leads the toolbar, immediately before the search magnifier.
+    const raw = html.indexOf('data-mdprv-table-action="raw"');
+    expect(html.indexOf('data-mdprv-table-toolbar')).toBeLessThan(raw);
+    expect(raw).toBeLessThan(html.indexOf('data-mdprv-table-action="filter"'));
+    expect(raw).toBeLessThan(html.indexOf("mdprv-table-searchbar"));
+    expect(html).toContain('data-mdprv-table-raw="0"');
+    expect(html).toContain("data-mdprv-table-raw-view hidden");
   }, 30000);
+
+  it("puts the original Markdown table source in the raw view", async () => {
+    const html = await renderMarkdown(
+      "| Nome | Valor |\n| :--- | ---: |\n| A | 1 |\n",
+      "auto",
+      "doc"
+    );
+    const view = html.indexOf("data-mdprv-table-raw-view");
+    expect(view).toBeGreaterThan(html.indexOf("</table>"));
+    expect(view).toBeLessThan(html.indexOf("data-mdprv-chart-container"));
+    // The raw view is the source itself, highlighted as Markdown.
+    expect(html.slice(view)).toContain("| Nome | Valor |");
+    expect(html.slice(view)).toContain("| :--- | ---: |");
+    expect(html.slice(view)).toContain("| A | 1 |");
+    expect(html).not.toContain("language-markdown");
+  }, 30000);
+
+  it("keeps the original table source for tables inside a blockquote", async () => {
+    const html = await renderMarkdown("> | X | Y |\n> | - | - |\n> | 9 | 8 |\n", "auto", "doc");
+    expect(html).toContain('data-mdprv-table-kind="gfm"');
+    expect(html).toContain('data-mdprv-table-action="raw"');
+    const view = html.indexOf("data-mdprv-table-raw-view");
+    expect(view).toBeGreaterThan(-1);
+    // The quoted lines are preserved exactly as written, prefix included.
+    expect(html.slice(view)).toContain("> | X | Y |");
+    expect(html.slice(view)).toContain("> | 9 | 8 |");
+  }, 30000);
+
+  it("omits the GFM raw toggle and view when no source lines are available", () => {
+    expect(renderGfmTableOpen(1)).not.toContain('data-mdprv-table-action="raw"');
+    expect(renderGfmTableOpen(1)).not.toContain("mdprv-table-toolbar--raw");
+    expect(renderGfmTableOpen(1)).not.toContain("data-mdprv-table-raw");
+    expect(renderGfmTableClose()).not.toContain("data-mdprv-table-raw-view");
+  });
+
+  it("escapes the raw source when highlighting is unavailable", () => {
+    expect(renderTableRawHtml("| a | <b> & |", "")).toBe(
+      '<pre class="mdprv-table-raw-pre"><code>| a | &lt;b&gt; &amp; |</code></pre>'
+    );
+    expect(renderTableRawHtml("| a |", '<pre class="shiki"></pre>')).toBe(
+      '<pre class="shiki"></pre>'
+    );
+  });
 
   it("gives every table a unique id", async () => {
     const html = await renderMarkdown(
@@ -171,6 +226,10 @@ describe("renderMarkdown", () => {
     expect(html).toContain('data-mdprv-num="1">1.234,50</td>');
     expect(html).toContain("Silva, Bia");
     expect(html).toContain('data-mdprv-table-action="raw"');
+    // CSV shares the toolbar: Raw still precedes the search magnifier.
+    expect(html.indexOf('data-mdprv-table-action="raw"')).toBeLessThan(
+      html.indexOf('data-mdprv-table-action="filter"')
+    );
     expect(html).toContain("data-mdprv-table-raw-view hidden");
     expect(html).toContain('class="shiki');
     expect(html).toContain('id="mdprv-table-1-grid"');

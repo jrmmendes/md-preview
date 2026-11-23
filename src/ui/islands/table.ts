@@ -342,7 +342,13 @@ function setupTable(block: HTMLElement): TableController | null {
     }
   };
 
-  /** GFM tables have no per-block raw view; the document-wide Raw covers them. */
+  const kind = block.getAttribute("data-mdprv-table-kind");
+  const isGfm = kind === "gfm";
+
+  /**
+   * The toggle only exists when the server emitted a per-block raw view (CSV
+   * always, GFM when its source lines were available).
+   */
   const rawMode = () =>
     rawView
       ? resolveRawMode(state.raw, state.globalRaw)
@@ -1801,7 +1807,9 @@ function setupTable(block: HTMLElement): TableController | null {
     }
     if (copyButton) {
       const label = mode.raw
-        ? "Copiar CSV como texto"
+        ? isGfm
+          ? "Copiar Markdown como texto"
+          : "Copiar CSV como texto"
         : range
           ? "Copiar intervalo como TSV"
           : "Copiar tabela como Markdown";
@@ -1809,7 +1817,15 @@ function setupTable(block: HTMLElement): TableController | null {
       copyButton.title = label;
     }
     if (csvButton) {
-      const label = mode.raw ? "Copiar CSV como texto" : "Copiar tabela como CSV";
+      // In raw mode the payload is the block source, which is Markdown (not
+      // CSV) for a GFM table, so the CSV copy would be misleading.
+      const unavailable = mode.raw && isGfm;
+      csvButton.disabled = unavailable;
+      const label = unavailable
+        ? "Indisponível no modo raw"
+        : mode.raw
+          ? "Copiar CSV como texto"
+          : "Copiar tabela como CSV";
       csvButton.setAttribute("aria-label", label);
       csvButton.title = label;
     }
@@ -1885,7 +1901,7 @@ function setupTable(block: HTMLElement): TableController | null {
       copyText(rawView.textContent ?? "").then(
         () => {
           flashCopied(copyButton);
-          announce("CSV copiado como texto.");
+          announce(isGfm ? "Markdown copiado como texto." : "CSV copiado como texto.");
         },
         () => flashCopyError(copyButton, "Não foi possível copiar")
       );
@@ -2497,7 +2513,8 @@ function setupTable(block: HTMLElement): TableController | null {
         if (!rawMode().locked) {
           state.raw = !state.raw;
           syncRaw();
-          announce(state.raw ? "Código CSV original exibido." : "Tabela CSV exibida.");
+          const source = isGfm ? "Markdown original" : "Código CSV original";
+          announce(state.raw ? `${source} exibido.` : "Tabela exibida.");
         }
         break;
       case "copy":

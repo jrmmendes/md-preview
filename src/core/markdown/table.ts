@@ -4,8 +4,8 @@
  * GFM tables keep their original `<table>` (and are usable without JS); the
  * renderer only wraps them with the spreadsheet shell and a toolbar that stays
  * hidden until the island boots. A ```csv fence reuses the same shell with the
- * parsed CSV rendered as the table body and the highlighted source available
- * for the per-block Raw view.
+ * parsed CSV rendered as the table body. Both kinds can expose the original
+ * source in the per-block Raw view.
  */
 
 import { COPY_ICON, CSV_ICON } from "../../shared/copy-icons";
@@ -57,13 +57,16 @@ function escapeText(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function toolbarHtml(id: string, kind: TableKind): string {
-  const rawButton =
-    kind === "csv"
-      ? '<button type="button" class="mdprv-table-btn mdprv-table-btn--label" data-mdprv-table-action="raw" aria-pressed="false">Raw</button>'
-      : "";
+function toolbarHtml(id: string, withRaw: boolean): string {
+  const rawButton = withRaw
+    ? '<button type="button" class="mdprv-table-btn mdprv-table-btn--label" data-mdprv-table-action="raw" aria-pressed="false">Raw</button>'
+    : "";
+  // The Raw toggle leads the toolbar (left of the search magnifier), mirroring
+  // the tree block; the modifier class keeps the remaining controls grouped on
+  // the right (see table.css).
   return (
-    `<div class="mdprv-table-toolbar" data-mdprv-table-toolbar hidden>` +
+    `<div class="mdprv-table-toolbar${withRaw ? " mdprv-table-toolbar--raw" : ""}" data-mdprv-table-toolbar hidden>` +
+    rawButton +
     `<div class="mdprv-table-searchbar">` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="filter" aria-expanded="false" aria-controls="${id}-search" aria-label="Pesquisar linhas" title="Pesquisar linhas">${FILTER_ICON}</button>` +
     `<div class="mdprv-table-search" id="${id}-search" data-mdprv-table-filter data-open="false">` +
@@ -74,7 +77,6 @@ function toolbarHtml(id: string, kind: TableKind): string {
     `<div class="mdprv-table-tools" role="group" aria-label="Controles da tabela">` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="header-row" aria-pressed="true" aria-label="Usar 1ª linha como cabeçalho" title="Usar 1ª linha como cabeçalho">${HEADER_ROW_ICON}</button>` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="header-col" aria-pressed="false" aria-label="Usar 1ª coluna como cabeçalho" title="Usar 1ª coluna como cabeçalho">${HEADER_COL_ICON}</button>` +
-    rawButton +
     `<button type="button" class="mdprv-table-btn mdprv-table-btn--pivot" data-mdprv-table-action="pivot" aria-pressed="false" aria-label="Pivotar tabela" title="Pivotar tabela">${PIVOT_ICON}</button>` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="chart" aria-pressed="false" aria-haspopup="dialog" aria-expanded="false" aria-label="Visualizar como gráfico" title="Visualizar como gráfico">${CHART_ICON}</button>` +
     `<button type="button" class="mdprv-table-btn" data-mdprv-table-action="copy" aria-label="Copiar tabela como Markdown" title="Copiar tabela como Markdown">${COPY_ICON}</button>` +
@@ -99,6 +101,17 @@ function sheetCloseHtml(): string {
   return `</div></div>`;
 }
 
+/** Trusted HTML for a per-block Raw view: highlighted source, else escaped text. */
+export function renderTableRawHtml(source: string, highlighted: string): string {
+  return highlighted.trim() !== ""
+    ? highlighted
+    : `<pre class="mdprv-table-raw-pre"><code>${escapeText(source)}</code></pre>`;
+}
+
+function rawViewHtml(rawHtml: string): string {
+  return `<div class="mdprv-table-raw" data-mdprv-table-raw-view hidden>${rawHtml}</div>`;
+}
+
 function shellEndHtml(): string {
   return (
     `<div class="mdprv-table-chart" data-mdprv-chart-container hidden></div>` +
@@ -108,21 +121,33 @@ function shellEndHtml(): string {
   );
 }
 
+export interface GfmRenderOptions {
+  /**
+   * Trusted HTML with the original Markdown lines of the table, used by the
+   * per-block Raw toggle. Empty (no source available) omits the toggle.
+   */
+  rawHtml?: string;
+}
+
 /** Prefix emitted before the GFM `<table>` token. */
-export function renderGfmTableOpen(seq: number): string {
+export function renderGfmTableOpen(seq: number, options: GfmRenderOptions = {}): string {
   const id = `mdprv-table-${seq}`;
+  const raw = options.rawHtml ?? "";
   return (
     `<div class="mdprv-table" data-mdprv-table data-mdprv-table-id="${id}" ` +
     `data-mdprv-table-kind="gfm" data-mdprv-table-header-row="1" ` +
-    `data-mdprv-table-header-col="0" data-mdprv-table-pivot="0">` +
-    toolbarHtml(id, "gfm") +
+    `data-mdprv-table-header-col="0" data-mdprv-table-pivot="0"` +
+    (raw === "" ? "" : ` data-mdprv-table-raw="0"`) +
+    `>` +
+    toolbarHtml(id, raw !== "") +
     sheetOpenHtml()
   );
 }
 
 /** Suffix emitted after the GFM `</table>` token. */
-export function renderGfmTableClose(): string {
-  return sheetCloseHtml() + shellEndHtml();
+export function renderGfmTableClose(options: GfmRenderOptions = {}): string {
+  const raw = options.rawHtml ?? "";
+  return sheetCloseHtml() + (raw === "" ? "" : rawViewHtml(raw)) + shellEndHtml();
 }
 
 function renderCsvRows(model: TableModel, numeric: boolean[]): string {
@@ -170,19 +195,16 @@ export function renderCsvTable(source: string, options: CsvRenderOptions): strin
   }
   const id = `mdprv-table-${options.seq}`;
   const highlighted = options.renderSource?.(source) ?? "";
-  const rawHtml =
-    highlighted.trim() !== ""
-      ? highlighted
-      : `<pre class="mdprv-table-raw-pre"><code>${escapeText(source)}</code></pre>`;
+  const rawHtml = renderTableRawHtml(source, highlighted);
   return (
     `<div class="mdprv-table" data-mdprv-table data-mdprv-table-id="${id}" ` +
     `data-mdprv-table-kind="csv" data-mdprv-table-header-row="1" ` +
     `data-mdprv-table-header-col="0" data-mdprv-table-pivot="0" data-mdprv-table-raw="0">` +
-    toolbarHtml(id, "csv") +
+    toolbarHtml(id, true) +
     sheetOpenHtml() +
     renderCsvTableHtml(model, id) +
     sheetCloseHtml() +
-    `<div class="mdprv-table-raw" data-mdprv-table-raw-view hidden>${rawHtml}</div>` +
+    rawViewHtml(rawHtml) +
     shellEndHtml()
   );
 }

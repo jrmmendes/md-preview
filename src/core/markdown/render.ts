@@ -5,7 +5,7 @@ import taskLists from "markdown-it-task-lists";
 
 import { renderDiff } from "./diff";
 import { codeToHtml, warmup } from "./highlight";
-import { renderCsvTable, renderGfmTableClose, renderGfmTableOpen } from "./table";
+import { renderCsvTable, renderGfmTableClose, renderGfmTableOpen, renderTableRawHtml } from "./table";
 import { renderTree } from "./tree";
 import type { DocLinkState } from "../doc-links";
 
@@ -23,13 +23,44 @@ export interface RenderOptions {
   docLinkResolver?: DocLinkResolver;
 }
 
+interface OpenTable {
+  /** Trusted Raw-view HTML for the table, empty when it has no source. */
+  rawHtml: string;
+}
+
 interface RenderEnv {
   slug: string;
   docLinkResolver?: DocLinkResolver;
+  /** Original Markdown; GFM tables slice it with `token.map` for the Raw view. */
+  source?: string;
   /** Monotonic table counter, shared by GFM tables and csv fences. */
   tableSeq?: number;
   /** Open GFM tables, used to close the wrapper after `</table>`. */
-  tableStack?: string[];
+  tableStack?: OpenTable[];
+}
+
+/**
+ * Original Markdown lines of a GFM table, highlighted for the per-block Raw
+ * view. Returns an empty string when the token carries no line map (nested
+ * containers edge cases) so the toggle is simply omitted.
+ */
+function gfmRawHtml(
+  lines: [number, number] | null | undefined,
+  source: string | undefined,
+  themeName: string
+): string {
+  if (!lines || source === undefined) {
+    return "";
+  }
+  const text = source
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .slice(lines[0], lines[1])
+    .join("\n");
+  if (text.trim() === "") {
+    return "";
+  }
+  return renderTableRawHtml(text, codeToHtml(text, "markdown", themeName));
 }
 
 function nextTableSeq(env: RenderEnv): number {
@@ -99,12 +130,14 @@ function createRenderer(themeName: string): MarkdownIt {
     const seq = nextTableSeq(renderEnv);
     const id = `mdprv-table-${seq}`;
     const token = tokens[idx]!;
+    // The Raw view shows the table exactly as written, sliced from the source.
+    const rawHtml = gfmRawHtml(token.map, renderEnv.source, themeName);
     token.attrJoin("class", "mdprv-grid");
     token.attrSet("role", "grid");
     token.attrSet("aria-label", "Tabela de dados");
     token.attrSet("id", `${id}-grid`);
-    (renderEnv.tableStack ??= []).push(id);
-    return renderGfmTableOpen(seq) + defaultTableOpen(tokens, idx, options, env, self);
+    (renderEnv.tableStack ??= []).push({ rawHtml });
+    return renderGfmTableOpen(seq, { rawHtml }) + defaultTableOpen(tokens, idx, options, env, self);
   };
 
   const defaultTableClose =
@@ -116,8 +149,8 @@ function createRenderer(themeName: string): MarkdownIt {
     if (!stack || stack.length === 0) {
       return html;
     }
-    stack.pop();
-    return html + renderGfmTableClose();
+    const table = stack.pop()!;
+    return html + renderGfmTableClose({ rawHtml: table.rawHtml });
   };
 
   const defaultImage = md.renderer.rules.image!;
@@ -187,7 +220,7 @@ export async function renderMarkdown(
 ): Promise<string> {
   await warmup();
   const md = rendererFor(themeName);
-  const env: RenderEnv = { slug };
+  const env: RenderEnv = { slug, source: content };
   if (options.docLinkResolver) {
     env.docLinkResolver = options.docLinkResolver;
   }

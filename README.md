@@ -26,6 +26,21 @@ Bun nem Node; Bun só é necessário para compilar do código-fonte. Passo a pas
 completo (sha256, `PATH`, atualização, desinstalação):
 [Instalação](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/primeiros-passos/instalacao.md).
 
+## Abrir arquivos que não são Markdown
+
+Qualquer arquivo de texto pode ser aberto; ele é exibido como um único bloco de
+código, com a linguagem inferida do nome:
+
+```sh
+md-preview data.json      # fence json
+md-preview Makefile       # fence makefile
+md-preview config.yaml    # fence yaml
+```
+
+`.md`, `.markdown` e `.mdc` continuam renderizados como Markdown. Arquivos
+binários (imagens, PDF, compactados) e arquivos acima de 1 MiB são recusados.
+O botão Raw mostra o conteúdo original do arquivo, não o fence gerado.
+
 ## Desenvolvimento
 
 Pré-requisito: Bun 1.x (o repositório fixa `bun@1.4.3` em `packageManager`).

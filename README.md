@@ -3,6 +3,10 @@
 # md-preview
 
 Abra arquivos Markdown no navegador: renderização local, live reload e temas.
+Inclui os 65 temas Shiki embutidos e importação de temas de cores
+(`theme.json`), Shiki (`.shiki.json`) e Mermaid (`.mermaid.json`) em
+**Temas → Importar** no modal de configurações. As mudanças do modal ficam em
+rascunho até **Salvar** (`Ctrl/Cmd+S`); fechar sem salvar descarta tudo.
 
 <img width="1804" height="1116" alt="Documento Markdown renderizado no md-preview" src="https://github.com/user-attachments/assets/46cf31a6-d856-4592-b308-672c289a4966" />
 
@@ -90,10 +94,14 @@ A documentação de usuário é o site Docusaurus em
 - [Markdown suportado](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/recursos/markdown.md)
   — sintaxe, tabelas, diff, Mermaid, tree fences, imagens relativas.
 - [Interface](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/recursos/interface.md)
-  — layout, sumário, histórico Recent, fontes, modo zen, painel de configurações.
+  — layout, sumário, histórico Recent, fontes, modo zen, modal de configurações.
 - [Referência da CLI](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/referencia/cli.md)
   — comandos, opções e códigos de saída.
 - [Criar tema](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/receitas/criar-tema.md)
-  — `theme.json`, seed dos temas embutidos e override.
+  — `theme.json`, seed dos temas embutidos, override e importação pelo modal.
+- [Temas Shiki](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/referencia/temas-shiki.md)
+  — catálogo de 65 temas, formato `.shiki.json` e importação pelo modal.
+- [Temas Mermaid](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/referencia/temas-mermaid.md)
+  — formato `.mermaid.json`, variáveis e resolução no render.
 - [FAQ](https://github.com/jrmmendes/md-preview-docs/blob/main/docs/faq.md)
   — respostas curtas e o que a ferramenta não faz.

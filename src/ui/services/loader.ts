@@ -7,7 +7,6 @@ export type LoaderName = (typeof LOADERS)[number];
 
 let overlay: HTMLElement | null = null;
 let spinner: HTMLElement | null = null;
-let select: HTMLSelectElement | null = null;
 let currentName: LoaderName = "classic";
 let state: LoaderState | null = null;
 let watchingPages = false;
@@ -24,7 +23,6 @@ function defaultName(): LoaderName {
 function refs(): void {
   overlay = document.getElementById("mdprv-loader-overlay");
   spinner = document.getElementById("mdprv-loader-spinner");
-  select = document.getElementById("mdprv-loader") as HTMLSelectElement | null;
 }
 
 function applyVisible(visible: boolean): void {
@@ -85,9 +83,6 @@ export function set(name: string): void {
   currentName = next;
   if (spinner) {
     spinner.className = "mdprv-loader mdprv-loader--" + next;
-  }
-  if (select && select.value !== next) {
-    select.value = next;
   }
   document.documentElement.setAttribute("data-loader", next);
 }

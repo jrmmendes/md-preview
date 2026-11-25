@@ -29,7 +29,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: .4rem;
+  justify-content: flex-start;
+  gap: .5rem;
   padding: .4rem .5rem;
   border-bottom: 1px solid var(--mdprv-border);
   background: var(--mdprv-surface);
@@ -39,25 +40,15 @@
   display: none;
 }
 
+/* Raw and the filter field form the left cluster; this auto margin pushes the
+   icon actions to the right edge, leaving the flexible space in the middle
+   instead of between the controls on the left. */
 .mdprv-table-tools {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: .3rem;
   margin-left: auto;
-}
-
-/* The per-block Raw toggle leads the toolbar, before the search magnifier: the
-   auto margin pushes every remaining control (search, count and the actions
-   group) to the right, the same affordance used by the tree block. */
-.mdprv-table-toolbar--raw > .mdprv-table-btn[data-mdprv-table-action="raw"] {
-  margin-right: auto;
-}
-
-/* When Raw is the left anchor its auto margin already pushes the right cluster,
-   so the actions group must not split the free space with a second auto margin. */
-.mdprv-table-toolbar--raw .mdprv-table-tools {
-  margin-left: 0;
 }
 
 .mdprv-table-btn {
@@ -139,13 +130,13 @@
   display: none;
 }
 
-/* Search sits on the left. The slot keeps a fixed width while the field fades
-   in, so opening/closing never reflows the rest of the toolbar. */
+/* Search follows Raw/magnifier in the left cluster. While the field is closed
+   the slot collapses to the magnifier's width, so the left cluster stays
+   compact next to Raw; opening it expands the field in place. */
 .mdprv-table-searchbar {
   display: flex;
   align-items: center;
-  gap: var(--mdprv-table-search-gap);
-  flex: 0 1 calc(var(--mdprv-table-search-width) + 1.9rem + var(--mdprv-table-search-gap));
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -153,8 +144,9 @@
   display: flex;
   align-items: center;
   gap: .45rem;
-  flex: 1 1 var(--mdprv-table-search-width);
-  min-width: 7rem;
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
   overflow: hidden;
   opacity: 0;
   visibility: hidden;
@@ -165,12 +157,43 @@
 }
 
 .mdprv-table-search[data-open="true"] {
+  flex: 0 1 var(--mdprv-table-search-width);
+  width: auto;
+  /* Keeps the field usable on narrow viewports: it shrinks to 160px before the
+     toolbar switches to the scrolling layout below. */
+  min-width: 160px;
+  margin-left: var(--mdprv-table-search-gap);
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
   transition:
     opacity var(--mdprv-duration-fast, .15s) var(--mdprv-easing, ease),
     visibility 0s linear 0s;
+}
+
+/* Narrow tables: keep Raw, the field and the icons on a single row and let the
+   toolbar scroll horizontally instead of stacking/overlapping. The field is
+   allowed to shrink first; the icon group keeps its intrinsic width. */
+@media (max-width: 720px) {
+  .mdprv-table-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .mdprv-table-searchbar {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .mdprv-table-search[data-open="true"] {
+    min-width: 160px;
+  }
+
+  .mdprv-table-tools {
+    flex: 0 0 auto;
+  }
 }
 
 .mdprv-table-search input[type="search"] {

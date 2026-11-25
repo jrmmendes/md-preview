@@ -117,7 +117,12 @@ Grade com funil por coluna, pesquisa, ordenação, pivô, cópia e tela cheia.
 | [CT-2026-007](https://example.com/contratos/CT-2026-007) | Condomínio Pedra Clara | Nordeste | R$ 63.780,00 | 4,4% | 21 | 17/05/2026 | Ativo |
 | [CT-2026-008](https://example.com/contratos/CT-2026-008) | Mercado Bom Dia | Centro-Oeste | R$ 87.600,00 | 3,9% | 28 | 21/05/2026 | Em revisão |
 
-A grade é somente leitura: não há edição de célula.[^tabela]
+A grade é somente leitura: não há edição de célula.[^tabela] Duplo clique (ou
+`Enter` na célula ativa) abre o conteúdo completo na lightbox da tabela,
+inclusive quando a coluna está estreita e o texto aparece truncado; a mesma
+lightbox oferece zoom, redimensionamento e arraste. Em **Widgets → Tabelas**, a
+**Quebra automática de linhas** troca o truncamento por células de várias
+linhas.
 
 ## Fence csv
 

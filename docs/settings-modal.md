@@ -21,7 +21,7 @@ Shiki e Mermaid. Temas `auto` não declaram `loader`: cada variante traz o seu.
 - Quatro páginas, com **Temas** como seção própria: **Temas** (seleção e
   `Importar`), **Aparência** (fonte, loader, código, gráficos), **Sistema**
   (daemon e caminhos somente leitura, restaurar padrões) e **Widgets** (zoom,
-  tabela simples, diff simples).
+  tabela simples, quebra automática de linhas e diff simples).
 - A página **Importar** (`#/temas/importar`) concentra os três importadores:
   `theme.json`, `.shiki.json` e `.mermaid.json`. Os três usam o mesmo formulário
   (nome, arquivo/textarea, erro inline, lista de instalados com remover) e os
@@ -29,25 +29,30 @@ Shiki e Mermaid. Temas `auto` não declaram `loader`: cada variante traz o seu.
   `/__mermaid-themes`). Importar só adiciona ao catálogo; a aplicação continua
   nos menus de Código/Gráficos e na grade de Temas.
 - O modal segue o fluxo **rascunho → salvar**: tema, fonte, loader, Shiki,
-  Mermaid, exemplo de gráfico, zoom, tabela simples e diff simples viram um
-  snapshot em memória (`settings/draft.ts`). Nada toca o documento, cookies ou
-  `localStorage` antes de **Salvar** (disquete ao lado do fechar ou
-  `Ctrl/Cmd+S`). Sem alterações, o disquete fica oculto e o modal mantém a
-  borda normal; com rascunho sujo, a borda fica `--mdprv-accent` e a região viva
-  anuncia “Alterações não salvas”. Fechar por `Esc`, `X` ou backdrop descarta o
-  rascunho e restaura o estado efetivo.
+  Mermaid, exemplo de gráfico, zoom, tabela simples, quebra automática de linhas
+  e diff simples viram um snapshot em memória (`settings/draft.ts`). Nada toca o
+  documento, cookies ou `localStorage` antes de **Salvar** (disquete ao lado do
+  fechar ou `Ctrl/Cmd+S`). Sem alterações, o disquete fica oculto e o modal
+  mantém a borda normal; com rascunho sujo, a borda fica `--mdprv-accent` e a
+  região viva anuncia “Alterações não salvas”. Fechar por `Esc`, `X` ou backdrop
+  descarta o rascunho e restaura o estado efetivo.
 - As ações de cada bloco viraram ícones alinhados à direita do título:
   **lápis** (personalizar), **seta circular** (restaurar do tema, desabilitada
   quando o bloco segue o preset) e **importar** (só em Código, Gráficos e no
   bloco Tema da página Temas). Em Gráficos, o menu de exemplo fica na mesma
   linha, à esquerda dos ícones.
-- Salvar aplica tudo de uma vez. Fonte, loader, zoom e modos simples entram ao
-  vivo; Shiki/Mermaid/tema exigem o reload único, com loader e reabertura do
-  modal na mesma rota.
+- Salvar aplica tudo de uma vez. Fonte, loader, zoom, tabela simples, quebra
+  automática de linhas e diff simples entram ao vivo; Shiki/Mermaid/tema exigem
+  o reload único, com loader e reabertura do modal na mesma rota.
 - Personalizações ficam no navegador (`localStorage`/cookies), nunca em
   `config.json` ou `theme.json`. O esquema efetivo é explícito em
   `html[data-scheme]`, o que permite overrides de Shiki por esquema inclusive
   em temas fixos.
+- A quebra automática de linhas usa `localStorage["mdprv_table_wrap"]`
+  (`"1"`/`"0"`, desligada por padrão) e a classe `mdprv-wrap-cells` em
+  `<html>`. O boot script aplica a classe antes do body e o salvamento alterna
+  ao vivo; no CSS, só células/cabeçalhos de `.mdprv-grid` mudam (o painel de
+  detalhe da lightbox continua com `pre-wrap`).
 - `loader` no `config.json`/`MDPRV_LOADER` vence o preset do tema; sem escolha
   explícita, vale o `loader` do tema (`auto` escolhe pela variante clara/escura).
 - A página Sistema é somente leitura; “Restaurar padrões” limpa apenas as

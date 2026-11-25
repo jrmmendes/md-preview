@@ -105,6 +105,18 @@ cp themes/tropical/*.json "$themes/"
 Ou importe um arquivo por vez em **Temas → Importar** (`Ctrl+,`). O nome do
 arquivo é o slug usado pelo app; não renomeie os JSON.
 
+## Tabelas interativas
+
+Tabelas GFM e fences `csv` viram grades no estilo planilha, com seleção,
+filtros por coluna, ordenação, pivô, cópia e tela cheia. Em **Widgets →
+Tabelas**, a opção **Quebra automática de linhas** (`mdprv_table_wrap`, desligada
+por padrão) faz células longas crescerem em várias linhas em vez de truncar com
+reticências; o cabeçalho acompanha. Para ler um texto longo que a grade trunca,
+dê duplo clique na célula (ou duplo toque no celular) ou pressione `Enter` na
+célula ativa: o detalhe abre na mesma lightbox da tela cheia, com backdrop
+desfocado, zoom, alças de redimensionamento, arraste e o botão **Copiar**. `Esc`
+ou o **X** fecham e devolvem o foco à célula.
+
 ## Documentação
 
 A documentação de usuário é o site Docusaurus em

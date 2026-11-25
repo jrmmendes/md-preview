@@ -85,6 +85,26 @@ A renderização de página fica em `src/core/page.ts`, o servidor em
 `src/ui/islands/`. O daemon sobe sob demanda na primeira invocação da CLI e
 encerra após 15 minutos ocioso.
 
+## Temas prontos
+
+O repositório também mantém coleções de temas completos em `themes/<família>/`.
+Elas não são embutidas no binário nem copiadas por `theme seed`: são arquivos
+prontos para instalar em `~/.config/md-preview/themes/` ou importar pelo modal.
+
+- [`themes/tropical/`](themes/tropical/README.md) — par claro/escuro em tons
+  terrosos e quentes (ivory, coral, clay, kraft, céu e oliva), com tema de
+  cores, Shiki e Mermaid (`tropical` e `tropical-dark`).
+
+Para instalar a coleção inteira:
+
+```sh
+themes=$(md-preview theme path | sed -n 's/^themes: //p')
+cp themes/tropical/*.json "$themes/"
+```
+
+Ou importe um arquivo por vez em **Temas → Importar** (`Ctrl+,`). O nome do
+arquivo é o slug usado pelo app; não renomeie os JSON.
+
 ## Documentação
 
 A documentação de usuário é o site Docusaurus em

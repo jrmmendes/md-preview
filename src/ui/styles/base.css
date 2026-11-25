@@ -46,10 +46,8 @@ html.mdprv-closed #mdprv-toc,html.mdprv-closed #mdprv-top{display:none}
   background-color: var(--shiki-light-bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  .shiki,
-  .shiki span {
-    color: var(--shiki-dark) !important;
-    background-color: var(--shiki-dark-bg) !important;
-  }
+html[data-scheme="dark"] .shiki,
+html[data-scheme="dark"] .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
 }

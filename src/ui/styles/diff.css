@@ -281,13 +281,11 @@ html.mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="hunk"] {
   text-decoration: var(--shiki-light-text-decoration, none);
 }
 
-@media (prefers-color-scheme: dark) {
-  .mdprv-diff-token {
-    color: var(--shiki-dark);
-    font-style: var(--shiki-dark-font-style, inherit);
-    font-weight: var(--shiki-dark-font-weight, inherit);
-    text-decoration: var(--shiki-dark-text-decoration, none);
-  }
+html[data-scheme="dark"] .mdprv-diff-token {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style, inherit);
+  font-weight: var(--shiki-dark-font-weight, inherit);
+  text-decoration: var(--shiki-dark-text-decoration, none);
 }
 
 @media (prefers-reduced-motion: reduce) {

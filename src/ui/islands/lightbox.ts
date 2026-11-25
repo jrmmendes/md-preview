@@ -44,12 +44,21 @@ function prefersDark(): boolean {
 }
 
 /**
- * `data-theme` holds the theme *name* ("auto", "github-light", "nord", ...),
- * not a light/dark token. Only "auto" follows the OS; for fixed themes the
- * `color-scheme` emitted by the theme CSS is the source of truth.
+ * `data-scheme` is the effective light/dark value written by the server and
+ * refined by the boot script, so it is the primary source here. The
+ * `color-scheme` and `prefers-color-scheme` fallbacks keep older shells and
+ * tests working when the attribute is missing.
  */
 function effectiveScheme(): "light" | "dark" {
-  const name = document.documentElement.getAttribute("data-theme") ?? "auto";
+  const root = document.documentElement;
+  const scheme = root.getAttribute("data-scheme");
+  if (scheme === "dark") {
+    return "dark";
+  }
+  if (scheme === "light") {
+    return "light";
+  }
+  const name = root.getAttribute("data-theme") ?? "auto";
   if (name !== "auto") {
     const scheme =
       typeof window.getComputedStyle === "function"

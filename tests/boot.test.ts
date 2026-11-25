@@ -148,13 +148,34 @@ interface BootOptions {
   session?: Record<string, string>;
   navigationType?: string;
   themeStack?: string;
+  /** Attributes injected into `<html>` before the script runs. */
+  attrs?: Record<string, string>;
+  /** `matchMedia("(prefers-color-scheme: dark)")` result. */
+  dark?: boolean;
 }
+
+type SchemeListener = (event: { matches: boolean }) => void;
 
 function boot(options: BootOptions = {}) {
   const document = new FakeDocument();
+  for (const [name, value] of Object.entries(options.attrs ?? {})) {
+    document.documentElement.setAttribute(name, value);
+  }
   const localStorage = storage(options.local);
   const sessionStorage = storage(options.session);
-  const window: Record<string, unknown> = { localStorage, sessionStorage };
+  const listeners: SchemeListener[] = [];
+  const window: Record<string, unknown> = {
+    localStorage,
+    sessionStorage,
+    matchMedia: (query: string) => ({
+      matches: options.dark === true && query === "(prefers-color-scheme: dark)",
+      addEventListener: (type: string, listener: SchemeListener) => {
+        if (type === "change") {
+          listeners.push(listener);
+        }
+      },
+    }),
+  };
   if (options.themeStack !== undefined) {
     window.getComputedStyle = () => ({
       getPropertyValue: (name: string) => (name === "--mdprv-font-stack" ? options.themeStack : ""),
@@ -173,7 +194,12 @@ function boot(options: BootOptions = {}) {
     inlineScript(SHELL)
   );
   run(window, document, location, performance, Date);
-  return { document, localStorage, sessionStorage };
+  const emitScheme = (dark: boolean): void => {
+    for (const listener of listeners) {
+      listener({ matches: dark });
+    }
+  };
+  return { document, localStorage, sessionStorage, emitScheme };
 }
 
 function fontSelection(value: Record<string, unknown>): string {
@@ -266,6 +292,75 @@ describe("boot inline script", () => {
 
     const plain = boot({ local: { mdprv_simple_diff: "0" } }).document.documentElement;
     expect(plain.classList.contains("mdprv-simple-diffs")).toBe(false);
+  });
+
+  it("resolves the auto scheme and the dark loader from matchMedia", () => {
+    const dark = boot({
+      attrs: {
+        "data-theme": "auto",
+        "data-scheme": "light",
+        "data-loader": "classic",
+        "data-loader-dark": "ring",
+      },
+      dark: true,
+    }).document.documentElement;
+    expect(dark.getAttribute("data-scheme")).toBe("dark");
+    expect(dark.getAttribute("data-loader")).toBe("ring");
+
+    const light = boot({
+      attrs: {
+        "data-theme": "auto",
+        "data-scheme": "dark",
+        "data-loader": "classic",
+        "data-loader-dark": "ring",
+      },
+      dark: false,
+    }).document.documentElement;
+    expect(light.getAttribute("data-scheme")).toBe("light");
+    expect(light.getAttribute("data-loader")).toBe("classic");
+  });
+
+  it("keeps the server scheme for fixed themes", () => {
+    const { document } = boot({
+      attrs: { "data-theme": "nord", "data-scheme": "dark", "data-loader": "ring" },
+      dark: false,
+    });
+    expect(document.documentElement.getAttribute("data-scheme")).toBe("dark");
+    expect(document.documentElement.getAttribute("data-loader")).toBe("ring");
+  });
+
+  it("lets a local loader win over the dark theme loader", () => {
+    const { document } = boot({
+      attrs: {
+        "data-theme": "auto",
+        "data-scheme": "light",
+        "data-loader": "classic",
+        "data-loader-dark": "ring",
+      },
+      dark: true,
+      local: { mdprv_loader: "braille" },
+    });
+    expect(document.documentElement.getAttribute("data-scheme")).toBe("dark");
+    expect(document.documentElement.getAttribute("data-loader")).toBe("braille");
+  });
+
+  it("follows system scheme changes while the theme is auto", () => {
+    const { document, emitScheme } = boot({
+      attrs: {
+        "data-theme": "auto",
+        "data-scheme": "light",
+        "data-loader": "classic",
+        "data-loader-dark": "ring",
+      },
+      dark: false,
+    });
+    expect(document.documentElement.getAttribute("data-scheme")).toBe("light");
+    emitScheme(true);
+    expect(document.documentElement.getAttribute("data-scheme")).toBe("dark");
+    expect(document.documentElement.getAttribute("data-loader")).toBe("ring");
+    emitScheme(false);
+    expect(document.documentElement.getAttribute("data-scheme")).toBe("light");
+    expect(document.documentElement.getAttribute("data-loader")).toBe("classic");
   });
 
   it("keeps the loader intent working for the current path", () => {

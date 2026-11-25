@@ -1,13 +1,13 @@
 import "./styles/base.css";
 import "./styles/meta.css";
 import "./styles/sidebar.css";
-import "./styles/fonts.css";
 import "./styles/mermaid.css";
 import "./styles/tree.css";
 import "./styles/table.css";
 import "./styles/diff.css";
 import "./styles/raw.css";
 import "./styles/loader.css";
+import "./styles/settings.css";
 
 import { initCopyCode } from "./islands/copy-code";
 import { initActivate } from "./islands/activate";
@@ -19,7 +19,7 @@ import { initLiveReload } from "./islands/live-reload";
 import { initLoaderOverlay } from "./islands/loader-overlay";
 import { initLightbox } from "./islands/lightbox";
 import { initRawView } from "./islands/raw-view";
-import { initSettings } from "./islands/settings";
+import { initSettings } from "./islands/settings/index";
 import { initTable } from "./islands/table";
 import { initToc } from "./islands/toc";
 import { initTree } from "./islands/tree";

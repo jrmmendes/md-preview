@@ -194,6 +194,10 @@ export function setLoader(name: string): void {
   localSet(KEYS.loader, name);
 }
 
+export function clearLoader(): void {
+  localRemove(KEYS.loader);
+}
+
 function serializeFontSelection(selection: FontSelection): string {
   return JSON.stringify({
     v: FONT_VERSION,

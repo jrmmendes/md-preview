@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{mdprv-theme}}" data-loader="{{mdprv-loader}}" data-zoom-sensitivity="{{mdprv-zoom}}">
+<html lang="en" data-theme="{{mdprv-theme}}" data-scheme="{{mdprv-scheme}}" data-shiki-light="{{mdprv-shiki-light}}" data-shiki-dark="{{mdprv-shiki-dark}}" data-mermaid-light="{{mdprv-mermaid-light}}" data-mermaid-dark="{{mdprv-mermaid-dark}}" data-loader="{{mdprv-loader}}" data-loader-dark="{{mdprv-loader-dark}}" data-zoom-sensitivity="{{mdprv-zoom}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,8 +19,39 @@
     function clearSession(key) {
       try { window.sessionStorage.removeItem(key); } catch (error) { /* ignore */ }
     }
-    var stored = local("mdprv_loader");
-    if (typeof stored === "string" && LOADERS.indexOf(stored) >= 0) {
+    function loaderName(value) {
+      return typeof value === "string" && LOADERS.indexOf(value) >= 0 ? value : null;
+    }
+
+    // Effective scheme is explicit in the DOM so the Shiki CSS and the modal
+    // can key off it, including for fixed themes. A local loader always wins.
+    var stored = loaderName(local("mdprv_loader"));
+    var lightLoader = loaderName(root.getAttribute("data-loader")) || "classic";
+    var darkLoader = loaderName(root.getAttribute("data-loader-dark")) || lightLoader;
+    function applyScheme(dark) {
+      root.setAttribute("data-scheme", dark ? "dark" : "light");
+      if (stored === null) {
+        root.setAttribute("data-loader", dark ? darkLoader : lightLoader);
+      }
+    }
+    if (root.getAttribute("data-theme") === "auto") {
+      var darkQuery = null;
+      try {
+        darkQuery = typeof window.matchMedia === "function"
+          ? window.matchMedia("(prefers-color-scheme: dark)")
+          : null;
+      } catch (error) { darkQuery = null; }
+      applyScheme(!!(darkQuery && darkQuery.matches));
+      if (darkQuery) {
+        var onSchemeChange = function (event) { applyScheme(!!event.matches); };
+        if (typeof darkQuery.addEventListener === "function") {
+          darkQuery.addEventListener("change", onSchemeChange);
+        } else if (typeof darkQuery.addListener === "function") {
+          darkQuery.addListener(onSchemeChange);
+        }
+      }
+    }
+    if (stored !== null) {
       root.setAttribute("data-loader", stored);
     }
 
@@ -156,43 +187,7 @@
     </div>
     <nav id="mdprv-toc" class="mdprv-toc" aria-label="Table of contents"></nav>
   </aside>
-  <button type="button" id="mdprv-settings-toggle" class="mdprv-settings-toggle" aria-label="Preview settings" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
-  <div class="mdprv-settings" id="mdprv-settings" hidden>
-    <label class="mdprv-field-label" for="mdprv-theme">Theme</label>
-    <select id="mdprv-theme" class="mdprv-theme" aria-label="Theme">{{mdprv-theme-options}}</select>
-    <label class="mdprv-field-label" for="mdprv-font">Font</label>
-    <div class="mdprv-font-picker" id="mdprv-font-picker">
-      <input id="mdprv-font" class="mdprv-input" type="text" role="combobox" aria-expanded="false" aria-controls="mdprv-font-list" aria-autocomplete="list" aria-activedescendant="" autocomplete="off" spellcheck="false" placeholder="Search fonts (e.g. Inter)" aria-label="Font family">
-      <ul id="mdprv-font-list" class="mdprv-font-list" role="listbox" aria-label="Available fonts" hidden></ul>
-      <div class="mdprv-font-actions">
-        <button type="button" id="mdprv-font-refresh" class="mdprv-btn">Refresh</button>
-        <button type="button" id="mdprv-font-reset" class="mdprv-btn">Reset</button>
-      </div>
-      <p id="mdprv-font-status" class="mdprv-font-status" role="status" aria-live="polite"></p>
-      <details class="mdprv-font-google" id="mdprv-font-google">
-        <summary>Load from Google Fonts</summary>
-        <div class="mdprv-font-google-row">
-          <input id="mdprv-font-google-family" class="mdprv-input" type="text" placeholder="Family (e.g. Inter)" autocomplete="off" spellcheck="false" aria-label="Google Fonts family">
-          <button type="button" id="mdprv-font-google-load" class="mdprv-btn">Load</button>
-        </div>
-        <p id="mdprv-font-google-error" class="mdprv-font-error" role="alert" hidden></p>
-      </details>
-    </div>
-    <label class="mdprv-field-label" for="mdprv-loader">Loader</label>
-    <select id="mdprv-loader" class="mdprv-theme" aria-label="Loading indicator">{{mdprv-loader-options}}</select>
-    <label class="mdprv-field-label" for="mdprv-zoom-sens">Zoom sensitivity (scroll)</label>
-    <input id="mdprv-zoom-sens" class="mdprv-input" type="number" min="1.01" max="3" step="0.05" value="{{mdprv-zoom}}" inputmode="decimal" aria-label="Mermaid zoom scroll sensitivity">
-    <label class="mdprv-field-check" for="mdprv-simple-table">
-      <input id="mdprv-simple-table" type="checkbox" aria-describedby="mdprv-simple-table-desc">
-      <span>Modo simples de tabela</span>
-    </label>
-    <p id="mdprv-simple-table-desc" class="mdprv-field-hint">Oculta as faixas de letras e números e a moldura de planilha, mantendo filtros, seleção e gráficos.</p>
-    <label class="mdprv-field-check" for="mdprv-simple-diff">
-      <input id="mdprv-simple-diff" type="checkbox" aria-describedby="mdprv-simple-diff-desc">
-      <span>Modo simples de diff</span>
-    </label>
-    <p id="mdprv-simple-diff-desc" class="mdprv-field-hint">Oculta os metadados de arquivo e os cabeçalhos de hunk, deixando só adições, remoções e contexto.</p>
-  </div>
+  <button type="button" id="mdprv-settings-toggle" class="mdprv-settings-toggle" aria-label="Preview settings" aria-haspopup="dialog" aria-controls="mdprv-settings-dialog" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
   <button type="button" id="mdprv-sidebar-toggle" class="mdprv-sidebar-toggle" aria-label="Toggle sidebar" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></svg></button>
   <aside class="mdprv-history" id="mdprv-history" aria-label="Recent previews">
     <div class="mdprv-sidebar-head"><span class="mdprv-sidebar-title">Recent</span></div>
@@ -218,6 +213,7 @@
     <h2 id="mdprv-closed-title" tabindex="-1">No document open</h2>
     <p>Run <code>md-preview &lt;file&gt;</code> in a terminal to open a document, or pick one from Recent.</p>
   </section>
+  <div id="mdprv-settings-root"></div>
   <script type="application/json" id="mdprv-data">{{mdprv-data}}</script>
   <script src="/__assets/mermaid.min.js"></script>
   <script type="module" src="./main.ts"></script>

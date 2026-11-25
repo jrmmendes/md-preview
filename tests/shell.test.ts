@@ -21,32 +21,45 @@ describe("ui shell", () => {
     expect([...duplicates]).toEqual([]);
   });
 
-  it("keeps the theme style and select ids distinct", () => {
+  it("keeps a single theme style and no legacy settings panel", () => {
     const all = ids(SHELL);
-    expect(all.filter((id) => id === "mdprv-theme")).toHaveLength(1);
     expect(all.filter((id) => id === "mdprv-theme-css")).toHaveLength(1);
-    expect(SHELL).toContain('<select id="mdprv-theme"');
     expect(SHELL).toContain('<style id="mdprv-theme-css">');
-    expect(SHELL).toContain('<label class="mdprv-field-label" for="mdprv-theme">');
+    expect(SHELL).not.toContain('<div class="mdprv-settings"');
+    expect(SHELL).not.toContain('id="mdprv-settings"');
+    expect(SHELL).not.toContain('<select id="mdprv-theme"');
+    expect(SHELL).not.toContain('<select id="mdprv-loader"');
+    expect(SHELL).not.toContain("{{mdprv-theme-options}}");
+    expect(SHELL).not.toContain("{{mdprv-loader-options}}");
+    expect(SHELL).not.toContain("mdprv-field-label");
+    expect(SHELL).not.toContain("mdprv-font-picker");
+    expect(SHELL).not.toContain("mdprv-zoom-sens");
+    expect(SHELL).not.toContain('id="mdprv-simple-table"');
+    expect(SHELL).not.toContain('id="mdprv-simple-diff"');
   });
 
-  it("exposes an accessible font combobox without a datalist", () => {
+  it("hosts the settings modal root and trigger contract", () => {
+    expect(SHELL).toContain('<div id="mdprv-settings-root"></div>');
+    expect(SHELL).toContain('id="mdprv-settings-toggle"');
+    expect(SHELL).toContain('aria-haspopup="dialog"');
+    expect(SHELL).toContain('aria-controls="mdprv-settings-dialog"');
+    expect(SHELL).toContain('aria-expanded="false"');
+    expect(ids(SHELL).filter((id) => id === "mdprv-settings-root")).toHaveLength(1);
+    // The dialog itself is created by settings/modal and never duplicated in
+    // the shell.
+    expect(ids(SHELL)).not.toContain("mdprv-settings-dialog");
+  });
+
+  it("leaves the settings controls to the modal island", () => {
     expect(SHELL).not.toContain("<datalist");
     expect(SHELL).not.toContain("queryLocalFonts");
-    expect(SHELL).toContain('<input id="mdprv-font"');
-    expect(SHELL).toContain('role="combobox"');
-    expect(SHELL).toContain('aria-controls="mdprv-font-list"');
-    expect(SHELL).toContain('aria-autocomplete="list"');
-    expect(SHELL).toContain('aria-activedescendant=""');
-    expect(SHELL).toContain('<ul id="mdprv-font-list"');
-    expect(SHELL).toContain('role="listbox"');
-    expect(SHELL).toContain('id="mdprv-font-status"');
-    expect(SHELL).toContain('role="status"');
-    expect(SHELL).toContain('aria-live="polite"');
-    expect(SHELL).toContain('id="mdprv-font-refresh"');
-    expect(SHELL).toContain('id="mdprv-font-reset"');
-    expect(SHELL).toContain('id="mdprv-font-google-family"');
-    expect(SHELL).toContain('id="mdprv-font-google-load"');
+    expect(SHELL).not.toContain('id="mdprv-font"');
+    expect(SHELL).not.toContain('id="mdprv-font-list"');
+    expect(SHELL).not.toContain('id="mdprv-font-status"');
+    expect(SHELL).not.toContain('id="mdprv-font-refresh"');
+    expect(SHELL).not.toContain('id="mdprv-font-reset"');
+    expect(SHELL).not.toContain('id="mdprv-font-google-family"');
+    expect(SHELL).not.toContain('id="mdprv-font-google-load"');
   });
 
   it("activates the selection before the body through the inline script", () => {
@@ -58,11 +71,27 @@ describe("ui shell", () => {
     expect(head).toContain("data-font-missing");
   });
 
+  it("exposes an explicit effective scheme and per-scheme loader", () => {
+    expect(SHELL).toContain('data-scheme="{{mdprv-scheme}}"');
+    expect(SHELL).toContain('data-shiki-light="{{mdprv-shiki-light}}"');
+    expect(SHELL).toContain('data-shiki-dark="{{mdprv-shiki-dark}}"');
+    expect(SHELL).toContain('data-loader="{{mdprv-loader}}"');
+    expect(SHELL).toContain('data-loader-dark="{{mdprv-loader-dark}}"');
+    const head = SHELL.slice(0, SHELL.indexOf("<body>"));
+    expect(head).toContain("data-scheme");
+    expect(head).toContain("matchMedia");
+    expect(head).toContain("data-loader-dark");
+  });
+
+  it("ships the JSON payload consumed by the islands", () => {
+    expect(SHELL).toContain('<script type="application/json" id="mdprv-data">{{mdprv-data}}</script>');
+    expect(SHELL).toContain("<style id=\"mdprv-theme-css\">{{mdprv-theme-css}}</style>");
+  });
+
   it("exposes a single visually hidden live status region", () => {
     const all = ids(SHELL);
     expect(all.filter((id) => id === "mdprv-status")).toHaveLength(1);
     expect(SHELL).toContain('<p id="mdprv-status" class="mdprv-sr-only" role="status" aria-live="polite"></p>');
-    expect(SHELL).toContain('id="mdprv-font-status"');
     expect(SHELL).toContain('class="mdprv-mermaid-status"');
   });
 

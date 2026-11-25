@@ -1,5 +1,7 @@
 import type {
   ActivateEvent,
+  MermaidThemesEvent,
+  ShikiThemesEvent,
   SlugsEvent,
   SnapshotEvent,
   ThemesEvent,
@@ -11,6 +13,8 @@ export interface EventMap {
   version: VersionEvent;
   slugs: SlugsEvent;
   themes: ThemesEvent;
+  "shiki-themes": ShikiThemesEvent;
+  "mermaid-themes": MermaidThemesEvent;
   activate: ActivateEvent;
   ping: { ts: number };
 }
@@ -18,13 +22,15 @@ export interface EventMap {
 type EventType = keyof EventMap;
 type Handler<K extends EventType> = (data: EventMap[K]) => void;
 
-const TYPES: EventType[] = ["snapshot", "version", "slugs", "themes", "activate", "ping"];
+const TYPES: EventType[] = ["snapshot", "version", "slugs", "themes", "shiki-themes", "mermaid-themes", "activate", "ping"];
 
 const handlers: { [K in EventType]: Set<Handler<K>> } = {
   snapshot: new Set(),
   version: new Set(),
   slugs: new Set(),
   themes: new Set(),
+  "shiki-themes": new Set(),
+  "mermaid-themes": new Set(),
   activate: new Set(),
   ping: new Set(),
 };

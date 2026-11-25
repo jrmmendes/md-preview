@@ -1,147 +1,285 @@
+/**
+ * Combobox de fontes reutilizável (modal de configurações).
+ *
+ * Sem IDs globais: cada instância cria os próprios elementos e expõe
+ * `setValue`/`setDisabled`. Reutiliza o catálogo do daemon, a busca e o
+ * carregamento de Google Fonts já existentes.
+ */
 import type { FontInfo } from "../../core/contract";
-import { getFontSelection, setFontSelection, type FontSelection } from "../prefs";
 import { searchFonts } from "../services/font-search";
-import { fontStack, sanitizeFamily } from "../services/font-value";
-import {
-  applySelection,
-  fetchFonts,
-  loadGoogleFamily,
-  resetSelection,
-} from "../services/fonts";
+import { GENERIC_FAMILIES, fontStack, sanitizeFamily } from "../services/font-value";
+import { fetchFonts, loadGoogleFamily } from "../services/fonts";
 
 const MAX_OPTIONS = 80;
 
-function optionId(index: number): string {
-  return `mdprv-font-option-${index}`;
+export interface FontOption {
+  value: string;
+  label: string;
+  stack?: string;
 }
 
-export function initFontPicker(): void {
-  const inputElement = document.getElementById("mdprv-font") as HTMLInputElement | null;
-  const listElement = document.getElementById("mdprv-font-list") as HTMLUListElement | null;
-  const picker = document.getElementById("mdprv-font-picker");
-  const statusElement = document.getElementById("mdprv-font-status");
-  const refreshButton = document.getElementById("mdprv-font-refresh") as HTMLButtonElement | null;
-  const resetButton = document.getElementById("mdprv-font-reset") as HTMLButtonElement | null;
-  const googleInput = document.getElementById(
-    "mdprv-font-google-family"
-  ) as HTMLInputElement | null;
-  const googleButton = document.getElementById(
-    "mdprv-font-google-load"
-  ) as HTMLButtonElement | null;
-  const googleError = document.getElementById("mdprv-font-google-error");
+export interface FontPickerValue {
+  family: string;
+  stack: string;
+  source: "local" | "google";
+}
 
-  if (!inputElement || !listElement || !statusElement) {
-    return;
+export interface FontPickerConfig {
+  value: string;
+  stack?: string;
+  /** Extra options shown before the system catalog (e.g. the theme preset). */
+  options?: FontOption[];
+  disabled?: boolean;
+  label?: string;
+  onChange: (value: FontPickerValue) => void;
+}
+
+export interface FontPickerHandle {
+  root: HTMLElement;
+  setValue(family: string, stack?: string): void;
+  setDisabled(disabled: boolean): void;
+  destroy(): void;
+}
+
+interface Option extends FontOption {
+  kind: "default" | "generic" | "system" | "extra";
+}
+
+let uidCounter = 0;
+
+function uid(prefix: string): string {
+  uidCounter += 1;
+  return `${prefix}-${uidCounter}`;
+}
+
+function optionFor(family: string, stack?: string): Option {
+  if (family === "") {
+    return {
+      value: "",
+      label: "Padrão do sistema",
+      stack,
+      kind: "default",
+    };
   }
-  const input: HTMLInputElement = inputElement;
-  const list: HTMLUListElement = listElement;
-  const status: HTMLElement = statusElement;
+  const generic = (GENERIC_FAMILIES as readonly string[]).includes(family);
+  return {
+    value: family,
+    label: family,
+    stack: stack ?? fontStack(family),
+    kind: generic ? "generic" : "system",
+  };
+}
 
-  let fonts: FontInfo[] = [];
-  let filtered: FontInfo[] = [];
-  let active = -1;
-  let open = false;
+export function createFontPicker(config: FontPickerConfig): FontPickerHandle {
+  const listId = uid("mdprv-settings-font-list");
+  const root = document.createElement("div");
+  root.className = "mdprv-settings-font-picker";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "mdprv-settings-font-trigger";
+  trigger.setAttribute("role", "combobox");
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-controls", listId);
+  trigger.setAttribute("aria-label", config.label ?? "Fonte");
+
+  const valueNode = document.createElement("span");
+  valueNode.className = "mdprv-settings-font-value";
+  const chevron = document.createElement("span");
+  chevron.className = "mdprv-settings-font-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>';
+  trigger.append(valueNode, chevron);
+
+  const panel = document.createElement("div");
+  panel.className = "mdprv-settings-font-panel";
+  panel.hidden = true;
+
+  const search = document.createElement("input");
+  search.type = "text";
+  search.className = "mdprv-settings-font-search";
+  search.placeholder = "Buscar fonte";
+  search.setAttribute("aria-label", "Buscar fonte");
+  search.setAttribute("aria-controls", listId);
+  search.setAttribute("autocomplete", "off");
+  search.setAttribute("spellcheck", "false");
+
+  const list = document.createElement("div");
+  list.className = "mdprv-settings-font-list";
+  list.id = listId;
+  list.setAttribute("role", "listbox");
+  list.setAttribute("aria-label", "Fontes disponíveis");
+
+  const footer = document.createElement("div");
+  footer.className = "mdprv-settings-font-google";
+  const googleInput = document.createElement("input");
+  googleInput.type = "text";
+  googleInput.className = "mdprv-settings-font-google-input";
+  googleInput.placeholder = "Google Fonts (ex.: Inter)";
+  googleInput.setAttribute("aria-label", "Família do Google Fonts");
+  googleInput.setAttribute("autocomplete", "off");
+  googleInput.setAttribute("spellcheck", "false");
+  const googleButton = document.createElement("button");
+  googleButton.type = "button";
+  googleButton.className = "mdprv-settings-btn mdprv-settings-btn--compact";
+  googleButton.textContent = "Carregar";
+  footer.append(googleInput, googleButton);
+
+  const error = document.createElement("p");
+  error.className = "mdprv-settings-font-error";
+  error.setAttribute("role", "alert");
+  error.hidden = true;
+
+  const status = document.createElement("p");
+  status.className = "mdprv-settings-font-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  status.textContent = "Fontes do sistema";
+
+  panel.append(search, list, footer, error, status);
+  root.append(trigger, panel);
+
+  let selectedFamily = config.value;
+  let selectedStack = config.stack ?? "";
+  let extras: FontOption[] = [...(config.options ?? [])];
+  let systemFonts: FontInfo[] = [];
   let loading = false;
-  let available = false;
-  let selected: FontSelection | null = getFontSelection();
+  let loaded = false;
+  let open = false;
+  let active = -1;
+  let visible: Option[] = [];
+  let outsideHandler: ((event: Event) => void) | null = null;
 
-  if (selected) {
-    input.value = selected.family;
-    applySelection(selected);
+  if (config.disabled) {
+    root.classList.add("is-disabled");
+    trigger.disabled = true;
   }
 
-  function setStatus(message: string): void {
-    status.textContent = message;
-  }
-
-  function updateStatus(): void {
-    if (loading) {
-      setStatus("Loading fonts…");
-      return;
+  function labelFor(family: string): string {
+    if (family === "") {
+      return "Padrão do sistema";
     }
-    const query = input.value.trim();
-    if (open && query !== "") {
-      if (filtered.length === 0) {
-        setStatus(`No fonts match “${query}”.`);
+    const extra = extras.find((option) => option.value === family);
+    return extra?.label ?? family;
+  }
+
+  function updateTrigger(): void {
+    valueNode.textContent = labelFor(selectedFamily);
+    const extra = extras.find((option) => option.value === selectedFamily);
+    const stack = selectedStack || extra?.stack || fontStack(selectedFamily);
+    valueNode.style.fontFamily = stack || "var(--mdprv-font-stack)";
+    trigger.setAttribute("aria-label", `${config.label ?? "Fonte"}: ${valueNode.textContent}`);
+  }
+
+  function allOptions(): Option[] {
+    const seen = new Set<string>();
+    const result: Option[] = [];
+    const push = (option: Option): void => {
+      const key = option.value.toLowerCase();
+      if (seen.has(key)) {
         return;
       }
-      setStatus(`${filtered.length} matching ${filtered.length === 1 ? "font" : "fonts"}.`);
-      return;
+      seen.add(key);
+      result.push(option);
+    };
+    push(optionFor(""));
+    for (const generic of GENERIC_FAMILIES) {
+      push(optionFor(generic));
     }
-    if (fonts.length === 0) {
-      setStatus("Fonts unavailable.");
-      return;
+    for (const extra of extras) {
+      const family = sanitizeFamily(extra.value);
+      if (family) {
+        push({ ...extra, value: family, label: extra.label || family, kind: "extra" });
+      }
     }
-    if (!available) {
-      setStatus("Font catalog unavailable; showing generic families.");
-      return;
+    if (selectedFamily !== "") {
+      const family = sanitizeFamily(selectedFamily);
+      if (family) {
+        push(optionFor(family, selectedStack || undefined));
+      }
     }
-    setStatus(`${fonts.length} fonts.`);
+    for (const font of systemFonts) {
+      const family = sanitizeFamily(font.family);
+      if (family) {
+        push(optionFor(family));
+      }
+    }
+    return result;
   }
 
   function setActive(index: number, scroll: boolean): void {
     active = index;
-    const options = list.querySelectorAll<HTMLElement>('[role="option"]');
-    options.forEach((option, position) => {
-      option.classList.toggle("mdprv-font-option-active", position === index);
+    const nodes = list.querySelectorAll<HTMLElement>('[role="option"]');
+    nodes.forEach((node, position) => {
+      node.classList.toggle("is-active", position === index);
     });
-    const current = options[index];
+    const current = nodes[index];
     if (current) {
-      input.setAttribute("aria-activedescendant", current.id);
+      search.setAttribute("aria-activedescendant", current.id);
       if (scroll) {
         current.scrollIntoView({ block: "nearest" });
       }
     } else {
-      input.removeAttribute("aria-activedescendant");
+      search.removeAttribute("aria-activedescendant");
     }
   }
 
   function render(): void {
-    if (!open) {
-      list.hidden = true;
-      input.setAttribute("aria-expanded", "false");
-      input.removeAttribute("aria-activedescendant");
-      updateStatus();
-      return;
-    }
+    const query = search.value.trim();
+    const options = allOptions();
+    const filtered =
+      query === ""
+        ? options
+        : searchFonts(
+            options.map((option) => ({ ...option, family: option.label })),
+            query,
+            MAX_OPTIONS
+          );
+    visible = filtered as Option[];
 
-    filtered = searchFonts(fonts, input.value, MAX_OPTIONS);
     list.textContent = "";
     const fragment = document.createDocumentFragment();
-    filtered.forEach((font, index) => {
-      const option = document.createElement("li");
-      option.id = optionId(index);
-      option.className = "mdprv-font-option";
-      option.setAttribute("role", "option");
-      option.setAttribute(
-        "aria-selected",
-        selected && selected.family.toLowerCase() === font.family.toLowerCase() ? "true" : "false"
-      );
-      option.setAttribute("data-family", font.family);
+    filtered.forEach((option, index) => {
+      const node = document.createElement("div");
+      node.id = `${listId}-${index}`;
+      node.className = "mdprv-settings-font-option";
+      node.setAttribute("role", "option");
+      node.setAttribute("aria-selected", String(option.value === selectedFamily));
+      node.dataset.family = option.value;
+      node.dataset.index = String(index);
+      node.classList.toggle("is-selected", option.value === selectedFamily);
 
+      const copy = document.createElement("span");
+      copy.className = "mdprv-settings-font-option-copy";
+      copy.style.fontFamily = option.stack ?? "var(--mdprv-font-stack)";
       const name = document.createElement("span");
-      name.className = "mdprv-font-name";
-      name.textContent = font.family;
+      name.className = "mdprv-settings-font-option-name";
+      name.textContent = option.label;
+      const sample = document.createElement("span");
+      sample.className = "mdprv-settings-font-option-sample";
+      sample.textContent = "Aa Bb Cc 0123";
+      copy.append(name, sample);
 
-      const preview = document.createElement("span");
-      preview.className = "mdprv-font-preview";
-      preview.textContent = "Aa Bb Cc 0123";
-      preview.style.fontFamily = fontStack(font.family);
+      const check = document.createElement("span");
+      check.className = "mdprv-settings-font-option-check";
+      check.setAttribute("aria-hidden", "true");
+      check.innerHTML =
+        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"></path></svg>';
 
-      option.append(name, preview);
-      fragment.appendChild(option);
+      node.append(copy, check);
+      fragment.appendChild(node);
     });
+
     if (filtered.length === 0) {
-      const empty = document.createElement("li");
-      empty.className = "mdprv-font-empty";
-      empty.setAttribute("role", "presentation");
-      empty.textContent = "No matching fonts";
+      const empty = document.createElement("p");
+      empty.className = "mdprv-settings-font-empty";
+      empty.textContent = "Nenhuma fonte encontrada.";
       fragment.appendChild(empty);
     }
-    list.appendChild(fragment);
-    list.hidden = false;
-    input.setAttribute("aria-expanded", "true");
 
+    list.appendChild(fragment);
     if (active >= filtered.length) {
       active = filtered.length - 1;
     }
@@ -149,204 +287,239 @@ export function initFontPicker(): void {
       active = 0;
     }
     setActive(active, false);
-    updateStatus();
+    status.textContent = loading
+      ? "Carregando fontes do sistema…"
+      : loaded
+        ? `${systemFonts.length} fontes do sistema`
+        : "Fontes do sistema";
   }
 
-  function openList(): void {
-    if (!open) {
-      open = true;
-      active = filtered.length > 0 ? 0 : -1;
+  function position(): void {
+    const rect = trigger.getBoundingClientRect();
+    const height = panel.offsetHeight || 300;
+    const below = window.innerHeight - rect.bottom;
+    root.classList.toggle("is-up", below < height + 16 && rect.top > below);
+  }
+
+  async function load(): Promise<void> {
+    if (loading || loaded) {
+      return;
     }
+    loading = true;
     render();
+    try {
+      const payload = await fetchFonts(false);
+      systemFonts = payload.fonts;
+      loaded = true;
+    } finally {
+      loading = false;
+      render();
+      position();
+    }
   }
 
-  function closeList(): void {
+  function openPanel(): void {
+    if (open || config.disabled) {
+      return;
+    }
+    open = true;
+    panel.hidden = false;
+    root.classList.add("is-open");
+    trigger.setAttribute("aria-expanded", "true");
+    search.value = "";
+    active = -1;
+    render();
+    position();
+    search.focus();
+    void load();
+    outsideHandler = (event) => {
+      if (!root.contains(event.target as Node)) {
+        closePanel(false);
+      }
+    };
+    document.addEventListener("pointerdown", outsideHandler, true);
+  }
+
+  function closePanel(refocus: boolean): void {
     if (!open) {
+      if (refocus) {
+        trigger.focus();
+      }
       return;
     }
     open = false;
+    panel.hidden = true;
+    root.classList.remove("is-open", "is-up");
+    trigger.setAttribute("aria-expanded", "false");
+    search.removeAttribute("aria-activedescendant");
     active = -1;
-    render();
+    if (outsideHandler) {
+      document.removeEventListener("pointerdown", outsideHandler, true);
+      outsideHandler = null;
+    }
+    if (refocus) {
+      trigger.focus();
+    }
   }
 
-  function selectFont(font: FontInfo): void {
-    const selection = setFontSelection({
-      family: font.family,
+  function selectOption(option: Option): void {
+    selectedFamily = option.value;
+    selectedStack = option.stack ?? "";
+    updateTrigger();
+    closePanel(true);
+    config.onChange({
+      family: option.value,
+      stack: option.stack ?? "",
       source: "local",
-      stack: fontStack(font.family),
     });
-    if (!selection) {
-      return;
-    }
-    selected = selection;
-    applySelection(selection);
-    input.value = selection.family;
-    closeList();
   }
 
-  async function load(force: boolean): Promise<void> {
-    loading = true;
-    if (refreshButton) {
-      refreshButton.disabled = true;
+  trigger.addEventListener("click", () => {
+    if (open) {
+      closePanel(false);
+    } else {
+      openPanel();
     }
-    updateStatus();
-    try {
-      const payload = await fetchFonts(force);
-      fonts = payload.fonts;
-      available = payload.available;
-    } finally {
-      loading = false;
-      if (refreshButton) {
-        refreshButton.disabled = false;
-      }
-      render();
-    }
-  }
+  });
 
-  input.addEventListener("focus", openList);
-  input.addEventListener("click", openList);
-  input.addEventListener("input", () => {
-    open = true;
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      openPanel();
+    }
+  });
+
+  search.addEventListener("input", () => {
     active = 0;
     render();
   });
-  input.addEventListener("keydown", (event) => {
+
+  search.addEventListener("keydown", (event) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      if (!open) {
-        openList();
-        return;
+      if (visible.length > 0) {
+        setActive((active + 1) % visible.length, true);
       }
-      if (filtered.length === 0) {
-        return;
-      }
-      active = active < 0 ? 0 : (active + 1) % filtered.length;
-      setActive(active, true);
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      if (!open) {
-        openList();
-        return;
+      if (visible.length > 0) {
+        setActive((active - 1 + visible.length) % visible.length, true);
       }
-      if (filtered.length === 0) {
-        return;
-      }
-      active = (active - 1 + filtered.length) % filtered.length;
-      setActive(active, true);
       return;
     }
-    if (event.key === "Home" && open) {
+    if (event.key === "Home") {
       event.preventDefault();
       setActive(0, true);
       return;
     }
-    if (event.key === "End" && open) {
+    if (event.key === "End") {
       event.preventDefault();
-      setActive(filtered.length - 1, true);
+      setActive(visible.length - 1, true);
       return;
     }
-    if (event.key === "Enter" && open) {
-      const font = filtered[active];
-      if (font) {
+    if (event.key === "Enter") {
+      const option = visible[active];
+      if (option) {
         event.preventDefault();
-        selectFont(font);
+        selectOption(option);
       }
       return;
     }
     if (event.key === "Escape") {
-      if (open) {
-        event.preventDefault();
-        input.value = selected?.family ?? "";
-        closeList();
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      closePanel(true);
       return;
     }
     if (event.key === "Tab") {
-      closeList();
+      closePanel(false);
     }
-  });
-  input.addEventListener("blur", () => {
-    window.setTimeout(() => {
-      const focused = document.activeElement;
-      if (!picker || !focused || !picker.contains(focused)) {
-        closeList();
-      }
-    }, 0);
   });
 
   list.addEventListener("pointerdown", (event) => {
-    const target = event.target as Element | null;
-    const option = target?.closest('[role="option"]') as HTMLElement | null;
-    if (!option) {
-      return;
-    }
     event.preventDefault();
-    const family = option.getAttribute("data-family");
-    const font = family ? fonts.find((entry) => entry.family === family) : undefined;
-    if (font) {
-      selectFont(font);
-    }
-    input.focus();
-  });
-
-  refreshButton?.addEventListener("click", () => {
-    void load(true);
-  });
-
-  resetButton?.addEventListener("click", () => {
-    selected = null;
-    resetSelection();
-    input.value = "";
-    closeList();
-    updateStatus();
-  });
-
-  async function loadGoogle(): Promise<void> {
-    if (!googleInput || !googleButton) {
+    const target = event.target as Element | null;
+    const node = target?.closest<HTMLElement>('[role="option"]');
+    if (!node) {
       return;
     }
-    const family = sanitizeFamily(googleInput.value);
-    if (!family) {
-      if (googleError) {
-        googleError.textContent = "Enter a valid font family name.";
-        googleError.hidden = false;
-      }
-      return;
+    const index = Number(node.dataset.index);
+    const option = visible[index];
+    if (option) {
+      selectOption(option);
     }
-    googleButton.disabled = true;
-    if (googleError) {
-      googleError.hidden = true;
-    }
-    try {
-      selected = await loadGoogleFamily(family);
-      input.value = selected.family;
-      googleInput.value = selected.family;
-      closeList();
-      setStatus(`Loaded “${selected.family}” from Google Fonts.`);
-    } catch (error) {
-      if (googleError) {
-        const timedOut = error instanceof Error && error.message === "google-font-timeout";
-        googleError.textContent = timedOut
-          ? "Could not load this font: the request timed out."
-          : "Could not load this font from Google Fonts. Check the name and try again.";
-        googleError.hidden = false;
-      }
-    } finally {
-      googleButton.disabled = false;
-    }
-  }
+  });
 
-  googleButton?.addEventListener("click", () => {
+  googleButton.addEventListener("click", () => {
     void loadGoogle();
   });
-  googleInput?.addEventListener("keydown", (event) => {
+
+  googleInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
       void loadGoogle();
     }
   });
 
-  void load(false);
+  async function loadGoogle(): Promise<void> {
+    const family = sanitizeFamily(googleInput.value);
+    error.hidden = true;
+    if (!family) {
+      error.textContent = "Informe um nome de fonte válido.";
+      error.hidden = false;
+      return;
+    }
+    googleButton.disabled = true;
+    try {
+      const selection = await loadGoogleFamily(family);
+      selectedFamily = selection.family;
+      selectedStack = selection.stack;
+      updateTrigger();
+      googleInput.value = "";
+      closePanel(true);
+      config.onChange({
+        family: selection.family,
+        stack: selection.stack,
+        source: "google",
+      });
+    } catch (err) {
+      const timedOut = err instanceof Error && err.message === "google-font-timeout";
+      error.textContent = timedOut
+        ? "A fonte demorou demais para carregar."
+        : "Não foi possível carregar essa fonte do Google Fonts.";
+      error.hidden = false;
+    } finally {
+      googleButton.disabled = false;
+    }
+  }
+
+  updateTrigger();
+  render();
+
+  return {
+    root,
+    setValue(family: string, stack?: string): void {
+      selectedFamily = family;
+      selectedStack = stack ?? "";
+      updateTrigger();
+      render();
+    },
+    setDisabled(disabled: boolean): void {
+      config.disabled = disabled;
+      trigger.disabled = disabled;
+      root.classList.toggle("is-disabled", disabled);
+      if (disabled) {
+        closePanel(false);
+      }
+    },
+    destroy(): void {
+      if (outsideHandler) {
+        document.removeEventListener("pointerdown", outsideHandler, true);
+        outsideHandler = null;
+      }
+      root.remove();
+    },
+  };
 }

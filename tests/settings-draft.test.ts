@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type {
   MermaidThemeEntry,
@@ -21,6 +23,7 @@ import {
   setDraftCustomized,
   setDraftFont,
   setDraftSimpleTables,
+  setDraftTableWrap,
   setDraftTheme,
   setDraftZoom,
   type SettingsSnapshot,
@@ -93,6 +96,7 @@ const APPLIED: SettingsSnapshot = {
   zoom: 1.1,
   simpleTables: false,
   simpleDiffs: false,
+  tableWrap: false,
 };
 
 const PRESETS = { light: AUTO.presets.light, dark: AUTO.presets.dark };
@@ -159,6 +163,17 @@ describe("settings draft", () => {
     });
   });
 
+  it("keeps table wrap in the draft until commit and does not reload", () => {
+    const draft = setDraftTableWrap(APPLIED, true);
+    expect(draft.tableWrap).toBe(true);
+    expect(APPLIED.tableWrap).toBe(false);
+    expect(isDraftDirty(APPLIED, draft)).toBe(true);
+    expect(needsReload(APPLIED, draft, DATA)).toBe(false);
+
+    expect(commitSnapshot(APPLIED, draft).tableWrap).toBe(true);
+    expect(discardSnapshot(APPLIED).tableWrap).toBe(false);
+  });
+
   it("only reloads for theme, Shiki or Mermaid changes", () => {
     expect(needsReload(APPLIED, setDraftZoom(APPLIED, 1.4), DATA)).toBe(false);
     expect(
@@ -202,5 +217,13 @@ describe("settings draft", () => {
     expect(preview?.loader.customized).toBe(true);
     expect(preview?.loader.value).toBe("ring");
     expect(preview?.codigo.value).toEqual({ light: "nord", dark: "nord" });
+  });
+
+  it("lists the table wrap key in the Sistema reset", () => {
+    const source = readFileSync(
+      join(import.meta.dir, "../src/ui/islands/settings/pages/sistema.ts"),
+      "utf8"
+    );
+    expect(source).toContain('"mdprv_table_wrap"');
   });
 });

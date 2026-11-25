@@ -1,8 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   buildChartData,
   buildColumnValues,
+  cellDetailHeading,
+  cellDetailText,
   chartUnavailableReason,
   clampColumnWidth,
   columnLetter,
@@ -43,6 +47,34 @@ describe("normalizeValueKey", () => {
     expect(normalizeValueKey("")).toBe("—");
     expect(normalizeValueKey("  ")).toBe("—");
     expect(normalizeValueKey("São")).toBe("sao");
+  });
+});
+
+describe("cellDetailText", () => {
+  it("preserves interior line breaks and paragraphs", () => {
+    expect(cellDetailText("Linha 1\nLinha 2\n\nParágrafo 2")).toBe(
+      "Linha 1\nLinha 2\n\nParágrafo 2"
+    );
+  });
+
+  it("normalizes CRLF, trailing spaces and outer blank lines", () => {
+    expect(cellDetailText("\r\n  A  \r\nB\t\r\n\r\n")).toBe("  A\nB");
+    expect(cellDetailText("texto   ")).toBe("texto");
+    expect(cellDetailText("\n\n")).toBe("");
+  });
+});
+
+describe("cellDetailHeading", () => {
+  it("combines the column label with the visible row number", () => {
+    expect(cellDetailHeading("Cliente", 2)).toBe("Cliente — linha 2");
+    expect(cellDetailHeading("A", 1)).toBe("A — linha 1");
+  });
+
+  it("falls back for empty labels and invalid rows", () => {
+    expect(cellDetailHeading("  ", 3)).toBe("— — linha 3");
+    expect(cellDetailHeading("Valor", 0)).toBe("Valor — linha 1");
+    expect(cellDetailHeading("Valor", Number.NaN)).toBe("Valor — linha 1");
+    expect(cellDetailHeading("Valor", 2.9)).toBe("Valor — linha 2");
   });
 });
 
@@ -449,5 +481,30 @@ describe("resolveRawMode", () => {
     expect(resolveRawMode(true, false)).toEqual({ raw: true, locked: false });
     expect(resolveRawMode(false, true)).toEqual({ raw: true, locked: true });
     expect(resolveRawMode(true, true)).toEqual({ raw: true, locked: true });
+  });
+});
+
+describe("table wrap CSS", () => {
+  const css = readFileSync(
+    join(import.meta.dir, "../src/ui/styles/table.css"),
+    "utf8"
+  );
+
+  it("wraps grid cells only under the html.mdprv-wrap-cells class", () => {
+    const rule = css
+      .split("/* --- automatic cell wrapping (`mdprv_table_wrap`) --- */")[1]
+      ?.split("}")[0];
+    expect(rule).toBeDefined();
+    expect(rule).toContain("html.mdprv-wrap-cells .mdprv-table .mdprv-grid th");
+    expect(rule).toContain("html.mdprv-wrap-cells .mdprv-table .mdprv-grid td");
+    expect(rule).toContain("height: auto");
+    expect(rule).toContain("white-space: normal");
+    expect(rule).toContain("overflow-wrap: anywhere");
+    expect(rule).toContain("word-break: break-word");
+  });
+
+  it("keeps the cell detail panel on pre-wrap", () => {
+    expect(css).toContain(".mdprv-lb-panel-body");
+    expect(css).toContain("white-space: pre-wrap");
   });
 });

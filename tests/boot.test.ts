@@ -279,19 +279,28 @@ describe("boot inline script", () => {
     }
   });
 
-  it("applies the simple table and diff classes independently", () => {
+  it("applies the simple table, diff and table wrap classes independently", () => {
     const both = boot({
-      local: { mdprv_simple_table: "1", mdprv_simple_diff: "1" },
+      local: {
+        mdprv_simple_table: "1",
+        mdprv_simple_diff: "1",
+        mdprv_table_wrap: "1",
+      },
     }).document.documentElement;
     expect(both.classList.contains("mdprv-simple-tables")).toBe(true);
     expect(both.classList.contains("mdprv-simple-diffs")).toBe(true);
+    expect(both.classList.contains("mdprv-wrap-cells")).toBe(true);
 
-    const tablesOnly = boot({ local: { mdprv_simple_table: "1" } }).document.documentElement;
+    const tablesOnly = boot({
+      local: { mdprv_simple_table: "1", mdprv_table_wrap: "0" },
+    }).document.documentElement;
     expect(tablesOnly.classList.contains("mdprv-simple-tables")).toBe(true);
     expect(tablesOnly.classList.contains("mdprv-simple-diffs")).toBe(false);
+    expect(tablesOnly.classList.contains("mdprv-wrap-cells")).toBe(false);
 
     const plain = boot({ local: { mdprv_simple_diff: "0" } }).document.documentElement;
     expect(plain.classList.contains("mdprv-simple-diffs")).toBe(false);
+    expect(plain.classList.contains("mdprv-wrap-cells")).toBe(false);
   });
 
   it("resolves the auto scheme and the dark loader from matchMedia", () => {

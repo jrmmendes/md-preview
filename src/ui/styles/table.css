@@ -399,6 +399,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   height: 1.9rem;
+  /* Double tap opens the cell detail; disabling the browser's double-tap zoom
+     keeps that gesture from also scaling the page. Pinch zoom still works. */
+  touch-action: manipulation;
 }
 
 .mdprv-grid td[data-mdprv-num="1"] {
@@ -1365,6 +1368,87 @@ html.mdprv-simple-tables .mdprv-table-chart {
 
 body.mdprv-table-lock {
   overflow: hidden;
+}
+
+/* --- text entry: cell detail inside the lightbox --- */
+/* The copy action is a lightbox control and only exists in text mode. */
+.mdprv-table-lb-tools button[hidden] {
+  display: none;
+}
+
+.mdprv-table-lb-tools button.mdprv-copied {
+  color: var(--mdprv-link);
+}
+
+.mdprv-table-lb-tools button.mdprv-copy-error {
+  color: var(--mdprv-danger, #c0392b);
+}
+
+.mdprv-lb-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: 80vh;
+  overflow: hidden;
+  border: 1px solid var(--mdprv-border-strong, var(--mdprv-border));
+  border-radius: var(--mdprv-radius-md, 6px);
+  background: var(--mdprv-bg);
+  color: var(--mdprv-fg);
+  box-shadow: var(--mdprv-shadow-panel);
+}
+
+.mdprv-lb-panel-head {
+  flex: none;
+  padding: .8rem 1rem;
+  border-bottom: 1px solid var(--mdprv-border);
+  background: var(--mdprv-surface);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.mdprv-table-lightbox.mdprv-table-panning .mdprv-lb-panel-head {
+  cursor: grabbing;
+}
+
+.mdprv-lb-panel-title {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--mdprv-font-size-ui, 13px);
+  font-weight: var(--mdprv-font-weight-bold, 600);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.mdprv-lb-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 1rem 1.15rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-size: var(--mdprv-font-size, 17px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mdprv-lb-panel-body:focus {
+  outline: none;
+}
+
+.mdprv-lb-panel-body:focus-visible {
+  outline: 2px solid var(--mdprv-accent);
+  outline-offset: -2px;
+}
+
+.mdprv-lb-panel-body a {
+  color: var(--mdprv-link);
+}
+
+@media (max-width: 480px) {
+  .mdprv-lb-panel-body {
+    padding: .8rem .9rem;
+  }
 }
 
 @media (pointer: coarse) {

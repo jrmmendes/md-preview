@@ -4,7 +4,8 @@
  * The server already emits a valid, readable table plus the spreadsheet shell
  * with a hidden toolbar. This island adds the sheet gutters, selection, keyboard
  * navigation, resize/autofit, per-column value funnels, global search, sorting,
- * pivoting, clipboard output and the fullscreen dialog. Table state lives only
+ * pivoting, clipboard output, the fullscreen dialog and its text entry (the
+ * cell detail lightbox). Table state lives only
  * in memory for the lifetime of the page, except the frame size chosen with the
  * fullscreen resize handles, which is kept in sessionStorage per document and
  * table (see `lightboxSizeKey`), so a reload restores it but a new tab starts
@@ -14,6 +15,8 @@
 import {
   buildChartData,
   buildColumnValues,
+  cellDetailHeading,
+  cellDetailText,
   chartUnavailableReason,
   clampColumnWidth,
   columnLetter,
@@ -106,6 +109,19 @@ const FUNNEL_BADGE =
 const CLOSE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="M6 6l12 12"></path></svg>';
 
+/** Tooltip/keyboard affordance shared by every data cell. */
+const CELL_DETAIL_HINT = "Duplo clique para ver o conteúdo completo";
+
+const CELL_DETAIL_COPY_LABEL = "Copiar";
+const CELL_DETAIL_COPIED_LABEL = "Copiado";
+const CELL_DETAIL_COPY_ERROR_LABEL = "Falha ao copiar";
+const CELL_DETAIL_COPY_FEEDBACK_MS = 1400;
+const CELL_DETAIL_COPY_ERROR_MS = 1800;
+/** Maximum gap between two taps that count as a double tap on touch screens. */
+const CELL_DETAIL_TAP_MS = 350;
+/** Maximum finger drift between those two taps, in CSS pixels. */
+const CELL_DETAIL_TAP_SLOP = 32;
+
 const LIGHTBOX_MIN_ZOOM = 0.6;
 const LIGHTBOX_MAX_ZOOM = 2.2;
 const LIGHTBOX_STEP = 0.15;
@@ -177,6 +193,11 @@ function setCellAttributes(
   cell.setAttribute("aria-colindex", String(column + 1));
   cell.setAttribute("aria-selected", "false");
   cell.tabIndex = tabbable ? 0 : -1;
+  if (role === "gridcell") {
+    cell.title = CELL_DETAIL_HINT;
+  } else {
+    cell.removeAttribute("title");
+  }
   if (role === "rowheader") {
     cell.setAttribute("scope", "row");
   } else if (role === "columnheader") {
@@ -186,6 +207,47 @@ function setCellAttributes(
 
 function rangeFrom(anchor: CellPosition, target: CellPosition): TableRange {
   return normalizeRange({ r1: anchor.r, c1: anchor.c, r2: target.r, c2: target.c });
+}
+
+/* ---------- cell text helpers ---------- */
+
+/**
+ * Plain text of a rendered cell, preserving the breaks the grid shows: `<br>`
+ * and block boundaries become newlines. `textContent` alone would glue
+ * `linha 1<br>linha 2` together, and `innerText` returns nothing for a cell
+ * hidden by a filter, so the walk is done on the cloned/current nodes instead.
+ */
+function cellPlainText(cell: HTMLElement): string {
+  const parts: string[] = [];
+  const visit = (node: Node): void => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parts.push(node.textContent ?? "");
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    const element = node as HTMLElement;
+    if (element.tagName === "BR") {
+      parts.push("\n");
+      return;
+    }
+    for (const child of Array.from(element.childNodes)) {
+      visit(child);
+    }
+    if (
+      element.tagName === "P" ||
+      element.tagName === "DIV" ||
+      element.tagName === "LI" ||
+      element.tagName === "BLOCKQUOTE"
+    ) {
+      parts.push("\n");
+    }
+  };
+  for (const child of Array.from(cell.childNodes)) {
+    visit(child);
+  }
+  return parts.join("");
 }
 
 function setupTable(block: HTMLElement): TableController | null {
@@ -1068,6 +1130,47 @@ function setupTable(block: HTMLElement): TableController | null {
     }
     const label = cell.querySelector<HTMLElement>(".mdprv-table-head-label");
     return textOf(label ?? cell) || columnLetter(column);
+  };
+
+  /** Visible row number (1-based, header included), matching the gutter tags. */
+  const detailRowNumber = (row: HTMLTableRowElement): number => {
+    let display = thead.rows[0]?.cells.length ? 1 : 0;
+    for (const candidate of Array.from(tbody.rows)) {
+      if (candidate.hidden) {
+        continue;
+      }
+      display += 1;
+      if (candidate === row) {
+        return display;
+      }
+    }
+    return rowIndexOf(row) + 1;
+  };
+
+  /** Opens the detail inside the shared lightbox; headers and the stray header row are ignored. */
+  const openCellDetail = (cell: HTMLTableCellElement): boolean => {
+    if (cell.getAttribute("role") !== "gridcell") {
+      return false;
+    }
+    const row = cell.parentElement as HTMLTableRowElement | null;
+    if (
+      !row ||
+      row.parentElement === thead ||
+      row.dataset.mdprvHeaderRow === "1"
+    ) {
+      return false;
+    }
+    const content = document.createElement("div");
+    content.className = "mdprv-lb-panel-content";
+    content.append(
+      ...Array.from(cell.childNodes, (node) => node.cloneNode(true))
+    );
+    openTextLightbox({
+      title: cellDetailHeading(columnLabel(cell.cellIndex), detailRowNumber(row)),
+      contentNode: content,
+      returnFocus: cell,
+    });
+    return true;
   };
 
   const updateFunnels = (): void => {
@@ -2068,6 +2171,97 @@ function setupTable(block: HTMLElement): TableController | null {
   };
 
   /* ---------- gesture/selection events ---------- */
+  const interactiveTarget = (target: Element): boolean =>
+    target.closest(
+      "a, button, input, select, textarea, label, [role='separator'], .mdprv-sheet-resize, [data-lb-handle]"
+    ) !== null;
+
+  let lastCellTap: {
+    at: number;
+    x: number;
+    y: number;
+    cell: HTMLTableCellElement;
+  } | null = null;
+
+  table.addEventListener("dblclick", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element) || event.button !== 0) {
+      return;
+    }
+    if (interactiveTarget(target)) {
+      return;
+    }
+    const cell = target.closest<HTMLTableCellElement>("[role='gridcell']");
+    if (!cell || !table.contains(cell)) {
+      return;
+    }
+    if (!openCellDetail(cell)) {
+      return;
+    }
+    // Opening the text lightbox from a fullscreen table must not also reach
+    // the lightbox's recenter-on-double-click handler.
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  /* Touch screens do not always synthesize `dblclick`; two taps on the same
+     cell within CELL_DETAIL_TAP_MS are treated as the same gesture. The second
+     touchstart is cancelled so the synthetic click/double-tap zoom never runs,
+     and touchmove resets the window so a scroll is never mistaken for a tap. */
+  table.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length !== 1) {
+        lastCellTap = null;
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element) || interactiveTarget(target)) {
+        lastCellTap = null;
+        return;
+      }
+      const cell = target.closest<HTMLTableCellElement>("[role='gridcell']");
+      if (!cell || !table.contains(cell)) {
+        lastCellTap = null;
+        return;
+      }
+      const row = cell.parentElement as HTMLTableRowElement | null;
+      if (
+        !row ||
+        row.parentElement === thead ||
+        row.dataset.mdprvHeaderRow === "1"
+      ) {
+        lastCellTap = null;
+        return;
+      }
+      const touch = event.touches[0]!;
+      const now = Date.now();
+      const previous = lastCellTap;
+      if (
+        previous !== null &&
+        previous.cell === cell &&
+        now - previous.at <= CELL_DETAIL_TAP_MS &&
+        Math.hypot(touch.clientX - previous.x, touch.clientY - previous.y) <=
+          CELL_DETAIL_TAP_SLOP
+      ) {
+        lastCellTap = null;
+        event.preventDefault();
+        openCellDetail(cell);
+        return;
+      }
+      lastCellTap = { at: now, x: touch.clientX, y: touch.clientY, cell };
+    },
+    { passive: false }
+  );
+
+  table.addEventListener(
+    "touchmove",
+    () => {
+      lastCellTap = null;
+    },
+    { passive: true }
+  );
+
   table.addEventListener("mousedown", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -2222,6 +2416,9 @@ function setupTable(block: HTMLElement): TableController | null {
           return;
         }
         event.preventDefault();
+        if (openCellDetail(cell)) {
+          return;
+        }
         next = { r: Math.min(maxR, r + 1), c };
         break;
       case "Escape":
@@ -2552,6 +2749,9 @@ function setupTable(block: HTMLElement): TableController | null {
    * drops the selection, so the default (nothing selected) is restored.
    */
   const ownsTarget = (target: Element): boolean => {
+    if (lightbox?.contains(target)) {
+      return true;
+    }
     if (block.contains(target)) {
       return true;
     }
@@ -2606,6 +2806,11 @@ function setupTable(block: HTMLElement): TableController | null {
   document.addEventListener("mousedown", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
+      return;
+    }
+    // Clicks in the text lightbox are not "outside the table": they must not
+    // drop the selection or close a filter the user opened before.
+    if (target.closest("[data-lb-panel]")) {
       return;
     }
     if (popover && !popover.hidden) {
@@ -2755,6 +2960,21 @@ let lightboxResize: {
 /** True when the frame size changed since the last successful persistence. */
 let lightboxSizeDirty = false;
 let lightboxSaveTimer = 0;
+
+/* --- text mode: a cell detail rendered inside the same lightbox --- */
+let lightboxPanel: HTMLElement | null = null;
+let lightboxPanelText = "";
+let lightboxPanelOnClose: (() => void) | null = null;
+let lightboxPanelCopyTimer = 0;
+/** Original aria-labels restored when the lightbox leaves text mode. */
+const lightboxHandleLabels = new Map<HTMLElement, string>();
+let lightboxCloseLabel = "";
+let lightboxCloseTitle = "";
+
+/** Geometry/zoom target: the fullscreen table or the text panel. */
+function lightboxSubject(): HTMLElement | null {
+  return lightboxPanel ?? lightboxBlock;
+}
 
 interface StoredLightboxSize {
   width: number | null;
@@ -3044,11 +3264,12 @@ function handleDirection(kind: string): { x: number; y: number } {
 }
 
 function syncHandleAria(): void {
-  if (!frame || !lightboxBlock) {
+  const subject = lightboxSubject();
+  if (!frame || !subject) {
     return;
   }
-  const zoom = zoomFactor(lightboxBlock);
-  const rect = lightboxBlock.getBoundingClientRect();
+  const zoom = zoomFactor(subject);
+  const rect = subject.getBoundingClientRect();
   const limits = resizeLimits(zoom);
   frame.querySelectorAll<HTMLElement>("[data-lb-handle]").forEach((handle) => {
     const kind = handle.getAttribute("data-lb-handle") ?? "";
@@ -3078,14 +3299,19 @@ function syncHandleAria(): void {
 }
 
 function applyLightboxSize(): void {
-  const block = lightboxBlock;
-  if (!block) {
+  const subject = lightboxSubject();
+  if (!subject) {
     return;
   }
-  block.style.width =
+  subject.style.width =
     lightboxWidth !== null ? `${lightboxWidth.toFixed(2)}px` : "";
-  block.style.height =
+  subject.style.height =
     lightboxHeight !== null ? `${lightboxHeight.toFixed(2)}px` : "";
+  if (lightboxPanel) {
+    // While auto-sized, the CSS max-height keeps long cells inside the stage;
+    // an explicit height from the resize handles must be able to exceed it.
+    lightboxPanel.style.maxHeight = lightboxHeight === null ? "" : "none";
+  }
   const controller = activeController();
   if (controller && !lightboxSizeFrame) {
     lightboxSizeFrame = window.requestAnimationFrame(() => {
@@ -3094,14 +3320,17 @@ function applyLightboxSize(): void {
       controller.reposition();
       syncHandleAria();
     });
+  } else if (lightboxPanel) {
+    window.requestAnimationFrame(syncHandleAria);
   }
 }
 
 function applyLightboxZoom(): void {
-  if (!lightboxBlock) {
+  const subject = lightboxSubject();
+  if (!subject) {
     return;
   }
-  lightboxBlock.style.zoom = String(lightboxZoom);
+  subject.style.zoom = String(lightboxZoom);
   const reset = lightbox?.querySelector<HTMLElement>("[data-lb-zoom-reset]");
   if (reset) {
     reset.textContent = `${Math.round(lightboxZoom * 100)}%`;
@@ -3117,11 +3346,21 @@ function applyLightboxZoom(): void {
 
 function lightboxNaturalWidth(): number {
   const controller = activeController();
-  return controller?.naturalWidth() ?? 0;
+  if (controller) {
+    return controller.naturalWidth();
+  }
+  if (lightboxPanel) {
+    const zoom = zoomFactor(lightboxPanel);
+    return (
+      lightboxBaseWidth ||
+      lightboxPanel.getBoundingClientRect().width / Math.max(1, zoom)
+    );
+  }
+  return 0;
 }
 
 function fitToStage(): void {
-  if (!lightboxBlock || !stage) {
+  if (!lightboxSubject() || !stage) {
     return;
   }
   const padding = Number.parseFloat(window.getComputedStyle(stage).paddingLeft || "20") || 20;
@@ -3134,7 +3373,7 @@ function fitToStage(): void {
 
 /** Recenters and optionally drops the manual size and the zoom. */
 function resetLightboxView(resetZoom: boolean): void {
-  if (!lightboxBlock) {
+  if (!lightboxSubject()) {
     return;
   }
   // An explicit reset (double click or the 100% button) forgets the saved size
@@ -3165,7 +3404,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 function canStartPan(event: PointerEvent): boolean {
   const target = event.target;
-  if (!(target instanceof Element) || !lightboxBlock) {
+  if (!(target instanceof Element) || !lightboxSubject()) {
     return false;
   }
   if (target.closest("[data-lb-handle]")) {
@@ -3181,6 +3420,10 @@ function canStartPan(event: PointerEvent): boolean {
     return true;
   }
   if (target === stage || target === lightbox) {
+    return true;
+  }
+  // The panel header is its title band, just like the table toolbar strip.
+  if (target.closest(".mdprv-lb-panel-head")) {
     return true;
   }
   // The toolbar strip is the closest thing to a title band on the component
@@ -3254,8 +3497,9 @@ function onLightboxPointerMove(event: PointerEvent): void {
   applyLightboxPan();
   // Keep the dragged content tracking the pointer despite subpixel layout
   // shifts (zoom, clamping, sticky headers changing the scroll extent).
-  if (lightboxBlock) {
-    const rect = lightboxBlock.getBoundingClientRect();
+  const subject = lightboxSubject();
+  if (subject) {
+    const rect = subject.getBoundingClientRect();
     const driftX = event.clientX - gesture.startX - (rect.left - gesture.startLeft);
     const driftY = event.clientY - gesture.startY - (rect.top - gesture.startTop);
     if (Math.abs(driftX) > 0.25 || Math.abs(driftY) > 0.25) {
@@ -3303,6 +3547,9 @@ function onLightboxPointerUp(event: PointerEvent): void {
 function openLightbox(block: HTMLElement): void {
   if (!lightbox || !stage || !frame || lightboxBlock === block) {
     return;
+  }
+  if (lightboxPanel) {
+    closeLightbox();
   }
   const controller = CONTROLLERS.get(block);
   if (!controller) {
@@ -3358,16 +3605,19 @@ function openLightbox(block: HTMLElement): void {
 }
 
 function closeLightbox(): void {
-  if (!lightbox || !lightboxBlock) {
+  if (!lightbox || (!lightboxBlock && !lightboxPanel)) {
     return;
   }
   const block = lightboxBlock;
-  const controller = CONTROLLERS.get(block) ?? null;
+  const panel = lightboxPanel;
+  const controller = block ? CONTROLLERS.get(block) ?? null : null;
   controller?.closePopover(false);
   controller?.closeChartPopover(false);
   // Flush a keyboard resize that is still inside the debounce window; closing
   // without resetting keeps the saved size for the next open.
-  persistLightboxSize();
+  if (block) {
+    persistLightboxSize();
+  }
   if (lightboxSizeFrame) {
     window.cancelAnimationFrame(lightboxSizeFrame);
     lightboxSizeFrame = 0;
@@ -3384,20 +3634,37 @@ function closeLightbox(): void {
   lightbox?.classList.remove(
     "mdprv-table-panning",
     "mdprv-table-resizing",
-    "mdprv-table-space"
+    "mdprv-table-space",
+    "mdprv-table-text"
   );
-  block.style.zoom = "";
-  block.style.width = "";
-  block.style.height = "";
   frame?.style.removeProperty("transform");
-  if (lightboxMarker?.parentNode) {
-    lightboxMarker.parentNode.insertBefore(block, lightboxMarker);
-    lightboxMarker.parentNode.removeChild(lightboxMarker);
-  } else if (frame && block.parentNode === frame) {
-    frame.removeChild(block);
+
+  if (block) {
+    block.style.zoom = "";
+    block.style.width = "";
+    block.style.height = "";
+    if (lightboxMarker?.parentNode) {
+      lightboxMarker.parentNode.insertBefore(block, lightboxMarker);
+      lightboxMarker.parentNode.removeChild(lightboxMarker);
+    } else if (frame && block.parentNode === frame) {
+      frame.removeChild(block);
+    }
   }
   lightboxMarker = null;
   lightboxBlock = null;
+
+  const onClose = lightboxPanelOnClose;
+  if (panel) {
+    panel.remove();
+    lightboxPanel = null;
+    lightboxPanelText = "";
+    lightboxPanelOnClose = null;
+    window.clearTimeout(lightboxPanelCopyTimer);
+    lightboxPanelCopyTimer = 0;
+    resetLightboxCopyButton();
+    syncTextLightboxChrome(false);
+  }
+
   lightboxZoom = 1;
   lightboxPanX = 0;
   lightboxPanY = 0;
@@ -3414,10 +3681,172 @@ function closeLightbox(): void {
   if (controller) {
     window.requestAnimationFrame(() => controller.sync());
   }
+  // Run the mode's callback before returning focus: it may need to restore a
+  // surrounding view (none today, but the contract is explicit).
+  onClose?.();
   if (lightboxFocus && document.contains(lightboxFocus)) {
-    lightboxFocus.focus();
+    lightboxFocus.focus({ preventScroll: true });
   }
   lightboxFocus = null;
+}
+
+function syncTextLightboxChrome(active: boolean): void {
+  if (!lightbox) {
+    return;
+  }
+  const close = lightbox.querySelector<HTMLElement>("[data-lb-close]");
+  const copy = lightbox.querySelector<HTMLButtonElement>("[data-lb-copy]");
+  if (active) {
+    lightbox.setAttribute("aria-labelledby", "mdprv-lb-panel-title");
+    close?.setAttribute("aria-label", "Fechar detalhe (Esc)");
+    close?.setAttribute("title", "Fechar (Esc)");
+    lightbox.classList.add("mdprv-table-text");
+    for (const [handle, label] of lightboxHandleLabels) {
+      handle.setAttribute("aria-label", label.replace(/tabela/gi, "detalhe"));
+    }
+    if (copy) {
+      copy.hidden = false;
+      copy.textContent = CELL_DETAIL_COPY_LABEL;
+      copy.classList.remove("mdprv-copied", "mdprv-copy-error");
+    }
+    return;
+  }
+  lightbox.removeAttribute("aria-labelledby");
+  if (lightboxCloseLabel) {
+    close?.setAttribute("aria-label", lightboxCloseLabel);
+  }
+  if (lightboxCloseTitle) {
+    close?.setAttribute("title", lightboxCloseTitle);
+  }
+  lightbox.classList.remove("mdprv-table-text");
+  for (const [handle, label] of lightboxHandleLabels) {
+    if (label) {
+      handle.setAttribute("aria-label", label);
+    }
+  }
+  if (copy) {
+    copy.hidden = true;
+    copy.textContent = CELL_DETAIL_COPY_LABEL;
+    copy.classList.remove("mdprv-copied", "mdprv-copy-error");
+  }
+}
+
+function resetLightboxCopyButton(): void {
+  const copy = lightbox?.querySelector<HTMLButtonElement>("[data-lb-copy]");
+  if (!copy) {
+    return;
+  }
+  window.clearTimeout(lightboxPanelCopyTimer);
+  lightboxPanelCopyTimer = 0;
+  copy.textContent = CELL_DETAIL_COPY_LABEL;
+  copy.classList.remove("mdprv-copied", "mdprv-copy-error");
+}
+
+function copyLightboxPanel(): void {
+  const copy = lightbox?.querySelector<HTMLButtonElement>("[data-lb-copy]");
+  if (!copy || !lightboxPanel) {
+    return;
+  }
+  window.clearTimeout(lightboxPanelCopyTimer);
+  copyText(lightboxPanelText).then(
+    () => {
+      copy.textContent = CELL_DETAIL_COPIED_LABEL;
+      copy.classList.add("mdprv-copied");
+      lightboxPanelCopyTimer = window.setTimeout(() => {
+        copy.textContent = CELL_DETAIL_COPY_LABEL;
+        copy.classList.remove("mdprv-copied");
+      }, CELL_DETAIL_COPY_FEEDBACK_MS);
+    },
+    () => {
+      copy.textContent = CELL_DETAIL_COPY_ERROR_LABEL;
+      copy.classList.add("mdprv-copy-error");
+      lightboxPanelCopyTimer = window.setTimeout(() => {
+        copy.textContent = CELL_DETAIL_COPY_LABEL;
+        copy.classList.remove("mdprv-copy-error");
+      }, CELL_DETAIL_COPY_ERROR_MS);
+    }
+  );
+}
+
+interface TextLightboxOptions {
+  title: string;
+  contentNode: HTMLElement;
+  onClose?: () => void;
+  /** Element that receives focus when the detail closes. */
+  returnFocus?: HTMLElement | null;
+}
+
+/**
+ * Opens a cell detail as a text entry of the existing table lightbox: same
+ * backdrop, close button, zoom, resize handles, pan and keyboard trap. The
+ * caller supplies already-rendered content; this function never re-renders
+ * Markdown.
+ */
+function openTextLightbox(options: TextLightboxOptions): void {
+  if (!lightbox || !stage || !frame) {
+    return;
+  }
+  const focus =
+    options.returnFocus ??
+    (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  if (lightboxBlock || lightboxPanel) {
+    closeLightbox();
+  }
+
+  const panel = document.createElement("section");
+  panel.className = "mdprv-lb-panel";
+  panel.setAttribute("data-lb-panel", "1");
+  const head = document.createElement("header");
+  head.className = "mdprv-lb-panel-head";
+  const title = document.createElement("h2");
+  title.className = "mdprv-lb-panel-title";
+  title.id = "mdprv-lb-panel-title";
+  title.textContent = options.title;
+  head.append(title);
+  const body = document.createElement("div");
+  body.className = "mdprv-lb-panel-body";
+  body.setAttribute("data-lb-panel-body", "1");
+  body.tabIndex = 0;
+  body.append(options.contentNode);
+  panel.append(head, body);
+  frame.append(panel);
+
+  lightboxPanel = panel;
+  lightboxPanelText = cellDetailText(cellPlainText(options.contentNode));
+  lightboxPanelOnClose = options.onClose ?? null;
+  lightboxFocus = focus;
+
+  lightboxZoom = 1;
+  lightboxPanX = 0;
+  lightboxPanY = 0;
+  lightboxHeight = null;
+  lightboxSizeDirty = false;
+  const padding =
+    Number.parseFloat(window.getComputedStyle(stage).paddingLeft || "20") || 20;
+  const available = Math.max(240, stage.clientWidth - padding * 2);
+  const limits = resizeLimits(1);
+  lightboxBaseWidth = clampValue(
+    Math.min(720, available),
+    Math.min(280, available),
+    limits.width.max
+  );
+  lightboxWidth = lightboxBaseWidth;
+
+  panel.style.zoom = "1";
+  applyLightboxSize();
+  applyLightboxPan();
+  stage.scrollTop = 0;
+  stage.scrollLeft = 0;
+  lightbox.classList.add("mdprv-open");
+  lightbox.setAttribute("aria-hidden", "false");
+  document.body.classList.add("mdprv-table-lock");
+  syncTextLightboxChrome(true);
+  resetLightboxCopyButton();
+  window.setTimeout(() => {
+    fitToStage();
+    syncHandleAria();
+    lightbox?.querySelector<HTMLElement>("[data-lb-close]")?.focus();
+  }, reducedMotion() ? 0 : 60);
 }
 
 function lightboxFocusables(): HTMLElement[] {
@@ -3450,17 +3879,23 @@ function setupLightbox(): void {
   if (close && !close.innerHTML.trim()) {
     close.innerHTML = CLOSE_ICON;
   }
+  lightboxCloseLabel = close?.getAttribute("aria-label") ?? "";
+  lightboxCloseTitle = close?.getAttribute("title") ?? "";
+  frame.querySelectorAll<HTMLElement>("[data-lb-handle]").forEach((handle) => {
+    lightboxHandleLabels.set(handle, handle.getAttribute("aria-label") ?? "");
+  });
 
   /* --- resize handles: pointer drag + keyboard nudge --- */
   frame.querySelectorAll<HTMLElement>("[data-lb-handle]").forEach((handle) => {
     handle.addEventListener("pointerdown", (event) => {
-      if (!lightboxBlock || event.button !== 0) {
+      const subject = lightboxSubject();
+      if (!subject || event.button !== 0) {
         return;
       }
       const kind = handle.getAttribute("data-lb-handle") ?? "";
       const direction = handleDirection(kind);
-      const zoom = zoomFactor(lightboxBlock);
-      const rect = lightboxBlock.getBoundingClientRect();
+      const zoom = zoomFactor(subject);
+      const rect = subject.getBoundingClientRect();
       lightboxResize = {
         pointerId: event.pointerId,
         handle: kind,
@@ -3479,7 +3914,8 @@ function setupLightbox(): void {
     });
 
     handle.addEventListener("keydown", (event) => {
-      if (!lightboxBlock) {
+      const subject = lightboxSubject();
+      if (!subject) {
         return;
       }
       const step = 16;
@@ -3494,8 +3930,8 @@ function setupLightbox(): void {
       if (horizontal === 0 && vertical === 0) {
         return;
       }
-      const zoom = zoomFactor(lightboxBlock);
-      const rect = lightboxBlock.getBoundingClientRect();
+      const zoom = zoomFactor(subject);
+      const rect = subject.getBoundingClientRect();
       const limits = resizeLimits(zoom);
       if (horizontal !== 0) {
         lightboxWidth = clampValue(
@@ -3528,8 +3964,8 @@ function setupLightbox(): void {
       return;
     }
     event.preventDefault();
-    const block = lightboxBlock;
-    const rect = block?.getBoundingClientRect();
+    const subject = lightboxSubject();
+    const rect = subject?.getBoundingClientRect();
     lightboxPan = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -3559,6 +3995,10 @@ function setupLightbox(): void {
     }
     if (target.closest("[data-lb-close]")) {
       closeLightbox();
+      return;
+    }
+    if (target.closest("[data-lb-copy]")) {
+      copyLightboxPanel();
       return;
     }
     if (target.closest("[data-lb-zoom-in]")) {
@@ -3592,6 +4032,10 @@ function setupLightbox(): void {
         "button, a, input, select, textarea, [data-lb-handle], [data-lb-close], .mdprv-table-lb-tools"
       )
     ) {
+      return;
+    }
+    if (lightboxPanel && target.closest(".mdprv-lb-panel-body")) {
+      // Keep native word selection inside the text; recenter from the title.
       return;
     }
     if (target === lightbox) {
@@ -3690,6 +4134,7 @@ export function initTable(): void {
     const root = document.documentElement;
     let globalRaw = root.classList.contains("mdprv-raw-open");
     let simple = root.classList.contains("mdprv-simple-tables");
+    let wrapCells = root.classList.contains("mdprv-wrap-cells");
     const observer = new MutationObserver(() => {
       const nextRaw = root.classList.contains("mdprv-raw-open");
       if (nextRaw !== globalRaw) {
@@ -3699,10 +4144,12 @@ export function initTable(): void {
         }
       }
       const nextSimple = root.classList.contains("mdprv-simple-tables");
-      if (nextSimple !== simple) {
+      const nextWrap = root.classList.contains("mdprv-wrap-cells");
+      if (nextSimple !== simple || nextWrap !== wrapCells) {
         simple = nextSimple;
-        // CSS hides/shows the gutters; the island only has to re-measure so the
-        // fullscreen frame and the chart keep the correct natural width.
+        wrapCells = nextWrap;
+        // CSS hides/shows the gutters or lets row heights grow with wrapped
+        // cells; re-measure the frame and reset the cached row heights.
         for (const controller of instances) {
           controller.sync();
           controller.reposition();

@@ -307,6 +307,33 @@ export function normalizeCellText(text: string): string {
     .trim();
 }
 
+/**
+ * Normalize text shown/copied by the cell detail dialog: Unix newlines, no
+ * trailing spaces before a break and no leading/trailing blank lines. Interior
+ * blank lines survive, so paragraphs written across multiple lines keep their
+ * spacing.
+ */
+export function cellDetailText(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .replace(/^\n+/, "")
+    .replace(/\n+$/, "");
+}
+
+/**
+ * Heading for the cell detail dialog: "<column> — linha <n>". An empty label
+ * falls back to an em dash; an invalid/zero row falls back to line 1.
+ */
+export function cellDetailHeading(columnLabel: string, rowNumber: number): string {
+  const label = columnLabel.trim() === "" ? "—" : columnLabel.trim();
+  const row =
+    Number.isFinite(rowNumber) && rowNumber > 0 ? Math.floor(rowNumber) : 1;
+  return `${label} — linha ${row}`;
+}
+
 /** Stable key for the per-column value filter. */
 export function normalizeValueKey(text: string): string {
   const value = normalizeCellText(text);

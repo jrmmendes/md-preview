@@ -67,16 +67,16 @@ describe("Shiki importer color-theme guard", () => {
   const colorTheme = JSON.stringify({
     $schema: "./theme.schema.json",
     schemaVersion: 1,
-    name: "anthropic",
+    name: "tropical",
     kind: "light",
-    colors: { background: "#faf9f5", text: "#141413", accent: "#d97757" },
+    colors: { background: "#f0eee6", text: "#191919", accent: "#d97757" },
     shiki: { light: "github-light", dark: "github-light" },
     mermaid: { theme: "base", overrides: {} },
   });
 
   it("recognizes a full color theme before the Shiki wrapper", () => {
     expect(isColorThemeJson(JSON.parse(colorTheme))).toBe(true);
-    const payload = buildImportPayload(colorTheme, "anthropic");
+    const payload = buildImportPayload(colorTheme, "tropical");
     expect(payload.ok).toBe(false);
     if (!payload.ok) {
       expect(payload.error).toBe(COLOR_THEME_GUARD_MESSAGE);

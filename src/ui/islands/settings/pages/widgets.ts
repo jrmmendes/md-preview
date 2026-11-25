@@ -245,9 +245,11 @@ export interface WidgetsContext {
   zoom: number;
   simpleTables: boolean;
   simpleDiffs: boolean;
+  tableWrap: boolean;
   onZoom(value: number): void;
   onSimpleTables(value: boolean): void;
   onSimpleDiffs(value: boolean): void;
+  onTableWrap(value: boolean): void;
 }
 
 export function renderWidgetsPage(ctx: WidgetsContext): HTMLElement {
@@ -256,6 +258,13 @@ export function renderWidgetsPage(ctx: WidgetsContext): HTMLElement {
     description: "oculta as letras, os números e a moldura de planilha.",
     checked: ctx.simpleTables,
     onChange: (checked) => ctx.onSimpleTables(checked),
+  });
+
+  const wrapToggle = switchRow({
+    label: "Quebra automática de linhas",
+    description: "faz células e cabeçalhos longos quebrarem em várias linhas em vez de truncar.",
+    checked: ctx.tableWrap,
+    onChange: (checked) => ctx.onTableWrap(checked),
   });
 
   const diffToggle = switchRow({
@@ -284,6 +293,7 @@ export function renderWidgetsPage(ctx: WidgetsContext): HTMLElement {
       description: "Como as tabelas do documento são renderizadas.",
       children: [
         tableToggle,
+        wrapToggle,
         el("div", { class: "mdprv-settings-widget-preview" }, tablePreview()),
       ],
     }),

@@ -14,8 +14,10 @@ import type { FontPickerValue } from "../font-picker";
 import {
   getSimpleDiffs,
   getSimpleTables,
+  getTableWrap,
   setSimpleDiffs,
   setSimpleTables,
+  setTableWrap,
   setTheme,
   setZoomSensitivity,
   writeLoaderIntent,
@@ -79,6 +81,7 @@ import {
   setDraftShiki,
   setDraftSimpleDiffs,
   setDraftSimpleTables,
+  setDraftTableWrap,
   setDraftTheme,
   setDraftZoom,
   type SettingsSnapshot,
@@ -180,6 +183,7 @@ export function initSettings(): void {
     zoom: currentZoom(),
     simpleTables: getSimpleTables(),
     simpleDiffs: getSimpleDiffs(),
+    tableWrap: getTableWrap(),
   };
   let draft: SettingsSnapshot = cloneSnapshot(applied);
 
@@ -260,9 +264,11 @@ export function initSettings(): void {
         zoom: draft.zoom,
         simpleTables: draft.simpleTables,
         simpleDiffs: draft.simpleDiffs,
+        tableWrap: draft.tableWrap,
         onZoom: changeZoom,
         onSimpleTables: changeSimpleTables,
         onSimpleDiffs: changeSimpleDiffs,
+        onTableWrap: changeTableWrap,
       });
     }
 
@@ -390,6 +396,11 @@ export function initSettings(): void {
     updateDirty();
   }
 
+  function changeTableWrap(value: boolean): void {
+    draft = setDraftTableWrap(draft, value);
+    updateDirty();
+  }
+
   async function applyDraft(target: SettingsSnapshot): Promise<void> {
     const themeChanged = applied.themeName !== target.themeName;
     const schemeChanged = applied.scheme !== target.scheme;
@@ -428,8 +439,10 @@ export function initSettings(): void {
     document.documentElement.setAttribute("data-zoom-sensitivity", formatZoom(target.zoom));
     setSimpleTables(target.simpleTables);
     setSimpleDiffs(target.simpleDiffs);
+    setTableWrap(target.tableWrap);
     document.documentElement.classList.toggle("mdprv-simple-tables", target.simpleTables);
     document.documentElement.classList.toggle("mdprv-simple-diffs", target.simpleDiffs);
+    document.documentElement.classList.toggle("mdprv-wrap-cells", target.tableWrap);
   }
 
   function save(): void {

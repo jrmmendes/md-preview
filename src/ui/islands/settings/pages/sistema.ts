@@ -26,6 +26,7 @@ const MANAGED_LOCAL_KEYS = [
   "mdprv_zoom_sensitivity",
   "mdprv_simple_table",
   "mdprv_simple_diff",
+  "mdprv_table_wrap",
 ] as const;
 
 const MANAGED_COOKIES = ["mdprv_theme", "mdprv_prefs"] as const;

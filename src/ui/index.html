@@ -63,6 +63,10 @@
       root.classList.add("mdprv-simple-diffs");
     }
 
+    if (local("mdprv_table_wrap") === "1") {
+      root.classList.add("mdprv-wrap-cells");
+    }
+
     var shouldLoad = false;
     var raw = session("mdprv_loader_pending");
     if (raw !== null) {

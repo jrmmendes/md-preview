@@ -35,6 +35,7 @@ const KEYS = {
   diffView: "mdprv_diff_view",
   simpleTables: "mdprv_simple_table",
   simpleDiffs: "mdprv_simple_diff",
+  tableWrap: "mdprv_table_wrap",
 } as const;
 
 const LEGACY_KEYS = {
@@ -339,6 +340,18 @@ export function getSimpleDiffs(): boolean {
 
 export function setSimpleDiffs(value: boolean): void {
   localSet(KEYS.simpleDiffs, value ? "1" : "0");
+}
+
+/**
+ * Automatic cell wrapping lets long table cells grow vertically instead of
+ * truncating with ellipsis. Independent from the simple table mode.
+ */
+export function getTableWrap(): boolean {
+  return localGet(KEYS.tableWrap) === "1";
+}
+
+export function setTableWrap(value: boolean): void {
+  localSet(KEYS.tableWrap, value ? "1" : "0");
 }
 
 function currentPath(): string {

@@ -453,6 +453,32 @@
   white-space: nowrap;
 }
 
+/* --- automatic cell wrapping (`mdprv_table_wrap`) --- */
+/* Long cells grow vertically instead of being clipped with an ellipsis. The
+   class lives on <html> (boot script and settings save); the detail lightbox
+   uses its own pre-wrap panel and is intentionally not covered by these
+   `.mdprv-grid` selectors. */
+html.mdprv-wrap-cells .mdprv-table .mdprv-grid th,
+html.mdprv-wrap-cells .mdprv-table .mdprv-grid td {
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-overflow: clip;
+}
+
+html.mdprv-wrap-cells .mdprv-table .mdprv-grid thead th {
+  white-space: normal;
+}
+
+html.mdprv-wrap-cells .mdprv-table .mdprv-table-head-label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .mdprv-table-sort-icon {
   flex: none;
   display: block;

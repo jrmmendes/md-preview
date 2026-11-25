@@ -31,6 +31,7 @@ export interface SettingsSnapshot {
   zoom: number;
   simpleTables: boolean;
   simpleDiffs: boolean;
+  tableWrap: boolean;
 }
 
 export function cloneSnapshot(value: SettingsSnapshot): SettingsSnapshot {
@@ -48,6 +49,7 @@ export function cloneSnapshot(value: SettingsSnapshot): SettingsSnapshot {
     zoom: value.zoom,
     simpleTables: value.simpleTables,
     simpleDiffs: value.simpleDiffs,
+    tableWrap: value.tableWrap,
   };
 }
 
@@ -210,6 +212,13 @@ export function setDraftSimpleDiffs(
   value: boolean
 ): SettingsSnapshot {
   return { ...cloneSnapshot(draft), simpleDiffs: value };
+}
+
+export function setDraftTableWrap(
+  draft: SettingsSnapshot,
+  value: boolean
+): SettingsSnapshot {
+  return { ...cloneSnapshot(draft), tableWrap: value };
 }
 
 /** Effective blocks for a snapshot; used by the previews and by save. */

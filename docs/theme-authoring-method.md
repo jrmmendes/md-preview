@@ -2,7 +2,8 @@
 
 Método repetível para transformar uma referência visual em um `theme.json` v1 válido,
 com contraste medido e smoke nos dois esquemas. O exemplo trabalhado é o par
-`anthropic` / `anthropic-dark`, derivado de <https://claude.com/resources>.
+`tropical` / `tropical-dark`, uma paleta de tons terrosos e quentes (ivory, coral,
+clay, kraft, céu e oliva).
 
 Princípio único: **medir antes de escrever**. Nenhuma cor entra no JSON por imitação
 visual; toda cor e toda métrica vem de `getComputedStyle` ou de um cálculo explícito.
@@ -42,6 +43,7 @@ do projeto; a extração usa o MCP do Playwright, como em `docs/bdd-scenarios.md
 | `themes/theme.schema.json` | JSON Schema (draft 2020-12) do contrato v1; usado pelo editor via `$schema` e por consumidores externos |
 | `src/core/themes/validate.ts` | Validador de runtime — **autoritativo** e mais estrito que o schema |
 | `themes/<name>.json` | Temas builtin; importados estaticamente e embutidos no binário |
+| `themes/<família>/` | Coleção pronta (ex.: `themes/tropical/`); subpasta **não** é varrida como builtin nem semeada — copie ou importe para usar |
 | `${XDG_CONFIG_HOME:-~/.config}/md-preview/themes/<name>.json` | Temas de usuário; lidos em runtime e sobrepõem o builtin de mesmo nome |
 | `${XDG_CONFIG_HOME:-~/.config}/md-preview/themes/<name>.shiki.json` | Tema Shiki importado pelo modal; entra no catálogo do bloco Código |
 | `${XDG_CONFIG_HOME:-~/.config}/md-preview/themes/<name>.mermaid.json` | Tema Mermaid importado pelo modal; entra nos menus do bloco Gráficos |
@@ -66,6 +68,17 @@ os caminhos efetivos.
 
 O nome do tema **é** o basename do arquivo, sem `.json`, e o campo `name` precisa ser
 idêntico. `theme validate` deriva o nome do basename: validar uma cópia renomeada falha.
+
+Coleções prontas, como [`themes/tropical/`](../themes/tropical/), ficam em
+subpastas de `themes/` e não entram no bundle: os scanners (`store.ts`,
+`shiki-store.ts`, `mermaid-store.ts`), o seed e os testes leem apenas filhos
+diretos de `themes/`. Copie os JSON da subpasta para
+`.../md-preview/themes/` (ou importe pelo modal) para usá-los. A coleção
+`tropical` é o exemplo trabalhado deste método — par claro/escuro em tons
+terrosos e quentes, com tema de cores, Shiki e Mermaid nos seis arquivos
+`tropical.json`, `tropical-dark.json`, `tropical.shiki.json`,
+`tropical-dark.shiki.json`, `tropical.mermaid.json` e
+`tropical-dark.mermaid.json`.
 
 ### 2.3 CLI real
 
@@ -213,7 +226,7 @@ Regras de coleta:
 - Salve o dump bruto (seletor → valores) junto do screenshot. A normalização da fase
   seguinte precisa ser auditável.
 
-Exemplo de medição (tema claro do Claude): fundo `#faf9f5`, cartão `#f5f4ed`, chip de
+Exemplo de medição (tema claro da coleção): fundo `#faf9f5`, cartão `#f5f4ed`, chip de
 código `#f0eee6`, texto `#141413`, acento `#d97757`, link `#a14a2e`.
 
 ### Fase 3 — Normalizar para o contrato
@@ -358,7 +371,7 @@ próprio `kind`). `codeToHtml` alimenta os dois slots com
 
 Se um tema claro declarar `shiki.dark` escuro, o bloco de código vira escuro quando o
 SO está no escuro. Os builtins confirmam a regra: `github-light.json` usa
-`github-light` nos dois slots; `anthropic-dark.json` usa `github-dark` nos dois.
+`github-light` nos dois slots; `tropical-dark.json` usa `github-dark` nos dois.
 
 `shiki.light`/`shiki.dark` aceitam qualquer slug sintaticamente válido
 (`^[a-z0-9][a-z0-9-]{0,31}$`). Se o tema custom não existir na máquina que abriu
@@ -458,7 +471,7 @@ recomece a medição do zero: preserve o matiz e ajuste luminosidade/croma.
 
 Regras:
 
-- mantenha a família de matiz do claro (o par do Claude continua quente; nada de
+- mantenha a família de matiz do claro (o par tropical continua quente; nada de
   cinza-azulado);
 - `kind: "dark"`, `shiki.light` e `shiki.dark` com tema escuro;
 - re-meça todos os pares ≥ 4,5:1; `accent-fg` costuma inverter para o fundo escuro;
@@ -603,7 +616,7 @@ Tema automático correspondente:
   "schemaVersion": 1,
   "name": "auto",
   "kind": "auto",
-  "variants": { "light": "anthropic", "dark": "anthropic-dark" }
+  "variants": { "light": "tropical", "dark": "tropical-dark" }
 }
 ```
 

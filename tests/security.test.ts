@@ -22,6 +22,7 @@ function config(stateFile: string): Config {
     stateFile,
     theme: "auto",
     loader: "classic",
+    loaderFrom: "default",
     zoomSensitivity: 1.1,
     configDir: join(dirname(stateFile), ".."),
     seedThemes: false,

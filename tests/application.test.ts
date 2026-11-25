@@ -106,6 +106,7 @@ function makeConfig(stateFile: string, idleMs = 60_000): Config {
     stateFile,
     theme: "auto",
     loader: "classic",
+    loaderFrom: "default",
     zoomSensitivity: 1.1,
     configDir: join(dirname(stateFile), ".."),
     seedThemes: false,
@@ -462,6 +463,125 @@ describe("application daemon themes", () => {
     } finally {
       abort.abort();
       await reader?.cancel();
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+});
+
+describe("application daemon theme endpoints", () => {
+  it("serves theme CSS by name with HEAD support and rejects unknown themes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-theme-css-"));
+    const stateFile = join(dir, "state", "daemon.json");
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50 });
+    const base = `http://127.0.0.1:${daemon.port}`;
+
+    try {
+      const nord = await fetch(`${base}/__theme-css?name=nord`);
+      expect(nord.status).toBe(200);
+      expect(nord.headers.get("content-type")).toContain("text/css");
+      const css = await nord.text();
+      expect(css).toContain("--mdprv-bg:#2e3440");
+      expect(css).toContain("color-scheme:dark");
+
+      const auto = await fetch(`${base}/__theme-css?name=auto`);
+      expect(auto.status).toBe(200);
+      const autoCss = await auto.text();
+      expect(autoCss).toContain('html[data-scheme="dark"]{');
+      expect(autoCss).not.toContain("prefers-color-scheme");
+
+      const unknown = await fetch(`${base}/__theme-css?name=missing`);
+      expect(unknown.status).toBe(404);
+
+      const head = await fetch(`${base}/__theme-css?name=nord`, { method: "HEAD" });
+      expect(head.status).toBe(200);
+      expect(head.headers.get("content-type")).toContain("text/css");
+      expect(await head.text()).toBe("");
+    } finally {
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+
+  it("renders single-theme code previews with background and foreground", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-code-preview-"));
+    const stateFile = join(dir, "state", "daemon.json");
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50 });
+    const base = `http://127.0.0.1:${daemon.port}`;
+
+    try {
+      const response = await fetch(`${base}/__preview/code?theme=dracula&lang=ts`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("application/json");
+      const body = (await response.json()) as {
+        html?: string;
+        background?: string;
+        foreground?: string;
+      };
+      expect(body.html).toContain('<pre class="shiki');
+      expect(body.background).toMatch(/^#[0-9a-fA-F]{3,8}$/);
+      expect(body.foreground).toMatch(/^#[0-9a-fA-F]{3,8}$/);
+
+      const aliased = await fetch(`${base}/__preview/code?theme=nord&lang=ts`);
+      expect(aliased.status).toBe(200);
+      const aliasedBody = (await aliased.json()) as { html?: string };
+      expect(aliasedBody.html).toContain('<pre class="shiki');
+
+      expect((await fetch(`${base}/__preview/code?theme=monokai`)).status).toBe(200);
+      expect((await fetch(`${base}/__preview/code?theme=nope`)).status).toBe(400);
+      expect((await fetch(`${base}/__preview/code?theme=nord&lang=not%20a%20lang`)).status).toBe(400);
+
+      const head = await fetch(`${base}/__preview/code?theme=nord`, { method: "HEAD" });
+      expect(head.status).toBe(200);
+      expect(await head.text()).toBe("");
+    } finally {
+      daemon.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15000);
+
+  it("applies the mdprv_prefs cookie to the page and the raw highlight", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mdprv-prefs-cookie-"));
+    const file = join(dir, "doc.md");
+    const stateFile = join(dir, "state", "daemon.json");
+    writeFileSync(file, "# Code\n\n```ts\nconst answer: number = 42;\n```\n");
+    const daemon = createDaemon(makeConfig(stateFile), { heartbeatMs: 50 });
+    const base = `http://127.0.0.1:${daemon.port}`;
+    const cookie = `mdprv_prefs=${encodeURIComponent(
+      JSON.stringify({ v: 1, shiki: { light: "solarized-light", dark: "dracula" } })
+    )}`;
+
+    try {
+      await register(base, daemon.token, "doc", file);
+
+      const shikiVars = (html: string): string[] =>
+        [...html.matchAll(/--shiki-(?:light|dark):[^;"']+/g)].map((match) => match[0]).sort();
+
+      const plainPage = await (await fetch(`${base}/doc?theme=auto`)).text();
+      const overridePage = await (
+        await fetch(`${base}/doc?theme=auto`, { headers: { Cookie: cookie } })
+      ).text();
+      const plainVars = shikiVars(plainPage);
+      const overrideVars = shikiVars(overridePage);
+      expect(plainVars.length).toBeGreaterThan(0);
+      expect(overrideVars).not.toEqual(plainVars);
+
+      const plainRaw = await (await fetch(`${base}/__raw-highlight?slug=doc&theme=auto`)).text();
+      const overrideRaw = await (
+        await fetch(`${base}/__raw-highlight?slug=doc&theme=auto`, {
+          headers: { Cookie: cookie },
+        })
+      ).text();
+      expect(shikiVars(plainRaw).length).toBeGreaterThan(0);
+      expect(shikiVars(overrideRaw)).not.toEqual(shikiVars(plainRaw));
+
+      const invalid = await (
+        await fetch(`${base}/doc?theme=auto`, {
+          headers: { Cookie: "mdprv_prefs=not-json" },
+        })
+      ).text();
+      expect(shikiVars(invalid)).toEqual(plainVars);
+    } finally {
       daemon.stop();
       rmSync(dir, { recursive: true, force: true });
     }

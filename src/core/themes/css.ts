@@ -57,11 +57,19 @@ export function tokenCss(theme: FixedTheme): string {
   return fixedCss(theme, theme.kind);
 }
 
+/**
+ * Emits the theme tokens as two selectable blocks instead of a media query.
+ *
+ * `auto` uses the light block as the base and only applies the dark block when
+ * the shell (or the modal) sets `html[data-scheme="dark"]`. This keeps custom
+ * `shiki.light`/`shiki.dark` tied to the *effective* scheme, including inside
+ * fixed themes where `prefers-color-scheme` must not decide anything.
+ */
 export function themeCss(theme: ResolvedTheme): string {
-  const light = `:root{${fixedCss(theme.light, theme.kind === "auto" ? "light dark" : theme.kind)}}`;
+  const light = `:root{${fixedCss(theme.light, theme.kind === "auto" ? "light" : theme.kind)}}`;
   if (theme.kind !== "auto") {
     return light;
   }
-  const dark = `:root{${fixedCss(theme.dark, "light dark")}}`;
-  return [light, `@media (prefers-color-scheme: dark){${dark}}`].join("\n");
+  const dark = `html[data-scheme="dark"]{${fixedCss(theme.dark, "dark")}}`;
+  return [light, dark].join("\n");
 }

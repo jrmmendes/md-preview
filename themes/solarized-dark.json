@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "name": "solarized-dark",
   "kind": "dark",
+  "loader": "bars",
   "colors": {
     "background": "#002b36",
     "surface": "#073642",

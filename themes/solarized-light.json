@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "name": "solarized-light",
   "kind": "light",
+  "loader": "bars",
   "colors": {
     "background": "#fdf6e3",
     "surface": "#eee8d5",

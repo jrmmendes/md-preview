@@ -2,14 +2,38 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 
-import type { Config } from "../../core/config";
-import type { ActivateEvent, SnapshotEvent } from "../../core/contract";
+import { configFile, configThemesDir, type Config } from "../../core/config";
+import type {
+  ActivateEvent,
+  PageConfigPayload,
+  SnapshotEvent,
+} from "../../core/contract";
 import { renderPage } from "../../core/page";
 import { normalizeContent, renderMarkdown } from "../../core/markdown/render";
-import { codeToHtml, warmup } from "../../core/markdown/highlight";
+import {
+  codeToHtmlSingle,
+  codeToHtmlWithPair,
+  prepareShikiPair,
+  warmup,
+} from "../../core/markdown/highlight";
 import { encodeSlugPath, slugFor } from "../../core/slug";
+import { themeCss } from "../../core/themes/css";
+import { themeCatalog } from "../../core/themes/catalog";
+import { applyThemeOverrides } from "../../core/themes/overrides";
+import {
+  isKnownMermaidTheme,
+  mermaidThemeEntries,
+} from "../../core/themes/mermaid-index";
+import type { MermaidThemeStore } from "../../core/themes/mermaid-store";
 import { resolveThemeName } from "../../core/themes/resolve";
+import { isKnownShikiTheme } from "../../core/themes/shiki-index";
+import type { ShikiThemeStore } from "../../core/themes/shiki-store";
 import type { ThemeStore } from "../../core/themes/store";
+import {
+  parseThemePrefs,
+  THEME_PREFS_COOKIE,
+  type ThemePrefs,
+} from "../../shared/theme-prefs";
 import { VERSION } from "../../core/version";
 import { parseFrontmatter } from "../../core/frontmatter";
 import { isMarkdownPath } from "../../core/extensions";
@@ -19,6 +43,15 @@ import { createDocLinkResolver, resolveDocFile } from "./doc-links";
 import { createFontCatalog, type FontCatalog } from "./fonts";
 import { baseHeaders, fontAssetHeaders, SECURITY_HEADERS } from "./headers";
 import { serveImage } from "./images";
+import {
+  CODE_PREVIEW_SAMPLE,
+  deleteShikiTheme,
+  importShikiTheme,
+  previewShikiImport,
+  shikiThemesPayload,
+} from "./shiki-import";
+import { deleteColorTheme, importColorTheme } from "./theme-import";
+import { deleteMermaidTheme, importMermaidTheme } from "./mermaid-import";
 import { loadShell } from "./shell";
 import type { SlugEntry, SlugRegistry } from "./watch";
 
@@ -43,6 +76,8 @@ type SseController = ReadableStreamDefaultController<Uint8Array>;
 export interface RouteDeps {
   config: Config;
   themes: ThemeStore;
+  shikiThemes: ShikiThemeStore;
+  mermaidThemes: MermaidThemeStore;
   registry: SlugRegistry;
   token: string;
   onActivity: () => void;
@@ -238,6 +273,46 @@ function cookieValue(header: string | null, name: string): string | null {
     }
   }
   return null;
+}
+
+/** Read-only daemon settings for the settings modal's System page. */
+function pageConfig(config: Config): PageConfigPayload {
+  return {
+    port: config.port,
+    idleMinutes: Math.max(1, Math.round(config.idleMs / 60000)),
+    seedThemes: config.seedThemes,
+    paths: {
+      config: configFile(config),
+      themes: configThemesDir(config),
+      state: config.stateFile,
+    },
+  };
+}
+
+/** Common language aliases accepted by the code preview endpoint. */
+const LANG_ALIASES: Record<string, string> = {
+  ts: "typescript",
+  tsx: "tsx",
+  js: "javascript",
+  jsx: "jsx",
+  md: "markdown",
+  yml: "yaml",
+  sh: "bash",
+  shell: "bash",
+  py: "python",
+  rb: "ruby",
+};
+
+function previewLanguage(raw: string | null): string | null {
+  if (raw === null || raw.trim() === "") {
+    return "typescript";
+  }
+  const value = raw.trim().toLowerCase();
+  if (value === "text" || value === "txt" || value === "plaintext") {
+    return "text";
+  }
+  const normalized = LANG_ALIASES[value] ?? value;
+  return /^[a-z0-9][a-z0-9-]{0,31}$/.test(normalized) ? normalized : null;
 }
 
 function serveClientAsset(name: string): Response {
@@ -457,6 +532,10 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       config.theme,
       themes
     );
+    const prefs = parseThemePrefs(cookieValue(req.headers.get("cookie"), THEME_PREFS_COOKIE), {
+      isShikiTheme: isKnownShikiTheme,
+      isMermaidTheme: isKnownMermaidTheme,
+    });
     // Markdown: frontmatter as before. Wrapped: no frontmatter, body = fence.
     const { data, body: markdownBody } = source.wrapped
       ? { data: {} as Record<string, unknown>, body: source.markdown }
@@ -466,9 +545,10 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         ? String(data.title).trim()
         : "";
     const title = metaTitle || (entry.path ? basename(entry.path) : "Markdown Preview");
-    const theme = url.searchParams.get("theme");
+    const themeParam = url.searchParams.get("theme");
     const body = await renderMarkdown(normalizeContent(markdownBody), themeName, slug, {
-      docLinkResolver: createDocLinkResolver(registry, slug, theme),
+      docLinkResolver: createDocLinkResolver(registry, slug, themeParam),
+      themeOverrides: prefs,
     });
     const nonce = randomBytes(16).toString("base64");
     return new Response(
@@ -478,12 +558,14 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
           body,
           themeName,
           loader: config.loader,
+          loaderFrom: config.loaderFrom,
           zoomSensitivity: config.zoomSensitivity,
           meta: data,
           raw: content,
         },
         addNonce(loadShell(), nonce),
-        themes
+        themes,
+        { prefs, config: pageConfig(config) }
       ),
       {
         headers: {
@@ -510,10 +592,15 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       config.theme,
       themes
     );
+    const prefs = parseThemePrefs(cookieValue(req.headers.get("cookie"), THEME_PREFS_COOKIE), {
+      isShikiTheme: isKnownShikiTheme,
+      isMermaidTheme: isKnownMermaidTheme,
+    });
     await warmup();
+    const pair = await prepareShikiPair(themeName, prefs);
     const language =
       entry.path === "" || isMarkdownPath(entry.path) ? "markdown" : languageForFile(entry.path);
-    const html = codeToHtml(entryContent(entry), language, themeName);
+    const html = codeToHtmlWithPair(entryContent(entry), language, pair);
     return new Response(head ? null : html, {
       headers: baseHeaders("text/html; charset=utf-8"),
     });
@@ -593,7 +680,80 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       return openStream(req, url);
     }
     if ((method === "GET" || method === "HEAD") && route === "/__themes") {
-      return json({ themes: themes.names(), errors: themes.errors() }, 200, method === "HEAD");
+      return json(
+        {
+          themes: themes.names(),
+          catalog: themeCatalog(themes),
+          errors: themes.errors(),
+        },
+        200,
+        method === "HEAD"
+      );
+    }
+    if (method === "POST" && route === "/__themes") {
+      return importColorTheme(req, { dir: themes.dir, themes });
+    }
+    if (method === "DELETE" && route.startsWith("/__themes/")) {
+      const name = route.slice("/__themes/".length);
+      return deleteColorTheme(req, name, { dir: themes.dir, themes });
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__theme-css") {
+      const name = url.searchParams.get("name");
+      if (!themes.has(name)) {
+        return text("not found", 404, method === "HEAD");
+      }
+      return css(themeCss(themes.get(name)), method === "HEAD");
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__shiki-themes") {
+      return json(shikiThemesPayload(deps.shikiThemes), 200, method === "HEAD");
+    }    if (method === "POST" && route === "/__shiki-themes") {
+      return importShikiTheme(req, { dir: deps.shikiThemes.dir, store: deps.shikiThemes });
+    }
+    if (method === "POST" && route === "/__shiki-themes/preview") {
+      return previewShikiImport(req);
+    }
+    if (method === "DELETE" && route.startsWith("/__shiki-themes/")) {
+      const name = route.slice("/__shiki-themes/".length);
+      return deleteShikiTheme(req, name, {
+        dir: deps.shikiThemes.dir,
+        store: deps.shikiThemes,
+      });
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__mermaid-themes") {
+      return json(
+        { themes: mermaidThemeEntries(), errors: deps.mermaidThemes.errors() },
+        200,
+        method === "HEAD"
+      );
+    }
+    if (method === "POST" && route === "/__mermaid-themes") {
+      return importMermaidTheme(req, {
+        dir: deps.mermaidThemes.dir,
+        store: deps.mermaidThemes,
+      });
+    }
+    if (method === "DELETE" && route.startsWith("/__mermaid-themes/")) {
+      const name = route.slice("/__mermaid-themes/".length);
+      return deleteMermaidTheme(req, name, {
+        dir: deps.mermaidThemes.dir,
+        store: deps.mermaidThemes,
+      });
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__preview/code") {
+      const requested = url.searchParams.get("theme");
+      if (requested === null || !isKnownShikiTheme(requested)) {
+        return text("invalid theme", 400, method === "HEAD");
+      }
+      const language = previewLanguage(url.searchParams.get("lang"));
+      if (language === null) {
+        return text("invalid lang", 400, method === "HEAD");
+      }
+      await warmup();
+      return json(
+        await codeToHtmlSingle(CODE_PREVIEW_SAMPLE, language, requested),
+        200,
+        method === "HEAD"
+      );
     }
     if (method === "DELETE" && route.startsWith("/__doc/")) {
       if (!sameOriginRequest(req) || !fetchSiteAllowed(req)) {

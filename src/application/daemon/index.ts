@@ -6,6 +6,22 @@ import { warmup } from "../../core/markdown/render";
 import { clearDaemonState, updateDaemonState, writeDaemonState } from "../../core/state";
 import { getThemeStore, setThemeStore } from "../../core/themes/index";
 import { seedThemes as seedThemeFiles } from "../../core/themes/seed";
+import {
+  createShikiThemeStore,
+  type ShikiThemeStore,
+} from "../../core/themes/shiki-store";
+import {
+  getShikiThemeStore,
+  setShikiThemeStore,
+} from "../../core/themes/shiki-index";
+import {
+  createMermaidThemeStore,
+  type MermaidThemeStore,
+} from "../../core/themes/mermaid-store";
+import {
+  getMermaidThemeStore,
+  setMermaidThemeStore,
+} from "../../core/themes/mermaid-index";
 import { createThemeStore, type ThemeStore } from "../../core/themes/store";
 import { createRoutes, type RoutesHandle } from "./routes";
 import type { FontCatalog } from "./fonts";
@@ -23,6 +39,8 @@ export interface CreateDaemonOptions {
   heartbeatMs?: number;
   fontCatalog?: FontCatalog;
   themeStore?: ThemeStore;
+  shikiThemeStore?: ShikiThemeStore;
+  mermaidThemeStore?: MermaidThemeStore;
 }
 
 export function createDaemon(config: Config, options: CreateDaemonOptions = {}): DaemonHandle {
@@ -79,6 +97,25 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     });
   setThemeStore(themeStore);
 
+  const shikiThemeStore =
+    options.shikiThemeStore ??
+    createShikiThemeStore({
+      dir: themesDir(config.configDir),
+      watch: true,
+      logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+      onChange: (change) => broadcast("shiki-themes", change),
+    });
+  setShikiThemeStore(shikiThemeStore);
+
+  const mermaidThemeStore =
+    options.mermaidThemeStore ??
+    createMermaidThemeStore({
+      dir: themesDir(config.configDir),
+      watch: true,
+      logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+      onChange: (change) => broadcast("mermaid-themes", change),
+    });
+  setMermaidThemeStore(mermaidThemeStore);
 
   const registry = createSlugRegistry({
     onVersion: (slug, version) => broadcast("version", { slug, version }),
@@ -102,6 +139,18 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
         setThemeStore(null);
       }
     }
+    if (!options.shikiThemeStore) {
+      shikiThemeStore.close();
+      if (getShikiThemeStore() === shikiThemeStore) {
+        setShikiThemeStore(null);
+      }
+    }
+    if (!options.mermaidThemeStore) {
+      mermaidThemeStore.close();
+      if (getMermaidThemeStore() === mermaidThemeStore) {
+        setMermaidThemeStore(null);
+      }
+    }
     clearDaemonState(config.stateFile);
     try {
       server?.stop(true);
@@ -114,6 +163,8 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
   routes = createRoutes({
     config,
     themes: themeStore,
+    shikiThemes: shikiThemeStore,
+    mermaidThemes: mermaidThemeStore,
     registry,
     token,
     heartbeatMs: options.heartbeatMs,

@@ -230,7 +230,7 @@ describe("theme and config commands", () => {
     const dir = tempDir();
     const seed = run(dir, ["theme", "seed"]);
     expect(seed.exitCode).toBe(0);
-    expect(readdirSync(join(dir, "themes"))).toHaveLength(10);
+    expect(readdirSync(join(dir, "themes"))).toHaveLength(11);
 
     const first = run(dir, ["config", "init"]);
     expect(first.exitCode).toBe(0);

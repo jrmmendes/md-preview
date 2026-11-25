@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "name": "github-light",
   "kind": "light",
+  "loader": "classic",
   "colors": {
     "background": "#ffffff",
     "surface": "#f6f8fa",

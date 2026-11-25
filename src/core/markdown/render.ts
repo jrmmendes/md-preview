@@ -4,10 +4,16 @@ import footnote from "markdown-it-footnote";
 import taskLists from "markdown-it-task-lists";
 
 import { renderDiff } from "./diff";
-import { codeToHtml, warmup } from "./highlight";
+import {
+  codeToHtmlWithPair,
+  prepareShikiPair,
+  warmup,
+  type ShikiPair,
+} from "./highlight";
 import { renderCsvTable, renderGfmTableClose, renderGfmTableOpen, renderTableRawHtml } from "./table";
 import { renderTree } from "./tree";
 import type { DocLinkState } from "../doc-links";
+import type { ThemePrefs } from "../../shared/theme-prefs";
 
 export { warmup };
 
@@ -21,6 +27,8 @@ export type DocLinkResolver = (href: string) => DocLinkResolution | null;
 export interface RenderOptions {
   /** Optional hook that rewrites sibling Markdown links at render time. */
   docLinkResolver?: DocLinkResolver;
+  /** Per-browser Shiki/Mermaid overrides for this request. */
+  themeOverrides?: ThemePrefs | null;
 }
 
 interface OpenTable {
@@ -47,7 +55,7 @@ interface RenderEnv {
 function gfmRawHtml(
   lines: [number, number] | null | undefined,
   source: string | undefined,
-  themeName: string
+  pair: ShikiPair
 ): string {
   if (!lines || source === undefined) {
     return "";
@@ -60,7 +68,7 @@ function gfmRawHtml(
   if (text.trim() === "") {
     return "";
   }
-  return renderTableRawHtml(text, codeToHtml(text, "markdown", themeName));
+  return renderTableRawHtml(text, codeToHtmlWithPair(text, "markdown", pair));
 }
 
 function nextTableSeq(env: RenderEnv): number {
@@ -69,9 +77,24 @@ function nextTableSeq(env: RenderEnv): number {
   return seq;
 }
 
+const MAX_RENDERERS = 64;
 const mdCache = new Map<string, MarkdownIt>();
 
-function createRenderer(themeName: string): MarkdownIt {
+/**
+ * Renderers embed the Shiki pair in their render rules, so the cache key must
+ * include it; otherwise the first request would pin its overrides for all
+ * later requests with the same theme name. Custom themes use the internal
+ * content-addressed name, so editing one invalidates the renderer.
+ */
+function rendererKey(
+  themeName: string,
+  light: string,
+  dark: string
+): string {
+  return `${themeName}|${light}|${dark}`;
+}
+
+function createRenderer(themeName: string, pair: ShikiPair): MarkdownIt {
   const md = new MarkdownIt({
     html: true,
     linkify: true,
@@ -83,7 +106,8 @@ function createRenderer(themeName: string): MarkdownIt {
   md.use(footnote);
   md.use(anchor, { tabIndex: false });
 
-  md.options.highlight = (code: string, lang: string): string => codeToHtml(code, lang, themeName);
+  md.options.highlight = (code: string, lang: string): string =>
+    codeToHtmlWithPair(code, lang, pair);
 
   const defaultFence = md.renderer.rules.fence!;
   md.renderer.rules.fence = (tokens, idx, options, env, self) => {
@@ -95,7 +119,7 @@ function createRenderer(themeName: string): MarkdownIt {
     if (info === "csv") {
       const csv = renderCsvTable(tokens[idx].content, {
         seq: nextTableSeq(env as RenderEnv),
-        renderSource: (source) => codeToHtml(source, "csv", themeName),
+        renderSource: (source) => codeToHtmlWithPair(source, "csv", pair),
       });
       if (csv !== null) {
         return csv + "\n";
@@ -107,14 +131,14 @@ function createRenderer(themeName: string): MarkdownIt {
         dirsOnly,
         // The raw toggle shows the fence body as a bash-highlighted block, the
         // same way a normal code block would be rendered.
-        renderSource: (source) => codeToHtml(source, "bash", themeName),
+        renderSource: (source) => codeToHtmlWithPair(source, "bash", pair),
       });
       if (tree !== null) {
         return tree + "\n";
       }
     }
     if (info === "diff") {
-      const diff = renderDiff(tokens[idx].content, parts[1] || "", { themeName });
+      const diff = renderDiff(tokens[idx].content, parts[1] || "", { pair });
       if (diff !== null) {
         return diff + "\n";
       }
@@ -131,7 +155,7 @@ function createRenderer(themeName: string): MarkdownIt {
     const id = `mdprv-table-${seq}`;
     const token = tokens[idx]!;
     // The Raw view shows the table exactly as written, sliced from the source.
-    const rawHtml = gfmRawHtml(token.map, renderEnv.source, themeName);
+    const rawHtml = gfmRawHtml(token.map, renderEnv.source, pair);
     token.attrJoin("class", "mdprv-grid");
     token.attrSet("role", "grid");
     token.attrSet("aria-label", "Tabela de dados");
@@ -196,11 +220,18 @@ function createRenderer(themeName: string): MarkdownIt {
   return md;
 }
 
-function rendererFor(themeName: string): MarkdownIt {
-  let md = mdCache.get(themeName);
+function rendererFor(themeName: string, pair: ShikiPair): MarkdownIt {
+  const key = rendererKey(themeName, pair.light, pair.dark);
+  let md = mdCache.get(key);
   if (!md) {
-    md = createRenderer(themeName);
-    mdCache.set(themeName, md);
+    md = createRenderer(themeName, pair);
+    mdCache.set(key, md);
+    if (mdCache.size > MAX_RENDERERS) {
+      const oldest = mdCache.keys().next().value;
+      if (oldest !== undefined) {
+        mdCache.delete(oldest);
+      }
+    }
   }
   return md;
 }
@@ -219,7 +250,8 @@ export async function renderMarkdown(
   options: RenderOptions = {}
 ): Promise<string> {
   await warmup();
-  const md = rendererFor(themeName);
+  const pair = await prepareShikiPair(themeName, options.themeOverrides ?? null);
+  const md = rendererFor(themeName, pair);
   const env: RenderEnv = { slug, source: content };
   if (options.docLinkResolver) {
     env.docLinkResolver = options.docLinkResolver;

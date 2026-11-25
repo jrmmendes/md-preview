@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "name": "gruvbox-dark",
   "kind": "dark",
+  "loader": "dots",
   "colors": {
     "background": "#282828",
     "surface": "#32302f",

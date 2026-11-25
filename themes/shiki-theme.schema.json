@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://md-preview.local/shiki-theme.schema.json",
+  "title": "md-preview custom Shiki theme",
+  "description": "Wrapper accepted by POST /__shiki-themes and stored as <slug>.shiki.json in the themes directory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "theme"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+    },
+    "type": { "enum": ["light", "dark"] },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "type": { "enum": ["light", "dark"] },
+        "colors": {
+          "type": "object",
+          "maxProperties": 512,
+          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" },
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 64 }
+        },
+        "settings": { "$ref": "#/$defs/tokenList" },
+        "tokenColors": { "$ref": "#/$defs/tokenList" },
+        "fg": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "bg": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "semanticHighlighting": { "type": "boolean" },
+        "semanticTokenColors": {
+          "type": "object",
+          "maxProperties": 512,
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "minLength": 1, "maxLength": 64 },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "foreground": { "type": "string", "minLength": 1, "maxLength": 64 },
+                  "bold": { "type": "boolean" },
+                  "italic": { "type": "boolean" },
+                  "underline": { "type": "boolean" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tokenList": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "oneOf": [
+              { "type": "string", "maxLength": 2048 },
+              {
+                "type": "array",
+                "maxItems": 50,
+                "items": { "type": "string", "maxLength": 2048 }
+              }
+            ]
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "foreground": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "background": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "fontStyle": { "type": "string", "pattern": "^[a-z ]{0,64}$" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

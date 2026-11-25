@@ -43,6 +43,8 @@ do projeto; a extração usa o MCP do Playwright, como em `docs/bdd-scenarios.md
 | `src/core/themes/validate.ts` | Validador de runtime — **autoritativo** e mais estrito que o schema |
 | `themes/<name>.json` | Temas builtin; importados estaticamente e embutidos no binário |
 | `${XDG_CONFIG_HOME:-~/.config}/md-preview/themes/<name>.json` | Temas de usuário; lidos em runtime e sobrepõem o builtin de mesmo nome |
+| `${XDG_CONFIG_HOME:-~/.config}/md-preview/themes/<name>.shiki.json` | Tema Shiki importado pelo modal; entra no catálogo do bloco Código |
+| `${XDG_CONFIG_HOME:-~/.config}/md-preview/themes/<name>.mermaid.json` | Tema Mermaid importado pelo modal; entra nos menus do bloco Gráficos |
 | `src/core/themes/store.ts` | Merge builtin ↔ usuário, watch, erros de arquivo |
 | `src/core/themes/defaults.ts` | Defaults dos grupos opcionais |
 | `src/core/themes/css.ts` | Token → variável CSS (`--mdprv-*`) |
@@ -82,6 +84,48 @@ bun run src/application/cli/index.ts theme seed
 ./bin/md-preview theme validate themes/<name>.json
 ./bin/md-preview theme list --json
 ```
+
+### 2.4 Importar pela UI
+
+O modal (engrenagem ou `Ctrl+,`) importa os três formatos em uma única página
+(**Temas → Importar**) sem rebuild e sem reiniciar o daemon:
+
+| Bloco | Aceita | Grava |
+| --- | --- | --- |
+| **Tema de cores** | `theme.json` completo (cores, tipografia, shiki, mermaid) | `themes/<slug>.json` |
+| **Tema Shiki** | wrapper `.shiki.json` ou JSON cru de VS Code/TextMate | `themes/<slug>.shiki.json` |
+| **Tema Mermaid** | `<slug>.mermaid.json` | `themes/<slug>.mermaid.json` |
+
+Os três fluxos usam o mesmo modelo: corpo ≤ 256 KiB, escrita atômica com modo
+`0600`, nenhuma sobrescrita (arquivo existente, nome embutido ou `auto` retornam
+`409`), watcher + SSE (`themes`, `shiki-themes`, `mermaid-themes`) para atualizar
+catálogo e menus. O nome é sempre o slug do arquivo; nada vindo do usuário vira
+path. Erros de validação aparecem inline no próprio painel.
+
+Importar um tema de **cores** já o deixa selecionado e aplica as cores ao vivo.
+Importar um tema **Shiki** só o adiciona ao catálogo; use os cards Claro/Escuro
+para aplicá-lo. Importar um tema **Mermaid** o seleciona nos dois cards de
+Gráficos. O formato Mermaid é:
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "meu-diagrama",
+  "theme": "base",
+  "variables": {
+    "background": "#faf9f5",
+    "primaryColor": "#d97757",
+    "primaryTextColor": "#141413",
+    "lineColor": "#a14a2e",
+    "fontFamily": "\"Source Sans 3\", sans-serif"
+  }
+}
+```
+
+`theme` é opcional (`base` por padrão) e aceita `base`, `default`, `neutral`,
+`dark` ou `forest`. `variables` tem no máximo 512 chaves
+(`^[A-Za-z][A-Za-z0-9]*$`) e valores string de 1–200 caracteres, sem `url(`,
+`var(`, `javascript:`, `@import`, controles ou `;{}<>`.
 
 ## 3. Método em fases
 
@@ -222,6 +266,11 @@ Restrições que o validador impõe:
 - `shadow-panel`: `none` ou string de sombra com caracteres seguros;
 - `typography.family`: nome seguro (sem `;`, `{}`, `<>`, aspas, barra invertida);
 - `mermaid.overrides`: chave `^[A-Za-z][A-Za-z0-9]*$`, valor ≤ 200 caracteres, ≤ 512 entradas.
+- `mermaid.theme`: nome embutido ou slug custom (`^[a-z0-9][a-z0-9-]{0,63}$`)
+  importado como `<slug>.mermaid.json`; se não existir na máquina, o render cai
+  em `default` com um aviso.
+- tema Shiki importado: até 1.024 entradas em `theme.colors`, 2.000 tokens e
+  arquivo ≤ 256 KiB (`src/core/themes/shiki-custom.ts`).
 
 Tipografia proprietária (Styrene, Copernicus) **não é embutida**. Declare o nome no
 `stack` com fallbacks e deixe o navegador resolver:
@@ -291,15 +340,18 @@ Regra de decisão para `accent`:
 
 ### Fase 5 — Escolher Shiki e Mermaid
 
-Shiki aceita apenas oito nomes (`src/core/themes/constants.ts`):
-`github-light`, `github-dark`, `dracula`, `nord`, `solarized-dark`,
-`solarized-light`, `gruvbox-dark-medium`, `gruvbox-light-medium`.
+Shiki aceita todos os 65 temas de `@shikijs/themes@3.23.0`
+(`SHIKI_THEME_NAMES` em `src/core/themes/constants.ts`, gerado a partir do
+pacote) e qualquer slug custom importado pelo modal (`.shiki.json` em
+`<config>/themes`). A lista efetiva vem de `GET /__shiki-themes` e do payload da
+página; o modal agrupa os menus por polaridade (`kind`).
 
-**Armadilha de polaridade.** `src/ui/styles/base.css` reaplica as cores do Shiki
-dentro de `@media (prefers-color-scheme: dark)` com `!important`, usando
-`--shiki-dark` / `--shiki-dark-bg`, independentemente do `kind` do tema. E
-`codeToHtml` alimenta os dois slots com `theme.light.shiki.light` e
-`theme.dark.shiki.dark` (`src/core/markdown/highlight.ts`). Portanto:
+**Polaridade e fallback.** `src/ui/styles/base.css` reaplica as cores do Shiki
+sob `html[data-scheme="dark"]` com `!important`, usando `--shiki-dark` /
+`--shiki-dark-bg` (`data-scheme` é o esquema efetivo; em tema fixo ele é o
+próprio `kind`). `codeToHtml` alimenta os dois slots com
+`theme.light.shiki.light` e `theme.dark.shiki.dark`
+(`src/core/markdown/highlight.ts`). Portanto:
 
 - tema fixo claro → `shiki.light` **e** `shiki.dark` com um tema claro;
 - tema fixo escuro → `shiki.light` **e** `shiki.dark` com um tema escuro.
@@ -307,6 +359,12 @@ dentro de `@media (prefers-color-scheme: dark)` com `!important`, usando
 Se um tema claro declarar `shiki.dark` escuro, o bloco de código vira escuro quando o
 SO está no escuro. Os builtins confirmam a regra: `github-light.json` usa
 `github-light` nos dois slots; `anthropic-dark.json` usa `github-dark` nos dois.
+
+`shiki.light`/`shiki.dark` aceitam qualquer slug sintaticamente válido
+(`^[a-z0-9][a-z0-9-]{0,31}$`). Se o tema custom não existir na máquina que abriu
+o documento, a resolução cai em `github-light`/`github-dark` por slot, sem
+quebrar a renderização. Importar um tema não o aplica: ele só entra em uso
+quando você o escolhe no card Claro/Escuro do bloco Código.
 
 Seleção por evidência, não por gosto:
 
@@ -347,6 +405,14 @@ referência: `background`, `primaryColor`, `primaryTextColor`, `primaryBorderCol
 `nodeBorder`, `clusterBkg`, `clusterBorder`, `edgeLabelBackground`, `noteBkgColor`,
 `noteTextColor`, `noteBorderColor`, `errorBkgColor`, `errorTextColor`, `fontFamily`,
 `fontSize`.
+
+Um tema Mermaid importado (**Temas → Importar → Tema Mermaid**)
+substitui o par `theme` + `overrides` por `{ theme: <base>, themeVariables:
+<variables> }` no payload do render. Ou seja, quando `mermaid.theme` aponta para
+um slug custom, as `variables` do arquivo são a fonte da verdade; os
+`overrides` do `theme.json` continuam valendo apenas para temas embutidos.
+Use o mesmo slug em `mermaid.theme` para amarrar o par claro/escuro ao tema
+importado em todas as máquinas que tiverem o arquivo.
 
 ### Fase 6 — Validar e fazer smoke
 
@@ -458,8 +524,12 @@ Derivação real (claro → escuro):
 ## 6. Template mínimo
 
 Obrigatórios em um tema fixo: `schemaVersion`, `name`, `kind`, os 8 `colors` e
-`shiki`/`mermaid`. Os grupos `radii`, `typography`, `layout` e `effects` podem ser
-omitidos e caem nos defaults de `src/core/themes/defaults.ts`.
+`shiki`/`mermaid`. Os grupos `radii`, `typography`, `layout`, `effects` e o
+campo `loader` podem ser omitidos e caem nos defaults de
+`src/core/themes/defaults.ts` (loader omitido = `classic`). A precedência do
+loader é `MDPRV_LOADER` > `config.json.loader` > preset do tema > `classic`;
+arquivos antigos sem `loader` continuam válidos e `theme seed` não sobrescreve
+cópias existentes.
 
 ```json
 {

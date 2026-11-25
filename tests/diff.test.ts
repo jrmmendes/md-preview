@@ -11,6 +11,8 @@ import {
 } from "../src/core/markdown/diff";
 import { renderMarkdown } from "../src/core/markdown/render";
 
+const PAIR = { light: "github-light", dark: "github-dark" };
+
 const SAMPLE = `diff --git a/src/app.ts b/src/app.ts
 index 1234567..89abcde 100644
 --- a/src/app.ts
@@ -293,7 +295,7 @@ describe("diffPlainText", () => {
 
 describe("renderDiff", () => {
   it("renders the toolbar and both panes", () => {
-    const html = renderDiff(SAMPLE, "", { themeName: "auto" });
+    const html = renderDiff(SAMPLE, "", { pair: PAIR });
     expect(html).not.toBeNull();
     if (!html) {
       return;
@@ -326,7 +328,7 @@ describe("renderDiff", () => {
 
   it("renders an empty side for unpaired split rows", () => {
     const html = renderDiff("@@ -1,2 +1 @@\n-a\n-b\n+c\n", "", {
-      themeName: "auto",
+      pair: PAIR,
     });
     expect(html).not.toBeNull();
     if (!html) {
@@ -341,7 +343,7 @@ describe("renderDiff", () => {
     const html = renderDiff(
       '@@ -1 +1 @@\n-<script>alert("x") & y</script>\n+<b>ok</b> & done\n',
       "",
-      { themeName: "auto" }
+      { pair: PAIR }
     );
     expect(html).not.toBeNull();
     if (!html) {
@@ -358,7 +360,7 @@ describe("renderDiff", () => {
     const html = renderDiff(
       " const head = 1;\n-const answer = 41;\n+const answer = 42;\n const tail = 2;\n",
       "",
-      { themeName: "auto" }
+      { pair: PAIR }
     );
     expect(html).not.toBeNull();
     if (!html) {
@@ -390,7 +392,7 @@ describe("renderDiff", () => {
         "   return run(args);\n" +
         " }\n",
       "",
-      { themeName: "auto" }
+      { pair: PAIR }
     );
     expect(html).not.toBeNull();
     if (!html) {
@@ -410,7 +412,7 @@ describe("renderDiff", () => {
   });
 
   it("pairs simple diff rows side by side", () => {
-    const html = renderDiff("-old\n+new\n", "", { themeName: "auto" });
+    const html = renderDiff("-old\n+new\n", "", { pair: PAIR });
     expect(html).not.toBeNull();
     if (!html) {
       return;
@@ -424,7 +426,7 @@ describe("renderDiff", () => {
   });
 
   it("renders simple diffs that only remove lines", () => {
-    const html = renderDiff("-a\n-b\n", "", { themeName: "auto" });
+    const html = renderDiff("-a\n-b\n", "", { pair: PAIR });
     expect(html).not.toBeNull();
     if (!html) {
       return;
@@ -439,7 +441,7 @@ describe("renderDiff", () => {
     const html = renderDiff(
       '-<script>alert("x") & y</script>\n+<b>ok</b> & done\n',
       "",
-      { themeName: "auto" }
+      { pair: PAIR }
     );
     expect(html).not.toBeNull();
     if (!html) {
@@ -453,14 +455,14 @@ describe("renderDiff", () => {
   });
 
   it("returns null for a context-only body", () => {
-    expect(renderDiff(" just context\n", "", { themeName: "auto" })).toBeNull();
+    expect(renderDiff(" just context\n", "", { pair: PAIR })).toBeNull();
   });
 
   it("does not render ordinary -- deletions as metadata rows", () => {
     const html = renderDiff(
       "--- a\n--- b\n--- c\n--- d\n+e\n",
       "",
-      { themeName: "auto" }
+      { pair: PAIR }
     );
     expect(html).not.toBeNull();
     if (!html) {
@@ -494,7 +496,7 @@ describe("renderDiff", () => {
       "rename from old.txt\n" +
       "rename to new.txt\n" +
       "Binary files a/x and b/x differ\n";
-    const html = renderDiff(code, "", { themeName: "auto" });
+    const html = renderDiff(code, "", { pair: PAIR });
     expect(html).not.toBeNull();
     if (!html) {
       return;
@@ -521,7 +523,7 @@ describe("renderDiff", () => {
     const html = renderDiff(
       "texto antes do diff\n@@ -1 +1 @@\n-old\n+new\n",
       "",
-      { themeName: "auto" }
+      { pair: PAIR }
     );
     expect(html).not.toBeNull();
     if (!html) {
@@ -545,7 +547,7 @@ describe("renderDiff", () => {
   });
 
   it("returns null for invalid input", () => {
-    expect(renderDiff("just text\n", "", { themeName: "auto" })).toBeNull();
+    expect(renderDiff("just text\n", "", { pair: PAIR })).toBeNull();
   });
 });
 

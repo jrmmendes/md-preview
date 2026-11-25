@@ -1,14 +1,16 @@
 import { lstatSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { BUNDLED_RAW, THEME_SCHEMA_JSON } from "./builtin";
+import { BUNDLED_RAW, SHIKI_THEME_SCHEMA_JSON, THEME_SCHEMA_JSON } from "./builtin";
 import { THEME_SCHEMA_FILE } from "./constants";
+import { SHIKI_THEME_SCHEMA_FILE } from "./shiki-custom";
 import type { ThemeError } from "./types";
 
 export interface SeedThemesOptions {
   dir: string;
   bundled?: ReadonlyMap<string, unknown>;
   schema?: unknown;
+  shikiSchema?: unknown;
   logger?: { warn(message: string): void };
 }
 
@@ -36,6 +38,7 @@ function exists(path: string): boolean {
 export function seedThemes(options: SeedThemesOptions): SeedThemesResult {
   const bundled = options.bundled ?? BUNDLED_RAW;
   const schema = options.schema ?? THEME_SCHEMA_JSON;
+  const shikiSchema = options.shikiSchema ?? SHIKI_THEME_SCHEMA_JSON;
   const result: SeedThemesResult = { created: [], skipped: [], errors: [] };
 
   try {
@@ -81,6 +84,21 @@ export function seedThemes(options: SeedThemesOptions): SeedThemesResult {
     } catch (err) {
       result.errors.push({
         file: schemaPath,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const shikiSchemaPath = join(options.dir, SHIKI_THEME_SCHEMA_FILE);
+  if (exists(shikiSchemaPath)) {
+    result.skipped.push(SHIKI_THEME_SCHEMA_FILE);
+  } else {
+    try {
+      writeAtomic(shikiSchemaPath, JSON.stringify(shikiSchema, null, 2) + "\n");
+      result.created.push(SHIKI_THEME_SCHEMA_FILE);
+    } catch (err) {
+      result.errors.push({
+        file: shikiSchemaPath,
         message: err instanceof Error ? err.message : String(err),
       });
     }

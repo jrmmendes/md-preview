@@ -1,8 +1,10 @@
 import { resolveChartPalette } from "../../shared/table";
 import { sanitizeFamily } from "../fonts";
+import { isLoaderName, LOADERS, type LoaderName } from "../loader";
+import { isColor } from "./color";
 import {
   MERMAID_THEMES,
-  SHIKI_THEME_NAMES,
+  SHIKI_THEME_ID_RE,
   THEME_NAME_RE,
   type MermaidThemeName,
   type ShikiThemeName,
@@ -117,16 +119,6 @@ function checkKeys(ctx: Context, group: string, raw: Record<string, unknown>, al
       fail(ctx, `unknown ${group} key ${JSON.stringify(key)}`);
     }
   }
-}
-
-function isColor(value: unknown): value is string {
-  if (typeof value !== "string" || value.length === 0 || value.length > 64) {
-    return false;
-  }
-  if (/url\(|var\(|@import|[;{}<>\u0000-\u001f\u007f]/i.test(value)) {
-    return false;
-  }
-  return value === "transparent" || COLOR.test(value) || COLOR_FN.test(value);
 }
 
 function color(ctx: Context, group: string, key: string, value: unknown): string {
@@ -343,8 +335,8 @@ function validateShiki(ctx: Context, raw: unknown): ThemeShiki {
   }
   checkKeys(ctx, "shiki", raw, ["light", "dark"]);
   for (const key of ["light", "dark"] as const) {
-    if (typeof raw[key] !== "string" || !(SHIKI_THEME_NAMES as readonly string[]).includes(raw[key] as string)) {
-      fail(ctx, `shiki.${key} must be one of: ${SHIKI_THEME_NAMES.join(", ")}`);
+    if (typeof raw[key] !== "string" || !SHIKI_THEME_ID_RE.test(raw[key] as string)) {
+      fail(ctx, `shiki.${key} must be a builtin Shiki theme name or a custom slug`);
     }
   }
   return { light: raw.light as ShikiThemeName, dark: raw.dark as ShikiThemeName };
@@ -355,8 +347,13 @@ function validateMermaid(ctx: Context, raw: unknown): ThemeMermaid {
     fail(ctx, "mermaid must be an object");
   }
   checkKeys(ctx, "mermaid", raw, ["theme", "overrides"]);
-  if (typeof raw.theme !== "string" || !(MERMAID_THEMES as readonly string[]).includes(raw.theme)) {
-    fail(ctx, "mermaid.theme is not a known Mermaid theme");
+  if (
+    raw.theme === "auto" ||
+    typeof raw.theme !== "string" ||
+    (!(MERMAID_THEMES as readonly string[]).includes(raw.theme) &&
+      !THEME_NAME_RE.test(raw.theme))
+  ) {
+    fail(ctx, "mermaid.theme must be a builtin Mermaid theme or a custom slug");
   }
   if (!isRecord(raw.overrides)) {
     fail(ctx, "mermaid.overrides must be an object");
@@ -376,6 +373,13 @@ function validateMermaid(ctx: Context, raw: unknown): ThemeMermaid {
     overrides[key] = value;
   }
   return { theme: raw.theme as MermaidThemeName, overrides };
+}
+
+function validateLoader(ctx: Context, raw: unknown): LoaderName {
+  if (!isLoaderName(raw)) {
+    fail(ctx, `loader must be one of: ${LOADERS.join(", ")}`);
+  }
+  return raw;
 }
 
 export function validateTheme(fileName: string, raw: unknown): Theme {
@@ -400,6 +404,7 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
     "charts",
     "shiki",
     "mermaid",
+    "loader",
   ]);
   if (raw.schemaVersion !== 1) {
     fail(ctx, "schemaVersion must be 1");
@@ -417,6 +422,7 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
       "charts",
       "shiki",
       "mermaid",
+      "loader",
     ]) {
       if (forbidden in raw) {
         fail(ctx, `auto themes cannot define ${forbidden}`);
@@ -456,6 +462,7 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
   const layout = "layout" in raw ? validateLayout(ctx, raw.layout) : undefined;
   const effects = "effects" in raw ? validateEffects(ctx, raw.effects) : undefined;
   const charts = "charts" in raw ? validateCharts(ctx, raw.charts, raw.kind) : undefined;
+  const loader = "loader" in raw ? validateLoader(ctx, raw.loader) : undefined;
   const normalized = withDefaults(
     colors,
     radii,
@@ -463,12 +470,14 @@ export function validateTheme(fileName: string, raw: unknown): Theme {
     layout,
     effects,
     charts,
-    raw.kind
+    raw.kind,
+    loader
   );
   const fixed: FixedTheme = {
     schemaVersion: 1,
     name: raw.name,
     kind: raw.kind,
+    loader: normalized.loader,
     colors: normalized.colors,
     radii: normalized.radii,
     typography: normalized.typography,

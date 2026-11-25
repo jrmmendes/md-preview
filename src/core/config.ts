@@ -1,7 +1,6 @@
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
-import type { LoaderName } from "./contract";
 import {
   configFilePath,
   readConfigFile,
@@ -9,26 +8,21 @@ import {
   type FileConfig,
   themesDir,
 } from "./config-file";
+import { DEFAULT_LOADER, isLoaderName, LOADERS, type LoaderName } from "./loader";
 import { DEFAULT_THEME, THEME_NAME_RE } from "./themes/constants";
 
 export const DEFAULT_PORT = 8766;
 export const DEFAULT_IDLE = 15;
-export const DEFAULT_LOADER = "classic";
 export const DEFAULT_ZOOM_SENSITIVITY = 1.1;
 export const DEFAULT_SEED_THEMES = true;
 
+export { DEFAULT_LOADER, isLoaderName, LOADERS };
 export type { LoaderName };
 
-export const LOADERS = [
-  "classic",
-  "dots",
-  "bars",
-  "ring",
-  "pulse",
-  "braille",
-] as const satisfies readonly LoaderName[];
-
 export type ConfigEnv = Record<string, string | undefined>;
+
+/** Where the effective loader came from; `default` means "let the theme decide". */
+export type LoaderSource = "env" | "file" | "default";
 
 export interface Config {
   port: number;
@@ -36,6 +30,7 @@ export interface Config {
   stateFile: string;
   theme: string;
   loader: LoaderName;
+  loaderFrom: LoaderSource;
   zoomSensitivity: number;
   configDir: string;
   seedThemes: boolean;
@@ -53,7 +48,7 @@ export interface LoadConfigOptions {
 }
 
 export function resolveLoaderName(name: string | undefined): LoaderName {
-  return name && (LOADERS as readonly string[]).includes(name) ? (name as LoaderName) : DEFAULT_LOADER;
+  return isLoaderName(name) ? name : DEFAULT_LOADER;
 }
 
 export function resolveZoomSensitivity(value: number | string | undefined): number {
@@ -140,16 +135,20 @@ export function loadConfig(env: ConfigEnv = process.env, options: LoadConfigOpti
     resolveSeedThemes(file.seedThemes) ??
     DEFAULT_SEED_THEMES;
 
+  const fromEnv = env.MDPRV_LOADER !== undefined;
+  const fromFile = typeof file.loader === "string";
+  const loaderFrom: LoaderSource = fromEnv ? "env" : fromFile ? "file" : "default";
+
   return {
     port: env.MDPRV_PORT !== undefined ? resolvePort(env.MDPRV_PORT) : resolvePort(file.port),
     idleMs:
       env.MDPRV_IDLE !== undefined ? resolveIdleMs(env.MDPRV_IDLE) : resolveIdleMs(file.idle),
     stateFile: resolveStateFile(env),
     theme: themed,
-    loader:
-      env.MDPRV_LOADER !== undefined
-        ? resolveLoaderName(env.MDPRV_LOADER)
-        : resolveLoaderName(typeof file.loader === "string" ? file.loader : undefined),
+    loader: fromEnv
+      ? resolveLoaderName(env.MDPRV_LOADER)
+      : resolveLoaderName(typeof file.loader === "string" ? file.loader : undefined),
+    loaderFrom,
     zoomSensitivity:
       env.MDPRV_ZOOM_SENSITIVITY !== undefined
         ? resolveZoomSensitivity(env.MDPRV_ZOOM_SENSITIVITY)
@@ -170,7 +169,13 @@ export function configToEnv(config: Config, base: ConfigEnv = process.env): Reco
   env.MDPRV_IDLE = String(Math.max(1, Math.round(config.idleMs / 60000)));
   env.MDPRV_STATE = config.stateFile;
   env.MDPRV_THEME = config.theme;
-  env.MDPRV_LOADER = config.loader;
+  // Only forward an explicit choice: otherwise the daemon would always see
+  // `MDPRV_LOADER=classic` and the theme preset would never apply.
+  if (config.loaderFrom !== "default") {
+    env.MDPRV_LOADER = config.loader;
+  } else {
+    delete env.MDPRV_LOADER;
+  }
   env.MDPRV_ZOOM_SENSITIVITY = String(config.zoomSensitivity);
   env.MDPRV_CONFIG_DIR = config.configDir;
   env.MDPRV_SEED_THEMES = config.seedThemes ? "1" : "0";

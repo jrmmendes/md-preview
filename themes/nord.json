@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "name": "nord",
   "kind": "dark",
+  "loader": "ring",
   "colors": {
     "background": "#2e3440",
     "surface": "#3b4252",

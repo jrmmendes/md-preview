@@ -1,3 +1,4 @@
+import type { LoaderName } from "../loader";
 import type { MermaidThemeName, ShikiThemeName } from "./constants";
 
 export interface ThemeColors {
@@ -93,6 +94,8 @@ export interface AutoTheme extends BaseTheme {
 
 export interface FixedTheme extends BaseTheme {
   kind: "light" | "dark";
+  /** Loading indicator preset; omitted themes normalize to `classic`. */
+  loader: LoaderName;
   colors: ThemeColors;
   radii: ThemeRadii;
   typography: ThemeTypography;

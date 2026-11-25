@@ -10,6 +10,8 @@ export {
   themeErrors,
   themeNames,
 } from "./index";
+export { DEFAULT_LOADER, LOADERS, isLoaderName, type LoaderName } from "../loader";
+export { DEFAULT_THEME_LOADER } from "./defaults";
 export type { ThemeStore, ThemeChange, ThemeLogger, ThemeStoreOptions } from "./store";
 export type {
   AutoTheme,

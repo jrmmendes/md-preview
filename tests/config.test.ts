@@ -27,6 +27,7 @@ describe("loadConfig", () => {
     expect(config.idleMs).toBe(DEFAULT_IDLE * 60 * 1000);
     expect(config.theme).toBe("auto");
     expect(config.loader).toBe(DEFAULT_LOADER);
+    expect(config.loaderFrom).toBe("default");
     expect(config.zoomSensitivity).toBe(DEFAULT_ZOOM_SENSITIVITY);
     expect(config.stateFile.endsWith("md-preview/daemon.json")).toBe(true);
     expect(config.configDir).toBe(resolve(CONFIG_DIR));
@@ -51,6 +52,7 @@ describe("loadConfig", () => {
     expect(config.stateFile).toBe("/tmp/mdprv/daemon.json");
     expect(config.theme).toBe("nord");
     expect(config.loader).toBe("braille");
+    expect(config.loaderFrom).toBe("env");
     expect(config.zoomSensitivity).toBe(1.5);
     expect(config.seedThemes).toBe(false);
   });
@@ -71,6 +73,34 @@ describe("loadConfig", () => {
     expect(config.loader).toBe(DEFAULT_LOADER);
     expect(config.zoomSensitivity).toBe(DEFAULT_ZOOM_SENSITIVITY);
     expect(config.idleMs).toBe(DEFAULT_IDLE * 60 * 1000);
+  });
+
+  it("tracks whether the loader came from env, file or defaults", () => {
+    expect(loadConfig({ MDPRV_LOADER: "ring" }, OPTIONS).loaderFrom).toBe("env");
+    expect(loadConfig({}, OPTIONS).loaderFrom).toBe("default");
+    const fromFile = loadConfig(
+      {},
+      {
+        configDir: CONFIG_DIR,
+        readFile: (path) =>
+          path.endsWith("config.json") ? JSON.stringify({ loader: "dots" }) : null,
+      }
+    );
+    expect(fromFile.loader).toBe("dots");
+    expect(fromFile.loaderFrom).toBe("file");
+  });
+
+  it("prefers the env loader over the file, even when both are set", () => {
+    const config = loadConfig(
+      { MDPRV_LOADER: "pulse" },
+      {
+        configDir: CONFIG_DIR,
+        readFile: (path) =>
+          path.endsWith("config.json") ? JSON.stringify({ loader: "dots" }) : null,
+      }
+    );
+    expect(config.loader).toBe("pulse");
+    expect(config.loaderFrom).toBe("env");
   });
 
   it("falls back to auto for an invalid theme name", () => {
@@ -149,5 +179,19 @@ describe("configToEnv", () => {
     expect(env.MDPRV_CONFIG_DIR).toBe(config.configDir);
     expect(env.MDPRV_SEED_THEMES).toBe("1");
     expect("EMPTY" in env).toBe(false);
+  });
+
+  it("omits MDPRV_LOADER when the loader came from the theme preset", () => {
+    const config = loadConfig({}, OPTIONS);
+    const env = configToEnv(config, { MDPRV_LOADER: "pulse", PATH: "/bin" });
+    expect("MDPRV_LOADER" in env).toBe(false);
+    expect(env.PATH).toBe("/bin");
+  });
+
+  it("keeps MDPRV_LOADER when it was chosen explicitly", () => {
+    const env = configToEnv(loadConfig({ MDPRV_LOADER: "pulse" }, OPTIONS), {
+      MDPRV_LOADER: "ring",
+    });
+    expect(env.MDPRV_LOADER).toBe("pulse");
   });
 });

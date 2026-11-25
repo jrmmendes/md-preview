@@ -1,5 +1,6 @@
 import { resolveChartPalette } from "../../shared/table";
 import { DEFAULT_FONT_STACK } from "../fonts";
+import { DEFAULT_LOADER, type LoaderName } from "../loader";
 import type {
   ThemeCharts,
   ThemeColors,
@@ -72,6 +73,9 @@ export const DEFAULT_OPTIONAL_COLORS = {
   selection: "",
 } as const;
 
+/** Preset used when a fixed theme omits `loader`. */
+export const DEFAULT_THEME_LOADER: LoaderName = DEFAULT_LOADER;
+
 export function withDefaults(
   colors: Pick<ThemeColors, "background" | "surface" | "text" | "muted" | "border" | "accent" | "code-bg" | "quote"> &
     Partial<ThemeColors>,
@@ -80,8 +84,10 @@ export function withDefaults(
   layout: Partial<ThemeLayout> | undefined,
   effects: Partial<ThemeEffects> | undefined,
   charts: Partial<ThemeCharts> | undefined,
-  kind: "light" | "dark"
+  kind: "light" | "dark",
+  loader?: LoaderName
 ): {
+  loader: LoaderName;
   colors: ThemeColors;
   radii: ThemeRadii;
   typography: ThemeTypography;
@@ -90,6 +96,7 @@ export function withDefaults(
   charts: ThemeCharts;
 } {
   return {
+    loader: loader ?? DEFAULT_THEME_LOADER,
     colors: {
       background: colors.background,
       surface: colors.surface,

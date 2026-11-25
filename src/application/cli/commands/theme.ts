@@ -3,6 +3,12 @@ import { basename } from "node:path";
 
 import { configThemesDir, loadConfig, type Config } from "../../../core/config";
 import { themesDir } from "../../../core/config-file";
+import { isBuiltinShikiTheme } from "../../../core/themes/shiki-custom";
+import { createShikiThemeStore } from "../../../core/themes/shiki-store";
+import {
+  isBuiltinMermaidThemeName,
+} from "../../../core/themes/mermaid-index";
+import { createMermaidThemeStore } from "../../../core/themes/mermaid-store";
 import { createThemeStore } from "../../../core/themes/store";
 import { seedThemes } from "../../../core/themes/seed";
 import { validateTheme } from "../../../core/themes/validate";
@@ -38,7 +44,10 @@ export async function themePath(config: Config = loadConfig()): Promise<void> {
   process.stdout.write(`themes: ${configThemesDir(config)}\n`);
 }
 
-export async function themeValidate(file: string): Promise<boolean> {
+export async function themeValidate(
+  file: string,
+  config: Config = loadConfig()
+): Promise<boolean> {
   const name = basename(file).replace(/\.json$/i, "");
   let raw: unknown;
   try {
@@ -48,7 +57,36 @@ export async function themeValidate(file: string): Promise<boolean> {
     return false;
   }
   try {
-    validateTheme(name, raw);
+    const theme = validateTheme(name, raw);
+    if (theme.kind !== "auto") {
+      const store = createShikiThemeStore({
+        dir: themesDir(config.configDir),
+        watch: false,
+        logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+      });
+      for (const slot of [theme.shiki.light, theme.shiki.dark]) {
+        if (!isBuiltinShikiTheme(slot) && !store.has(slot)) {
+          process.stderr.write(
+            `md-preview: warning: Shiki theme ${slot} is not builtin and was not imported on this machine; rendering falls back to github-light/github-dark\n`
+          );
+        }
+      }
+      store.close();
+      const mermaid = theme.mermaid.theme;
+      if (!isBuiltinMermaidThemeName(mermaid)) {
+        const mermaidStore = createMermaidThemeStore({
+          dir: themesDir(config.configDir),
+          watch: false,
+          logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+        });
+        if (!mermaidStore.has(mermaid)) {
+          process.stderr.write(
+            `md-preview: warning: Mermaid theme ${mermaid} is not builtin and was not imported on this machine; rendering falls back to default\n`
+          );
+        }
+        mermaidStore.close();
+      }
+    }
     process.stdout.write(`ok: ${file}\n`);
     return true;
   } catch (err) {

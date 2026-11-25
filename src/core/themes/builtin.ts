@@ -8,6 +8,7 @@ import nordRaw from "../../../themes/nord.json";
 import solarizedDarkRaw from "../../../themes/solarized-dark.json";
 import solarizedLightRaw from "../../../themes/solarized-light.json";
 import themeSchema from "../../../themes/theme.schema.json";
+import shikiThemeSchema from "../../../themes/shiki-theme.schema.json";
 
 import type { Theme } from "./types";
 import { validateTheme } from "./validate";
@@ -25,6 +26,8 @@ export const BUNDLED_RAW: ReadonlyMap<string, unknown> = new Map<string, unknown
 ]);
 
 export const THEME_SCHEMA_JSON: unknown = themeSchema;
+
+export const SHIKI_THEME_SCHEMA_JSON: unknown = shikiThemeSchema;
 
 export const BUNDLED_THEMES: ReadonlyMap<string, Theme> = new Map<string, Theme>(
   [...BUNDLED_RAW].map(([name, raw]): [string, Theme] => [name, validateTheme(name, raw)])

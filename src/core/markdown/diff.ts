@@ -14,7 +14,7 @@ import type { ThemedTokenWithVariants } from "shiki/types";
 
 import { COPY_ICON } from "../../shared/copy-icons";
 import { buildDiffClipboardText } from "../../shared/diff-text";
-import { codeToThemedTokens } from "./highlight";
+import { codeToThemedTokensWithPair, type ShikiPair } from "./highlight";
 
 export type DiffLineKind = "context" | "add" | "del" | "meta" | "hunk";
 
@@ -67,8 +67,8 @@ export interface DiffRow {
 }
 
 export interface DiffRenderOptions {
-  /** Active theme name, used to pick the Shiki light/dark pair. */
-  themeName: string;
+  /** Prepared Shiki pair (internal names) for the active request. */
+  pair: ShikiPair;
 }
 
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
@@ -444,16 +444,16 @@ interface TokenMaps {
 function tokenizeSide(
   side: DiffLine[],
   lang: string,
-  themeName: string
+  pair: ShikiPair
 ): TokenMap {
   const map: TokenMap = new Map();
   if (!lang || side.length === 0) {
     return map;
   }
-  const tokens = codeToThemedTokens(
+  const tokens = codeToThemedTokensWithPair(
     side.map((line) => line.text).join("\n"),
     lang,
-    themeName
+    pair
   );
   if (!tokens) {
     return map;
@@ -725,8 +725,8 @@ export function renderDiff(
     lines.length > MAX_HIGHLIGHT_LINES
       ? { old: new Map(), new: new Map() }
       : {
-          old: tokenizeSide(oldSide, lang, options.themeName),
-          new: tokenizeSide(newSide, lang, options.themeName),
+          old: tokenizeSide(oldSide, lang, options.pair),
+          new: tokenizeSide(newSide, lang, options.pair),
         };
 
   const toolbar =

@@ -3,6 +3,7 @@
   "schemaVersion": 1,
   "name": "github-dark",
   "kind": "dark",
+  "loader": "classic",
   "colors": {
     "background": "#0d1117",
     "surface": "#161b22",

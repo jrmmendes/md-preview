@@ -17,7 +17,7 @@ import {
 } from "../src/core/themes/tokens";
 
 const THEMES = join(import.meta.dir, "../themes");
-const FILES = readdirSync(THEMES).filter((file) => file.endsWith(".json") && file !== "theme.schema.json");
+const FILES = readdirSync(THEMES).filter((file) => file.endsWith(".json") && !file.endsWith(".schema.json"));
 const COLOR = /^(transparent|#[0-9a-fA-F]{3,8}|(rgba?|hsla?)\(.+\))$/;
 
 describe("builtin themes", () => {
@@ -62,13 +62,35 @@ describe("builtin themes", () => {
       for (const color of fixed.charts.palette) {
         expect(color).toMatch(COLOR);
       }
-      expect(SHIKI_THEME_NAMES).toContain(fixed.shiki.light);
-      expect(SHIKI_THEME_NAMES).toContain(fixed.shiki.dark);
+      expect(SHIKI_THEME_NAMES as readonly string[]).toContain(fixed.shiki.light);
+      expect(SHIKI_THEME_NAMES as readonly string[]).toContain(fixed.shiki.dark);
       for (const value of Object.values(fixed.mermaid.overrides)) {
         expect(typeof value).toBe("string");
       }
     });
   }
+});
+
+describe("builtin loaders", () => {
+  it("ships the preset loader from the prototype table", () => {
+    const expected: Record<string, FixedTheme["loader"]> = {
+      "github-light": "classic",
+      "github-dark": "classic",
+      dracula: "pulse",
+      "gruvbox-light": "dots",
+      "gruvbox-dark": "dots",
+      nord: "ring",
+      "solarized-light": "bars",
+      "solarized-dark": "bars",
+    };
+    for (const [name, loader] of Object.entries(expected)) {
+      expect(getTheme(name).light.loader).toBe(loader);
+      expect(getTheme(name).dark.loader).toBe(loader);
+    }
+    // `auto` has no loader of its own; it inherits from its variants.
+    expect(getTheme("auto").light.loader).toBe("classic");
+    expect(getTheme("auto").dark.loader).toBe("classic");
+  });
 });
 
 describe("themeNames", () => {
@@ -96,14 +118,34 @@ describe("themeCss", () => {
     expect(fixedCss).not.toContain("prefers-color-scheme");
   });
 
-  it("uses a single generator for auto and repeats the block in dark mode", () => {
+  it("emits the auto dark block under html[data-scheme=dark]", () => {
     const auto = getTheme("auto");
     const autoCss = themeCss(auto);
-    expect(autoCss).toContain("color-scheme:light dark");
-    expect(autoCss).toContain("@media (prefers-color-scheme: dark){:root{");
-    expect(autoCss.match(/prefers-color-scheme/g)).toHaveLength(1);
+    expect(autoCss).toStartWith(":root{");
+    expect(autoCss).toContain(`html[data-scheme="dark"]{`);
+    expect(autoCss).not.toContain("@media");
+    expect(autoCss).not.toContain("prefers-color-scheme");
+    expect(autoCss).toContain("color-scheme:light");
+    expect(autoCss).toContain("color-scheme:dark");
     expect(autoCss).toContain(auto.light.colors.background);
     expect(autoCss).toContain(auto.dark.colors.background);
+    // The shared generator still drives both blocks.
+    expect(autoCss).toContain(tokenCss(auto.light));
+    expect(autoCss).toContain(tokenCss(auto.dark));
+  });
+
+  it("never emits a scheme media query for fixed themes", () => {
+    for (const name of themeNames()) {
+      const theme = getTheme(name);
+      const out = themeCss(theme);
+      expect(out).not.toContain("@media");
+      if (theme.kind === "auto") {
+        expect(out).toContain("html[data-scheme=\"dark\"]");
+      } else {
+        expect(out.startsWith(":root{")).toBe(true);
+        expect(out).not.toContain("data-scheme");
+      }
+    }
   });
 });
 
@@ -145,8 +187,10 @@ describe("resolveThemeName", () => {
     expect(resolveThemeName(null, null, "nope")).toBe(DEFAULT_THEME);
   });
 
-  it("exposes the full Shiki allowlist", () => {
+  it("exposes the full Shiki catalog", () => {
     expect(shikiThemeNames()).toEqual([...SHIKI_THEME_NAMES]);
+    expect(shikiThemeNames()).toHaveLength(65);
     expect(shikiThemeNames()).toContain("gruvbox-dark-medium");
+    expect(shikiThemeNames()).toContain("tokyo-night");
   });
 });

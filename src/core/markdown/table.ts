@@ -61,9 +61,9 @@ function toolbarHtml(id: string, withRaw: boolean): string {
   const rawButton = withRaw
     ? '<button type="button" class="mdprv-table-btn mdprv-table-btn--label" data-mdprv-table-action="raw" aria-pressed="false">Raw</button>'
     : "";
-  // The Raw toggle leads the toolbar (left of the search magnifier), mirroring
-  // the tree block; the modifier class keeps the remaining controls grouped on
-  // the right (see table.css).
+  // The Raw toggle leads the toolbar (left of the search magnifier), and the
+  // filter field sits next to it; the icon actions are pushed to the right end
+  // by table.css, so the flexible space stays in the middle.
   return (
     `<div class="mdprv-table-toolbar${withRaw ? " mdprv-table-toolbar--raw" : ""}" data-mdprv-table-toolbar hidden>` +
     rawButton +

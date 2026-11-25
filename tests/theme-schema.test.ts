@@ -52,6 +52,24 @@ describe("validateTheme", () => {
     expect(theme.charts.palette).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
   });
 
+  it("normalizes an omitted loader to classic", () => {
+    const theme = validateTheme("sample", fixed()) as FixedTheme;
+    expect(theme.loader).toBe("classic");
+  });
+
+  it("accepts a known loader and keeps it", () => {
+    const theme = validateTheme("sample", fixed({ loader: "dots" })) as FixedTheme;
+    expect(theme.loader).toBe("dots");
+  });
+
+  it("accepts custom Shiki slugs in shiki.light/dark", () => {
+    const theme = validateTheme(
+      "sample",
+      fixed({ shiki: { light: "minha-paleta", dark: "tokyo-night" } })
+    ) as FixedTheme;
+    expect(theme.shiki).toEqual({ light: "minha-paleta", dark: "tokyo-night" });
+  });
+
   it("uses a valid charts.palette verbatim", () => {
     const theme = validateTheme(
       "sample",
@@ -101,7 +119,10 @@ describe("validateTheme", () => {
     ["unsafe stack", fixed({ typography: { stack: "Inter;color:red" } }), "sample"],
     ["unsafe length", fixed({ layout: { "content-width": "calc(1px + 2px)" } }), "sample"],
     ["long duration", fixed({ effects: { "duration-fast": "3s" } }), "sample"],
-    ["unknown shiki", fixed({ shiki: { light: "unknown", dark: "nord" } }), "sample"],
+    ["invalid shiki slug", fixed({ shiki: { light: "Nope!", dark: "nord" } }), "sample"],
+    ["shiki slug with dot", fixed({ shiki: { light: "my.theme", dark: "nord" } }), "sample"],
+    ["shiki slug with underscore", fixed({ shiki: { light: "my_theme", dark: "nord" } }), "sample"],
+    ["shiki slug too long", fixed({ shiki: { light: "a".repeat(33), dark: "nord" } }), "sample"],
     ["unknown charts key", fixed({ charts: { series: [] } }), "sample"],
     [
       "unsafe mermaid key",
@@ -110,6 +131,9 @@ describe("validateTheme", () => {
     ],
     ["fixed with variants", fixed({ variants: { light: "sample", dark: "sample" } }), "sample"],
     ["auto with colors", auto({ colors: COLORS }), "auto"],
+    ["auto with loader", auto({ loader: "dots" }), "auto"],
+    ["unknown loader", fixed({ loader: "spin" }), "sample"],
+    ["non-string loader", fixed({ loader: 2 }), "sample"],
   ];
   for (const [label, raw, name] of invalid) {
     it(`rejects ${label}`, () => {

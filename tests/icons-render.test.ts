@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { createIconStore } from "../src/core/icons/store";
 import { setIconStore } from "../src/core/icons/index";
 import { resolveIconPackName } from "../src/core/icons/resolve";
+import { fallbackIconSvg } from "../src/application/daemon/icons-assets";
+import { FALLBACK_ICON_SVG } from "../src/core/icons/defaults";
 import { renderMarkdown } from "../src/core/markdown/render";
 import { renderPage } from "../src/core/page";
 
@@ -55,6 +57,26 @@ describe("icon rendering", () => {
     expect(html).toContain('--mdprv-icon-copy:url("/__icon-assets/breeze/copy.svg")');
     expect(html).toContain('--mdprv-icon-chart-scatter:url("/__icon-assets/breeze/chart-scatter.svg")');
     expect(payload(html).icons).toEqual({ name: "breeze", style: "symbolic" });
+  });
+
+  it("emits lucide URLs when the selection resolves to the lucide pack", () => {
+    const store = createIconStore({ dir: null, watch: false });
+    expect(resolveIconPackName("lucide", null, "breeze", store)).toBe("lucide");
+    expect(resolveIconPackName(null, "lucide", "breeze", store)).toBe("lucide");
+    expect(resolveIconPackName(null, null, "lucide", store)).toBe("lucide");
+
+    const html = renderPage(input(), SHELL, undefined, { iconName: "lucide" });
+    expect(html).toContain('data-icons="lucide"');
+    expect(html).toContain('--mdprv-icon-copy:url("/__icon-assets/lucide/copy.svg")');
+    expect(html).toContain(
+      '--mdprv-icon-chart-scatter:url("/__icon-assets/lucide/chart-scatter.svg")'
+    );
+    expect(payload(html).icons).toEqual({ name: "lucide", style: "symbolic" });
+  });
+
+  it("keeps breeze as the per-key fallback when a pack omits a key", () => {
+    expect(resolveIconPackName(null, null, "does-not-exist")).toBe("breeze");
+    expect(fallbackIconSvg("lucide", "copy", () => null)).toBe(FALLBACK_ICON_SVG);
   });
 
   it("falls back to the builtin pack for an unknown selection", () => {

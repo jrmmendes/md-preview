@@ -7,6 +7,7 @@ import { createDaemon, type DaemonHandle } from "../src/application/daemon";
 import { fallbackIconSvg } from "../src/application/daemon/icons-assets";
 import type { Config } from "../src/core/config";
 import { builtinIconSvg } from "../src/core/icons/builtin";
+import { ICON_KEYS } from "../src/core/icons/constants";
 import { FALLBACK_ICON_SVG } from "../src/core/icons/defaults";
 
 const dirs: string[] = [];
@@ -78,6 +79,36 @@ describe("icon asset serving", () => {
     const head = await fetch(`${base}/__icon-assets/breeze/copy.svg`, { method: "HEAD" });
     expect(head.status).toBe(200);
     expect(await head.text()).toBe("");
+  }, 15000);
+
+  it("serves the builtin lucide pack from the embedded map", async () => {
+    const base = startWith(tempDir());
+    const response = await fetch(`${base}/__icon-assets/lucide/copy.svg`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+    const body = await response.text();
+    expect(body).toBe(builtinIconSvg("lucide", "copy")!);
+    expect(body).toContain("<svg");
+    expect(body).toContain('stroke="currentColor"');
+
+    const head = await fetch(`${base}/__icon-assets/lucide/copy.svg`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe("image/svg+xml");
+    expect(await head.text()).toBe("");
+
+    expect((await fetch(`${base}/__icon-assets/lucide/nope.svg`)).status).toBe(404);
+  }, 15000);
+
+  it("serves every lucide key as an embedded SVG", async () => {
+    const base = startWith(tempDir());
+    for (const key of ICON_KEYS) {
+      const response = await fetch(`${base}/__icon-assets/lucide/${key}.svg`);
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toBe(builtinIconSvg("lucide", key)!);
+      expect(body).toContain("<svg");
+      expect(body).toContain("</svg>");
+    }
   }, 15000);
 
   it("serves a user asset and data URIs", async () => {

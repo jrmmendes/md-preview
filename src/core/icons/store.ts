@@ -112,6 +112,11 @@ export function createIconStore(options: IconStoreOptions = {}): IconStore {
       if (isReservedIconPack(name)) {
         continue;
       }
+      // Every bundled pack (`breeze`, `lucide`) is immutable: a user file with
+      // the same slug never shadows the embedded manifest.
+      if (bundled.has(name)) {
+        continue;
+      }
       merged.set(name, pack);
     }
     orderedNames = ordered(merged);

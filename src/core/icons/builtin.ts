@@ -1,5 +1,6 @@
 import iconSchema from "../../../icons/icon.schema.json";
 import breezeRaw from "../../../icons/breeze.json";
+import lucideRaw from "../../../icons/lucide.json";
 
 import { DEFAULT_ICON_PACK } from "./constants";
 import { BUNDLED_ICON_SVGS } from "./builtin-assets";
@@ -12,6 +13,7 @@ export const ICON_SCHEMA_JSON: unknown = iconSchema;
 
 export const BUNDLED_ICON_RAW: ReadonlyMap<string, unknown> = new Map<string, unknown>([
   ["breeze", breezeRaw],
+  ["lucide", lucideRaw],
 ]);
 
 export const BUNDLED_ICON_PACKS: ReadonlyMap<string, IconPack> = new Map<string, IconPack>(

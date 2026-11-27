@@ -2,9 +2,10 @@
  * `GET /__icon-assets/<pack>/<key>.svg`: serves the SVG for one icon key.
  *
  * Resolution order mirrors the client contract:
- *   1. the selected pack (data URI or relative path under the icons dir);
- *   2. the builtin `breeze` asset embedded in the binary;
- *   3. a generic fallback glyph from `defaults.ts`.
+ *   1. the builtin asset embedded in the binary (for `breeze`, `lucide`, ...);
+ *   2. the selected pack (data URI or relative path under the icons dir);
+ *   3. the builtin `breeze` asset embedded in the binary;
+ *   4. a generic fallback glyph from `defaults.ts`.
  *
  * Path traversal, symlinks and non-regular files are rejected with 404 for
  * user assets. A key that is missing everywhere still returns a valid SVG so a
@@ -116,6 +117,13 @@ export function serveIconAsset(
   // stray files under `<configDir>/icons/breeze/` can never shadow it.
   if (pack === DEFAULT_ICON_PACK) {
     return svgResponse(fallbackIconSvg(pack, key), head);
+  }
+
+  // Other bundled packs (`lucide`) are served from the embedded map too, so
+  // the compiled binary does not need the `icons/` tree on disk.
+  const embedded = builtinIconSvg(pack, key);
+  if (embedded) {
+    return svgResponse(embedded, head);
   }
 
   const value = store.iconValue(pack, key);

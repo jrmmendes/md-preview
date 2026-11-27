@@ -44,12 +44,38 @@ describe("icon store", () => {
     expect(store.list()[0]).toMatchObject({ name: "breeze", source: "builtin" });
   });
 
+  it("lists breeze as the default builtin and lucide as a second builtin", () => {
+    const store = createIconStore({ dir: null, watch: false });
+    expect(store.names()).toEqual(["breeze", "lucide"]);
+    expect(store.list()).toMatchObject([
+      { name: "breeze", source: "builtin", default: true, count: 42 },
+      { name: "lucide", source: "builtin", count: 42 },
+    ]);
+    expect(store.list()[1]?.default).toBeUndefined();
+    expect(store.get("lucide").style).toBe("symbolic");
+    expect(Object.keys(store.get("lucide").icons)).toHaveLength(42);
+  });
+
+  it("never lets a user file shadow a bundled pack", () => {
+    const dir = tempDir();
+    writePack(dir, "lucide", { copy: "lucide/hijack.svg" });
+    writeAsset(dir, "lucide/hijack.svg", "<svg>hijack</svg>");
+    const store = createIconStore({ dir, watch: false });
+
+    expect(store.list().filter((item) => item.name === "lucide")).toHaveLength(1);
+    expect(store.list().find((item) => item.name === "lucide")).toMatchObject({
+      source: "builtin",
+      count: 42,
+    });
+    expect(store.iconValue("lucide", "copy")).toBe("lucide/copy.svg");
+  });
+
   it("merges user packs above builtins and reports user source", () => {
     const dir = tempDir();
     writePack(dir, "custom", { copy: "custom/copy.svg" });
     writeAsset(dir, "custom/copy.svg");
     const store = createIconStore({ dir, watch: false });
-    expect(store.names()).toEqual(["breeze", "custom"]);
+    expect(store.names()).toEqual(["breeze", "custom", "lucide"]);
     expect(store.list().find((item) => item.name === "custom")).toMatchObject({
       source: "user",
       style: "fullcolor",
@@ -101,8 +127,8 @@ describe("icon store", () => {
     const store = createIconStore({ dir, watch: false });
 
     expect(store.has("default")).toBe(false);
-    expect(store.names()).toEqual(["breeze"]);
-    expect(store.list().map((item) => item.name)).toEqual(["breeze"]);
+    expect(store.names()).toEqual(["breeze", "lucide"]);
+    expect(store.list().map((item) => item.name)).toEqual(["breeze", "lucide"]);
     expect(store.get("default").name).toBe("breeze");
     expect(store.errors()).toEqual([
       {

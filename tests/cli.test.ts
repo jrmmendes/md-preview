@@ -314,7 +314,11 @@ describe("theme and config commands", () => {
 
     const seed = run(dir, ["icons", "seed"]);
     expect(seed.exitCode).toBe(0);
-    expect(readdirSync(join(dir, "icons")).sort()).toEqual(["breeze.json", "icon.schema.json"]);
+    expect(readdirSync(join(dir, "icons")).sort()).toEqual([
+      "breeze.json",
+      "icon.schema.json",
+      "lucide.json",
+    ]);
   });
 });
 

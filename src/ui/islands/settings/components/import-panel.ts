@@ -27,12 +27,19 @@ export interface ImportPanelConfig<T> {
   namePlaceholder: string;
   nameMaxLength: number;
   textareaPlaceholder: string;
+  textareaLabel?: string;
   textareaRows?: number;
   accept?: string;
   endpoint: string;
   deleteEndpoint: (name: string) => string;
   listTitle: string;
+  /** Set to false when the page owns the installed list/removal UI. */
+  showList?: boolean;
   items: ImportPanelItem[];
+  /** Maps a server theme to its installed-list row. */
+  toItem: (theme: T) => ImportPanelItem;
+  /** Maps a full catalog to the installed-list rows (drops builtins). */
+  itemsFrom: (themes: T[]) => ImportPanelItem[];
   buildPayload: (
     text: string,
     name: string
@@ -40,6 +47,11 @@ export interface ImportPanelConfig<T> {
   deriveName: (parsed: unknown) => string;
   slugFromFile: (filename: string) => string;
   errorMessage: (status: number, body: string) => string;
+  /**
+   * Maps the server body to the imported item + full catalog. Defaults to the
+   * theme endpoints (`{ theme, themes }`); emoji packs return `{ emoji, emojis }`.
+   */
+  readResponse?: (body: unknown) => ImportPanelResponse<T> | null;
   onImported: (result: ImportPanelResponse<T>) => void;
   onDeleted: (name: string) => void;
 }
@@ -85,10 +97,16 @@ export function renderImportPanel<T>(config: ImportPanelConfig<T>): HTMLElement 
     hidden: true,
   });
   const status = el("p", {
-    class: "mdprv-settings-code-status",
+    class: "mdprv-settings-import-status",
     role: "status",
     "aria-live": "polite",
   });
+  const messages = el(
+    "div",
+    { class: "mdprv-settings-import-message" },
+    error,
+    status
+  );
   const importBtn = el(
     "button",
     { type: "button", class: "mdprv-settings-btn" },
@@ -97,6 +115,7 @@ export function renderImportPanel<T>(config: ImportPanelConfig<T>): HTMLElement 
   );
 
   const list = el("div", { class: "mdprv-settings-custom-list" });
+  let items = [...config.items];
 
   function showError(message: string): void {
     error.textContent = message;
@@ -132,7 +151,7 @@ export function renderImportPanel<T>(config: ImportPanelConfig<T>): HTMLElement 
 
   function renderItems(items: ImportPanelItem[]): void {
     list.replaceChildren();
-    if (items.length === 0) {
+    if (config.showList === false || items.length === 0) {
       return;
     }
     list.appendChild(el("p", { class: "mdprv-settings-field-label" }, config.listTitle));
@@ -159,6 +178,10 @@ export function renderImportPanel<T>(config: ImportPanelConfig<T>): HTMLElement 
               showError(config.errorMessage(response.status, await response.text()));
               return;
             }
+            // Update the installed list in place: a page re-render would wipe
+            // whatever JSON the other forms still hold.
+            items = items.filter((item) => item.name !== entry.name);
+            renderItems(items);
             config.onDeleted(entry.name);
           } catch (err) {
             showError(err instanceof Error ? err.message : String(err));
@@ -206,15 +229,29 @@ export function renderImportPanel<T>(config: ImportPanelConfig<T>): HTMLElement 
           showError(config.errorMessage(response.status, await response.text()));
           return;
         }
-        const body = (await response.json()) as {
+        const raw = (await response.json()) as {
           theme?: T;
           themes?: T[];
         };
-        if (!body.theme) {
-          showError("O servidor não devolveu o tema importado.");
+        const parsed = config.readResponse
+          ? config.readResponse(raw)
+          : raw.theme
+            ? { theme: raw.theme, themes: raw.themes ?? [] }
+            : null;
+        if (!parsed?.theme) {
+          showError("O servidor não devolveu o item importado.");
           return;
         }
-        config.onImported({ theme: body.theme, themes: body.themes ?? [] });
+        const themes = parsed.themes;
+        const imported = config.toItem(parsed.theme);
+        items = themes.length > 0
+          ? config.itemsFrom(themes)
+          : [
+              ...items.filter((item) => item.name !== imported.name),
+              imported,
+            ];
+        renderItems(items);
+        config.onImported({ theme: parsed.theme, themes });
       } catch (err) {
         showError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -249,7 +286,7 @@ export function renderImportPanel<T>(config: ImportPanelConfig<T>): HTMLElement 
   });
   textarea.addEventListener("blur", deriveName);
 
-  renderItems(config.items);
+  renderItems(items);
 
   return el(
     "div",
@@ -270,11 +307,14 @@ export function renderImportPanel<T>(config: ImportPanelConfig<T>): HTMLElement 
     el(
       "div",
       { class: "mdprv-settings-field" },
-      el("label", { class: "mdprv-settings-field-label", for: textId }, "JSON do tema"),
+      el(
+        "label",
+        { class: "mdprv-settings-field-label", for: textId },
+        config.textareaLabel ?? "JSON do tema"
+      ),
       textarea
     ),
-    error,
-    status,
+    messages,
     el("div", { class: "mdprv-settings-import-actions" }, importBtn),
     list
   );

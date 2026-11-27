@@ -105,6 +105,7 @@ function makeConfig(stateFile: string, idleMs = 60_000): Config {
     idleMs,
     stateFile,
     theme: "auto",
+    emoji: "github",
     loader: "classic",
     loaderFrom: "default",
     zoomSensitivity: 1.1,

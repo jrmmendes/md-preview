@@ -21,6 +21,7 @@ import {
   needsReload,
   restoreDraftBlock,
   setDraftCustomized,
+  setDraftExample,
   setDraftFont,
   setDraftSimpleTables,
   setDraftTableWrap,
@@ -92,6 +93,7 @@ const APPLIED: SettingsSnapshot = {
   scheme: "light",
   blocks: { fonte: false, loader: false, codigo: false, graficos: false },
   stored: { font: null, loader: null, shiki: null, mermaid: null },
+  emojiName: "github",
   exampleId: "fluxo",
   zoom: 1.1,
   simpleTables: false,
@@ -161,6 +163,15 @@ describe("settings draft", () => {
       stack: "system-ui, sans-serif",
       source: "local",
     });
+  });
+
+  it("switching the chart example never makes the draft dirty", () => {
+    const draft = setDraftExample(APPLIED, "classes");
+    expect(draft.exampleId).toBe("classes");
+    // The example is a live view preference, not a setting to save.
+    expect(isDraftDirty(APPLIED, draft)).toBe(false);
+    expect(needsReload(APPLIED, draft, DATA)).toBe(false);
+    expect(commitSnapshot(APPLIED, draft).exampleId).toBe("classes");
   });
 
   it("keeps table wrap in the draft until commit and does not reload", () => {

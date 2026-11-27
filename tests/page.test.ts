@@ -4,7 +4,7 @@ import { jsonForScript, renderPage } from "../src/core/page";
 import { themeNames } from "../src/core/themes/tokens";
 
 const SHELL = `<!DOCTYPE html>
-<html data-theme="{{mdprv-theme}}" data-scheme="{{mdprv-scheme}}" data-shiki-light="{{mdprv-shiki-light}}" data-shiki-dark="{{mdprv-shiki-dark}}" data-loader="{{mdprv-loader}}" data-loader-dark="{{mdprv-loader-dark}}" data-zoom-sensitivity="{{mdprv-zoom}}">
+<html data-theme="{{mdprv-theme}}" data-scheme="{{mdprv-scheme}}" data-shiki-light="{{mdprv-shiki-light}}" data-shiki-dark="{{mdprv-shiki-dark}}" data-emoji="{{mdprv-emoji}}" data-loader="{{mdprv-loader}}" data-loader-dark="{{mdprv-loader-dark}}" data-zoom-sensitivity="{{mdprv-zoom}}">
 <head><title>{{mdprv-title}}</title><style id="mdprv-theme-css">{{mdprv-theme-css}}</style></head>
 <body>
 <div class="mdprv-loader--{{mdprv-loader}}"></div>
@@ -33,6 +33,7 @@ describe("renderPage", () => {
     expect(html).not.toContain("{{mdprv-");
     expect(html).toContain('data-theme="auto"');
     expect(html).toContain('data-scheme="light"');
+    expect(html).toContain('data-emoji="github"');
     expect(html).toContain('data-loader="braille"');
     expect(html).toContain('data-loader-dark="braille"');
     expect(html).toContain('data-zoom-sensitivity="1.5"');
@@ -119,7 +120,7 @@ describe("renderPage", () => {
           port: 8766,
           idleMinutes: 15,
           seedThemes: true,
-          paths: { config: "/c/config.json", themes: "/c/themes", state: "/s/daemon.json" },
+          paths: { config: "/c/config.json", themes: "/c/themes", emojis: "/c/emojis", state: "/s/daemon.json" },
         },
       }
     );
@@ -175,6 +176,19 @@ describe("renderPage", () => {
     expect(data.shikiThemes?.length).toBe(65);
     expect(data.shikiThemes?.every((theme) => theme.source === "builtin")).toBe(true);
     expect(data.shikiThemes?.some((theme) => theme.name === "tokyo-night")).toBe(true);
+  });
+
+  it("ships the active emoji pack and catalog", () => {
+    const html = renderPage(input(), SHELL, undefined, { emojiName: "github" });
+    const payload = html.match(/id="mdprv-data">([\s\S]*?)<\/script>/);
+    const data = JSON.parse(payload?.[1] ?? "{}") as {
+      emoji?: { name?: string; style?: string };
+      emojis?: Array<{ name?: string; source?: string; style?: string; count?: number }>;
+    };
+    expect(data.emoji).toEqual({ name: "github", style: "native" });
+    expect(data.emojis?.[0]?.name).toBe("github");
+    expect(data.emojis?.[0]?.source).toBe("builtin");
+    expect(data.emojis?.[0]?.count).toBeGreaterThanOrEqual(80);
   });
 
   it("escapes '<' in JSON so it cannot close the script block", () => {

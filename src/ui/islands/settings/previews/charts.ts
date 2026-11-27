@@ -88,8 +88,11 @@ function marker(): { defs: string; id: string } {
   return { defs, id };
 }
 
+/** Every example shares one viewBox so the card keeps the same height. */
+export const CHART_VIEWBOX = "0 0 300 260";
+
 function flowSvg(arrow: { defs: string; id: string }): string {
-  return `<svg class="mdprv-settings-chart-svg" viewBox="0 0 300 260" xmlns="http://www.w3.org/2000/svg">
+  return `<svg class="mdprv-settings-chart-svg" viewBox="${CHART_VIEWBOX}" xmlns="http://www.w3.org/2000/svg">
       ${arrow.defs}
       <rect class="chart-node" x="95" y="12" width="110" height="32" rx="5"></rect>
       <text class="chart-title" x="150" y="29">Início</text>
@@ -114,7 +117,7 @@ function sequenceSvg(arrowId: string): string {
   const message = (from: number, to: number, y: number, label: string): string => `
     <path class="chart-edge" d="M ${from} ${y} L ${to} ${y}" marker-end="url(#${arrowId})"></path>
     <text class="chart-label" x="${(from + to) / 2}" y="${y - 7}">${label}</text>`;
-  return `<svg class="mdprv-settings-chart-svg" viewBox="0 0 300 270" xmlns="http://www.w3.org/2000/svg">
+  return `<svg class="mdprv-settings-chart-svg" viewBox="${CHART_VIEWBOX}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="${arrowId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
           <path class="chart-arrow" d="M 0 0 L 10 5 L 0 10 z"></path>
@@ -131,7 +134,7 @@ function sequenceSvg(arrowId: string): string {
 }
 
 function classesSvg(): string {
-  return `<svg class="mdprv-settings-chart-svg" viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg">
+  return `<svg class="mdprv-settings-chart-svg" viewBox="${CHART_VIEWBOX}" xmlns="http://www.w3.org/2000/svg">
       <rect class="chart-node" x="15" y="30" width="125" height="110" rx="5"></rect>
       <path class="chart-edge chart-edge--plain" d="M 15 58 L 140 58"></path>
       <text class="chart-title" x="77" y="45">Documento</text>
@@ -254,12 +257,21 @@ function menuEntries(
   return result;
 }
 
-export function renderChartsPreview(config: ChartsPreviewConfig): HTMLElement {
-  const example = chartExample(config.exampleId);
+export interface ChartsPreviewHandle {
+  root: HTMLElement;
+  /** Repaints the cards for another example without rebuilding the form. */
+  setExample(id: string): void;
+}
+
+export function renderChartsPreview(
+  config: ChartsPreviewConfig
+): ChartsPreviewHandle {
+  let exampleId = config.exampleId;
   const cards: CardEntry[] = [];
   const grid = el("div", { class: "mdprv-settings-chart-grid" });
 
   const paint = (): void => {
+    const example = chartExample(exampleId);
     for (const entry of cards) {
       entry.card.innerHTML = example.render();
       const themeEntry = entryByName(config.themes, entry.themeId);
@@ -318,5 +330,14 @@ export function renderChartsPreview(config: ChartsPreviewConfig): HTMLElement {
 
   paint();
 
-  return el("div", { class: "mdprv-settings-chart-preview" }, grid);
+  return {
+    root: el("div", { class: "mdprv-settings-chart-preview" }, grid),
+    setExample(id: string): void {
+      if (chartExample(id).id === chartExample(exampleId).id) {
+        return;
+      }
+      exampleId = id;
+      paint();
+    },
+  };
 }

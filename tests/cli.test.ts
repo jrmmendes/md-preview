@@ -242,6 +242,42 @@ describe("theme and config commands", () => {
     expect(second.exitCode).toBe(0);
     expect(readFileSync(configPath, "utf8")).toBe('{"theme":"nord"}\n');
   });
+
+  it("lists, validates and seeds emoji packs", () => {
+    const dir = tempDir();
+    const paths = run(dir, ["emoji", "path"]);
+    expect(paths.exitCode).toBe(0);
+    expect(output(paths)).toContain(`emojis: ${join(dir, "emojis")}`);
+    expect(output(paths)).toContain(`assets: ${join(dir, "emojis", "assets")}`);
+
+    const listed = run(dir, ["emoji", "list", "--json"]);
+    expect(listed.exitCode).toBe(0);
+    const items = JSON.parse(listed.stdout.toString()) as Array<{
+      name: string;
+      source: string;
+      count: number;
+    }>;
+    expect(items[0]?.name).toBe("github");
+    expect(items[0]?.source).toBe("builtin");
+    expect(items[0]?.count).toBeGreaterThanOrEqual(80);
+
+    const valid = join(dir, "custom.json");
+    writeFileSync(
+      valid,
+      JSON.stringify({ schemaVersion: 1, name: "custom", shortcodes: { smile: "😄" } })
+    );
+    expect(run(dir, ["emoji", "validate", valid]).exitCode).toBe(0);
+
+    const invalid = join(dir, "broken.json");
+    writeFileSync(invalid, JSON.stringify({ schemaVersion: 2, name: "broken", shortcodes: {} }));
+    const bad = run(dir, ["emoji", "validate", invalid]);
+    expect(bad.exitCode).toBe(1);
+    expect(output(bad)).toContain("schemaVersion");
+
+    const seed = run(dir, ["emoji", "seed"]);
+    expect(seed.exitCode).toBe(0);
+    expect(readdirSync(join(dir, "emojis")).sort()).toEqual(["emoji.schema.json", "github.json"]);
+  });
 });
 
 describe("preview command line", () => {

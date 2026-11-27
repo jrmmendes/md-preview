@@ -30,6 +30,7 @@ import {
   CHART_EXAMPLES,
   chartExample,
   renderChartsPreview,
+  type ChartsPreviewHandle,
 } from "../previews/charts";
 
 export interface AppearanceContext {
@@ -46,6 +47,8 @@ export interface AppearanceContext {
   openImportPage(): void;
   shikiThemes: ShikiThemeEntry[];
   mermaidThemes: MermaidThemeEntry[];
+  /** Hands the live chart preview to the owner so the example can repaint it. */
+  registerChartsPreview(handle: ChartsPreviewHandle): void;
 }
 
 function blockOptions(
@@ -63,16 +66,8 @@ function blockOptions(
   });
 }
 
-export function renderAppearancePage(ctx: AppearanceContext): HTMLElement {
-  const fragment = document.createDocumentFragment();
-  fragment.appendChild(
-    sectionHeader({
-      title: "Aparência",
-      description: "Fonte, loader, código e gráficos do documento.",
-    })
-  );
-
-  const fontBlock = customizableBlock({
+function fontBlock(ctx: AppearanceContext): HTMLElement {
+  return customizableBlock({
     title: "Fonte",
     description:
       "Fonte usada no texto renderizado. Famílias indisponíveis usam o fallback da stack.",
@@ -103,8 +98,10 @@ export function renderAppearancePage(ctx: AppearanceContext): HTMLElement {
       })(),
     ],
   });
+}
 
-  const loaderBlock = customizableBlock({
+function loaderBlock(ctx: AppearanceContext): HTMLElement {
+  return customizableBlock({
     title: "Loader",
     description:
       "Prévia animada das seis opções exibidas enquanto um documento carrega.",
@@ -118,8 +115,10 @@ export function renderAppearancePage(ctx: AppearanceContext): HTMLElement {
       }),
     ],
   });
+}
 
-  const codeBlock = customizableBlock({
+function codeBlock(ctx: AppearanceContext): HTMLElement {
+  return customizableBlock({
     title: "Código",
     description: "Prévia dos temas Shiki nos modos claro e escuro.",
     block: "codigo",
@@ -137,7 +136,9 @@ export function renderAppearancePage(ctx: AppearanceContext): HTMLElement {
       })(),
     ],
   });
+}
 
+function chartsBlock(ctx: AppearanceContext): HTMLElement {
   const example = chartExample(ctx.exampleId);
   const exampleMenu = iconMenu({
     label: `Exemplo de diagrama: ${example.label}`,
@@ -151,7 +152,7 @@ export function renderAppearancePage(ctx: AppearanceContext): HTMLElement {
     onChange: (value) => ctx.changeExample(value),
   });
 
-  const chartsBlock = customizableBlock({
+  return customizableBlock({
     title: "Gráficos",
     description:
       "Tema Mermaid e exemplos de diagramas nos modos claro e escuro.",
@@ -163,7 +164,7 @@ export function renderAppearancePage(ctx: AppearanceContext): HTMLElement {
     children: [
       (() => {
         const value: MermaidValue = ctx.resolved.graficos.value;
-        return renderChartsPreview({
+        const preview = renderChartsPreview({
           light: value.light,
           dark: value.dark,
           exampleId: ctx.exampleId,
@@ -171,20 +172,58 @@ export function renderAppearancePage(ctx: AppearanceContext): HTMLElement {
           themes: ctx.mermaidThemes,
           onChange: (face, theme) => ctx.changeMermaid(face, theme),
         });
+        ctx.registerChartsPreview(preview);
+        return preview.root;
       })(),
     ],
   });
+}
 
-  fragment.appendChild(
-    el(
-      "div",
-      { class: "mdprv-settings-appearance-blocks" },
-      fontBlock,
-      loaderBlock,
-      codeBlock,
-      chartsBlock
-    )
+const BLOCK_BUILDERS: Record<BlockId, (ctx: AppearanceContext) => HTMLElement> = {
+  fonte: fontBlock,
+  loader: loaderBlock,
+  codigo: codeBlock,
+  graficos: chartsBlock,
+};
+
+export interface AppearancePageHandle {
+  root: HTMLElement;
+  /** Rebuilds one block from `ctx`, keeping scroll and the other blocks. */
+  updateBlock(block: BlockId, ctx: AppearanceContext): void;
+}
+
+export function renderAppearancePage(ctx: AppearanceContext): AppearancePageHandle {
+  const blocks = el(
+    "div",
+    { class: "mdprv-settings-appearance-blocks" },
+    BLOCK_BUILDERS.fonte(ctx),
+    BLOCK_BUILDERS.loader(ctx),
+    BLOCK_BUILDERS.codigo(ctx),
+    BLOCK_BUILDERS.graficos(ctx)
   );
 
-  return el("div", { class: "mdprv-settings-page" }, fragment);
+  const root = el(
+    "div",
+    { class: "mdprv-settings-page" },
+    sectionHeader({
+      title: "Aparência",
+      description: "Fonte, loader, código e gráficos do documento.",
+    }),
+    blocks
+  );
+
+  return {
+    root,
+    updateBlock(block, next) {
+      const replacement = BLOCK_BUILDERS[block](next);
+      const current = blocks.querySelector<HTMLElement>(
+        `.mdprv-settings-block[data-block="${block}"]`
+      );
+      if (current) {
+        current.replaceWith(replacement);
+      } else {
+        blocks.appendChild(replacement);
+      }
+    },
+  };
 }

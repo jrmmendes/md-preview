@@ -1,10 +1,13 @@
 import type { ThemePrefs } from "../shared/theme-prefs";
 import type {
+  EmojiPackEntry,
   PageConfigPayload,
+  PageEmojiPayload,
   PageInput,
   PageThemePayload,
   ThemeCatalogEntry,
 } from "./contract";
+import { emojiPackEntries, getEmojiStore } from "./emoji/index";
 import { renderMeta } from "./meta";
 import { themeCss } from "./themes/css";
 import { themeCatalog } from "./themes/catalog";
@@ -37,6 +40,8 @@ export interface RenderPageOptions {
   prefs?: ThemePrefs | null;
   /** Read-only daemon settings for the settings modal. */
   config?: PageConfigPayload | null;
+  /** Effective emoji pack slug resolved for this request. */
+  emojiName?: string | null;
 }
 
 export function renderPage(
@@ -77,6 +82,9 @@ export function renderPage(
   const catalog: ThemeCatalogEntry[] = themeCatalog(themes);
   const shikiThemes = shikiThemeEntries();
   const mermaidThemes = mermaidThemeEntries();
+  const emojiPack = getEmojiStore().get(options.emojiName ?? null);
+  const emojis: EmojiPackEntry[] = emojiPackEntries();
+  const emoji: PageEmojiPayload = { name: emojiPack.name, style: emojiPack.style };
 
   const fill: Array<[string, string]> = [
     ["{{mdprv-title}}", Bun.escapeHTML(input.title)],
@@ -88,6 +96,7 @@ export function renderPage(
     ["{{mdprv-shiki-dark}}", themePayload.shiki.dark],
     ["{{mdprv-mermaid-light}}", themePayload.mermaidTheme.light],
     ["{{mdprv-mermaid-dark}}", themePayload.mermaidTheme.dark],
+    ["{{mdprv-emoji}}", emojiPack.name],
     ["{{mdprv-zoom}}", String(input.zoomSensitivity)],
     ["{{mdprv-theme-css}}", themeCss(theme)],
     ["{{mdprv-meta}}", renderMeta(input.meta)],
@@ -100,6 +109,8 @@ export function renderPage(
         catalog,
         shikiThemes,
         mermaidThemes,
+        emojis,
+        emoji,
         config: options.config ?? null,
       }),
     ],

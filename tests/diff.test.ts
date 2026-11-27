@@ -539,10 +539,10 @@ describe("renderDiff", () => {
       "utf8"
     );
     expect(css).toContain(
-      'html.mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="meta"]'
+      ':is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="meta"]'
     );
     expect(css).toContain(
-      'html.mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="hunk"]'
+      ':is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-diffs .mdprv-diff tr[data-diff-kind="hunk"]'
     );
   });
 

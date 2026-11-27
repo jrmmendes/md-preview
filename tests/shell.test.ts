@@ -75,6 +75,7 @@ describe("ui shell", () => {
     expect(SHELL).toContain('data-scheme="{{mdprv-scheme}}"');
     expect(SHELL).toContain('data-shiki-light="{{mdprv-shiki-light}}"');
     expect(SHELL).toContain('data-shiki-dark="{{mdprv-shiki-dark}}"');
+    expect(SHELL).toContain('data-emoji="{{mdprv-emoji}}"');
     expect(SHELL).toContain('data-loader="{{mdprv-loader}}"');
     expect(SHELL).toContain('data-loader-dark="{{mdprv-loader-dark}}"');
     const head = SHELL.slice(0, SHELL.indexOf("<body>"));

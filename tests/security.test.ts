@@ -21,6 +21,7 @@ function config(stateFile: string): Config {
     idleMs: 60_000,
     stateFile,
     theme: "auto",
+    emoji: "github",
     loader: "classic",
     loaderFrom: "default",
     zoomSensitivity: 1.1,

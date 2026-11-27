@@ -45,6 +45,8 @@ const LEGACY_KEYS = {
 
 const THEME_COOKIE = "mdprv_theme";
 
+const EMOJI_COOKIE = "mdprv_emoji";
+
 export type CollapsedSide = "left" | "right";
 
 export type DiffView = "inline" | "split";
@@ -172,6 +174,16 @@ export function getTheme(): string | null {
 
 export function setTheme(name: string): void {
   cookieSet(THEME_COOKIE, name);
+}
+
+/** Active emoji pack; mirrors the theme cookie and is written only on Save. */
+export function setEmoji(name: string): void {
+  cookieSet(EMOJI_COOKIE, name);
+}
+
+/** Drops the explicit pack so resolution falls back to config then `github`. */
+export function clearEmoji(): void {
+  cookieDelete(EMOJI_COOKIE);
 }
 
 export function getWidth(): number | null {

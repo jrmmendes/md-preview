@@ -458,8 +458,8 @@
    class lives on <html> (boot script and settings save); the detail lightbox
    uses its own pre-wrap panel and is intentionally not covered by these
    `.mdprv-grid` selectors. */
-html.mdprv-wrap-cells .mdprv-table .mdprv-grid th,
-html.mdprv-wrap-cells .mdprv-table .mdprv-grid td {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-wrap-cells .mdprv-table .mdprv-grid th,
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-wrap-cells .mdprv-table .mdprv-grid td {
   height: auto;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -467,11 +467,11 @@ html.mdprv-wrap-cells .mdprv-table .mdprv-grid td {
   text-overflow: clip;
 }
 
-html.mdprv-wrap-cells .mdprv-table .mdprv-grid thead th {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-wrap-cells .mdprv-table .mdprv-grid thead th {
   white-space: normal;
 }
 
-html.mdprv-wrap-cells .mdprv-table .mdprv-table-head-label {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-wrap-cells .mdprv-table .mdprv-table-head-label {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
@@ -724,10 +724,17 @@ html.mdprv-wrap-cells .mdprv-table .mdprv-table-head-label {
   background: color-mix(in srgb, var(--mdprv-accent) 16%, var(--mdprv-bg));
 }
 
+/* Active cell ring. The inset shadow alone is painted below the cell hairlines,
+   so on the frame edges the 1px border eats half of the 2px stroke and the ring
+   reads as cut. The outline is painted above the border and, with a negative
+   offset, stays inside the cell: the ring closes on all four sides, never
+   overflows the frame and does not shift the grid. */
 .mdprv-grid td.mdprv-active,
 .mdprv-grid th.mdprv-active {
   position: relative;
   box-shadow: inset 0 0 0 2px var(--mdprv-accent);
+  outline: 2px solid var(--mdprv-accent);
+  outline-offset: -2px;
   z-index: 2;
 }
 
@@ -1013,39 +1020,36 @@ html.mdprv-wrap-cells .mdprv-table .mdprv-table-head-label {
   display: none;
 }
 
-/* --- simple table mode (global preference) --- */
-html.mdprv-simple-tables .mdprv-table {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-html.mdprv-simple-tables .mdprv-sheet {
+/* --- simple table mode (global preference) ---
+   The outer frame keeps the same border, themed radius and background as the
+   full mode; only the spreadsheet chrome (gutters and inner grid rules) is
+   simplified. */
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-sheet {
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
 }
 
-html.mdprv-simple-tables .mdprv-sheet-corner,
-html.mdprv-simple-tables .mdprv-sheet-colhead,
-html.mdprv-simple-tables .mdprv-sheet-rowhead {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-sheet-corner,
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-sheet-colhead,
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-sheet-rowhead {
   display: none;
 }
 
-html.mdprv-simple-tables .mdprv-sheet-body {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-sheet-body {
   grid-column: 1;
   grid-row: 1;
 }
 
-html.mdprv-simple-tables .mdprv-grid th,
-html.mdprv-simple-tables .mdprv-grid td {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-grid th,
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-grid td {
   border-right: 0;
 }
 
-html.mdprv-simple-tables .mdprv-grid td {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-grid td {
   border-bottom-color: color-mix(in srgb, var(--mdprv-border) 55%, transparent);
 }
 
-html.mdprv-simple-tables .mdprv-table-chart {
+:is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-table-chart {
   background: transparent;
 }
 

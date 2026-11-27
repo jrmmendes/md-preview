@@ -103,6 +103,17 @@ export function initLiveReload(): void {
     reload();
   });
 
+  on("emojis", (data) => {
+    const active = document.documentElement.getAttribute("data-emoji") ?? "";
+    const changed = Array.isArray(data.changed) ? data.changed : [];
+    // Only an edit/removal of the effective pack changes the rendered HTML;
+    // the settings catalog itself updates in place in the modal island.
+    if (active === "" || !changed.includes(active)) {
+      return;
+    }
+    reload();
+  });
+
   on("version", (data) => {
     if (!ready || data.slug !== slug) {
       return;

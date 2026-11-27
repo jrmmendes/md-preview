@@ -139,6 +139,7 @@ beforeAll(() => {
     idleMs: 60_000,
     stateFile: join(dir, "state", "daemon.json"),
     theme: "auto",
+    emoji: "github",
     loader: "classic",
     loaderFrom: "default",
     zoomSensitivity: 1.1,

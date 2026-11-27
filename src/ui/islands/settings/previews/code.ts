@@ -18,9 +18,25 @@ interface PreviewPayload {
   foreground?: unknown;
 }
 
-async function fetchPreview(
-  theme: string
-): Promise<{ html: string; background: string; foreground: string } | null> {
+interface CodePreview {
+  html: string;
+  background: string;
+  foreground: string;
+}
+
+/**
+ * The preview only depends on the Shiki theme (the sample and language are
+ * fixed), so one successful fetch per theme is enough for the whole page
+ * lifetime: reopening the modal or switching back never re-requests it.
+ */
+const PREVIEW_CACHE = new Map<string, CodePreview>();
+
+/** A theme can be re-imported under the same name; drop the stale HTML. */
+export function clearCodePreviewCache(): void {
+  PREVIEW_CACHE.clear();
+}
+
+async function fetchPreview(theme: string): Promise<CodePreview | null> {
   try {
     const response = await fetch(
       `/__preview/code?theme=${encodeURIComponent(theme)}&lang=ts`,
@@ -107,29 +123,47 @@ export function renderCodePreviews(config: CodePreviewConfig): HTMLElement {
 
     let request = 0;
 
-    async function paint(theme: string): Promise<void> {
-      request += 1;
-      const current = request;
-      card.dataset.shikiTheme = theme;
-      status.hidden = false;
-      status.textContent = "Carregando prévia…";
-      const preview = await fetchPreview(theme);
-      if (current !== request) {
-        return;
-      }
-      if (!preview || preview.html === "") {
-        host.textContent = "";
-        status.textContent = "Prévia indisponível.";
-        return;
-      }
+    function apply(preview: CodePreview): void {
       host.innerHTML = preview.html;
       status.hidden = true;
+      status.textContent = "";
       if (preview.background) {
         card.style.setProperty("--settings-code-bg", preview.background);
       }
       if (preview.foreground) {
         card.style.setProperty("--settings-code-fg", preview.foreground);
       }
+    }
+
+    async function paint(theme: string): Promise<void> {
+      request += 1;
+      const current = request;
+      card.dataset.shikiTheme = theme;
+      const cached = PREVIEW_CACHE.get(theme);
+      if (cached) {
+        apply(cached);
+        return;
+      }
+      // Keep the previous HTML on screen while the next theme loads; only the
+      // very first paint (empty host) shows the loading label.
+      if (host.childElementCount === 0) {
+        status.hidden = false;
+        status.textContent = "Carregando prévia…";
+      }
+      card.setAttribute("aria-busy", "true");
+      const preview = await fetchPreview(theme);
+      if (current !== request) {
+        return;
+      }
+      card.removeAttribute("aria-busy");
+      if (!preview || preview.html === "") {
+        if (host.childElementCount === 0) {
+          status.textContent = "Prévia indisponível.";
+        }
+        return;
+      }
+      PREVIEW_CACHE.set(theme, preview);
+      apply(preview);
     }
 
     const menu = iconMenu({

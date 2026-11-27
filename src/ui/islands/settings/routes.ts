@@ -2,14 +2,20 @@
  * Rotas internas do modal de configurações.
  *
  * As rotas só existem enquanto o modal está aberto; o formato é
- * `#/temas[/importar]`, `#/aparencia`, `#/sistema`, `#/widgets` e
+ * `#/temas[/importar]`, `#/aparencia`, `#/emojis`, `#/sistema`, `#/widgets` e
  * `#/widgets/<bloco>`. Rotas legadas (`#/codigo`, `#/graficos`, ...) são
  * redirecionadas para a seção equivalente; `#/aparencia/tema` continua
  * aceito e aponta para a página Temas. Este módulo é puro para poder ser
  * testado sem DOM.
  */
 
-export const SETTINGS_SECTIONS = ["temas", "aparencia", "widgets", "sistema"] as const;
+export const SETTINGS_SECTIONS = [
+  "temas",
+  "aparencia",
+  "emojis",
+  "widgets",
+  "sistema",
+] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
@@ -129,6 +135,8 @@ export function sectionLabel(section: SettingsSection): string {
       return "Temas";
     case "aparencia":
       return "Aparência";
+    case "emojis":
+      return "Emojis";
     case "sistema":
       return "Sistema";
     case "widgets":

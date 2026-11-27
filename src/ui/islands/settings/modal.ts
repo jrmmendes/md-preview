@@ -20,11 +20,17 @@ import {
 const SECTION_ICONS: Record<SettingsSection, IconName> = {
   temas: "layers",
   aparencia: "palette",
+  emojis: "smile",
   sistema: "terminal",
   widgets: "activity",
 };
 
-const TOP_LEVEL_SECTIONS: SettingsSection[] = ["aparencia", "widgets", "sistema"];
+const TOP_LEVEL_SECTIONS: SettingsSection[] = [
+  "aparencia",
+  "emojis",
+  "widgets",
+  "sistema",
+];
 
 export interface SettingsModalOptions {
   root: HTMLElement;
@@ -119,14 +125,17 @@ export function createSettingsModal(options: SettingsModalOptions): SettingsModa
     tabindex: "-1",
   });
 
+  // The save button keeps its box while hidden: toggling `hidden` would push
+  // the close button whenever the draft became dirty.
   const saveButton = el(
     "button",
     {
       type: "button",
-      class: "mdprv-settings-save",
+      class: ["mdprv-settings-save", "is-hidden"],
       "aria-label": "Salvar alterações",
       title: "Salvar alterações (Ctrl+S)",
-      hidden: true,
+      "aria-hidden": "true",
+      tabindex: "-1",
       disabled: true,
       onclick: () => options.onSave(),
     },
@@ -387,8 +396,10 @@ export function createSettingsModal(options: SettingsModalOptions): SettingsModa
 
   function setDirty(dirty: boolean): void {
     modal.classList.toggle("is-dirty", dirty);
-    saveButton.hidden = !dirty;
     saveButton.disabled = !dirty;
+    saveButton.classList.toggle("is-hidden", !dirty);
+    saveButton.setAttribute("aria-hidden", String(!dirty));
+    saveButton.tabIndex = dirty ? 0 : -1;
     if (dirty) {
       if (dirtyStatus.textContent !== "Alterações não salvas") {
         dirtyStatus.textContent = "Alterações não salvas";
@@ -419,6 +430,32 @@ export function createSettingsModal(options: SettingsModalOptions): SettingsModa
     if (event.key === "Tab") {
       trapFocus(event);
     }
+  }
+
+  /**
+   * `overflow:hidden` on the body removes the page scrollbar, which would widen
+   * the viewport and shift centered content. Measure the gutter first and let
+   * `html { padding-right }` keep the exact same content width.
+   */
+  function lockScroll(): void {
+    const gutter = Math.max(
+      0,
+      window.innerWidth - document.documentElement.clientWidth
+    );
+    document.documentElement.style.setProperty(
+      "--mdprv-scrollbar-gutter",
+      `${gutter}px`
+    );
+    // The html class also scopes the document-wide widget flags out while the
+    // modal is open, so the preview wrapper alone drives the live preview.
+    document.documentElement.classList.add("mdprv-settings-open");
+    document.body.classList.add("mdprv-settings-open");
+  }
+
+  function unlockScroll(): void {
+    document.documentElement.classList.remove("mdprv-settings-open");
+    document.body.classList.remove("mdprv-settings-open");
+    document.documentElement.style.removeProperty("--mdprv-scrollbar-gutter");
   }
 
   function routeHash(route: SettingsRoute): string {
@@ -460,7 +497,7 @@ export function createSettingsModal(options: SettingsModalOptions): SettingsModa
       backdrop.classList.remove("is-closing");
       void backdrop.offsetWidth;
       backdrop.classList.add("is-open");
-      document.body.classList.add("mdprv-settings-open");
+      lockScroll();
       options.trigger?.setAttribute("aria-expanded", "true");
       writeHash(route);
       options.onOpen(route);
@@ -483,7 +520,7 @@ export function createSettingsModal(options: SettingsModalOptions): SettingsModa
       window.clearTimeout(focusTimer);
       backdrop.classList.remove("is-open");
       backdrop.classList.add("is-closing");
-      document.body.classList.remove("mdprv-settings-open");
+      unlockScroll();
       options.trigger?.setAttribute("aria-expanded", "false");
       restoreHash();
       options.onClose();

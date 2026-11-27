@@ -3,11 +3,14 @@
  * personalizáveis. Sem DOM: o modal apenas renderiza o resultado.
  */
 import type { LoaderName } from "../../../core/loader";
+import { isEmojiStyle } from "../../../core/emoji/constants";
 import type { MermaidThemeName, ShikiThemeName } from "../../../core/themes/constants";
 import { THEME_PREFS_BLOCKS_KEY } from "../../../shared/theme-prefs";
 import type {
+  EmojiPackEntry,
   MermaidThemeEntry,
   PageConfigPayload,
+  PageEmojiPayload,
   PageThemePayload,
   ShikiThemeEntry,
   ThemeCatalogEntry,
@@ -52,6 +55,9 @@ export interface PageThemeData {
   catalog: ThemeCatalogEntry[];
   shikiThemes: ShikiThemeEntry[];
   mermaidThemes?: MermaidThemeEntry[];
+  /** Pack resolved for this request; absent in pages cached before Phase A. */
+  emoji?: PageEmojiPayload | null;
+  emojis: EmojiPackEntry[];
   config?: PageConfigPayload | null;
 }
 
@@ -123,8 +129,38 @@ function isConfig(value: unknown): value is PageConfigPayload {
     isRecord(paths) &&
     typeof paths.config === "string" &&
     typeof paths.themes === "string" &&
+    typeof paths.emojis === "string" &&
     typeof paths.state === "string"
   );
+}
+
+function isEmojiEntry(value: unknown): value is EmojiPackEntry {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.label === "string" &&
+    isEmojiStyle(value.style) &&
+    (value.source === "builtin" || value.source === "user") &&
+    typeof value.count === "number" &&
+    Number.isFinite(value.count) &&
+    value.count >= 0 &&
+    (value.description === undefined || typeof value.description === "string") &&
+    (value.license === undefined || typeof value.license === "string") &&
+    (value.attribution === undefined || typeof value.attribution === "string")
+  );
+}
+
+function isEmojiPayload(value: unknown): value is PageEmojiPayload {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    isEmojiStyle(value.style)
+  );
+}
+
+/** Keeps only well-formed catalog entries; used by the page payload and sync. */
+export function parseEmojiEntries(raw: unknown): EmojiPackEntry[] {
+  return Array.isArray(raw) ? raw.filter(isEmojiEntry) : [];
 }
 
 function isShikiEntry(value: unknown): value is ShikiThemeEntry {
@@ -183,6 +219,8 @@ export function parsePageThemeData(raw: unknown): PageThemeData | null {
     catalog,
     shikiThemes,
     mermaidThemes,
+    emoji: isEmojiPayload(raw.emoji) ? raw.emoji : null,
+    emojis: parseEmojiEntries(raw.emojis),
     config,
   };
 }

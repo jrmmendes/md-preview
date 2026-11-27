@@ -7,6 +7,7 @@ import { daemonStart, daemonStatus, daemonStop } from "./commands/daemon";
 import { serve } from "./commands/serve";
 import { configInit } from "./commands/config";
 import { themeList, themePath, themeSeed, themeValidate } from "./commands/theme";
+import { emojiList, emojiPath, emojiSeed, emojiValidate } from "./commands/emoji";
 import { VERSION } from "../../core/version";
 
 function fail(message: string): never {
@@ -111,6 +112,36 @@ theme
   .description("Create the themes directory and seed missing builtin themes")
   .action(async () => {
     await themeSeed();
+  });
+
+const emoji = program.command("emoji").description("Inspect and validate emoji packs");
+emoji
+  .command("list")
+  .description("List builtin and user emoji packs")
+  .option("--json", "print JSON")
+  .action(async (options: { json?: boolean }) => {
+    await emojiList(options);
+  });
+emoji
+  .command("validate")
+  .description("Validate an emoji pack JSON file")
+  .argument("<file>", "emoji pack JSON file")
+  .action(async (file: string) => {
+    if (!(await emojiValidate(file))) {
+      process.exitCode = 1;
+    }
+  });
+emoji
+  .command("path")
+  .description("Print the configuration, emoji and asset directories")
+  .action(async () => {
+    await emojiPath();
+  });
+emoji
+  .command("seed")
+  .description("Create the emojis directory and seed the builtin pack and schema")
+  .action(async () => {
+    await emojiSeed();
   });
 
 const config = program.command("config").description("Manage the configuration file");

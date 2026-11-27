@@ -27,6 +27,8 @@ export interface SettingsSnapshot {
   scheme: Scheme;
   blocks: Blocks;
   stored: StoredValues;
+  /** Active emoji pack slug; applied through the `mdprv_emoji` cookie. */
+  emojiName: string;
   exampleId: string;
   zoom: number;
   simpleTables: boolean;
@@ -45,6 +47,7 @@ export function cloneSnapshot(value: SettingsSnapshot): SettingsSnapshot {
       shiki: value.stored.shiki ? { ...value.stored.shiki } : null,
       mermaid: value.stored.mermaid ? { ...value.stored.mermaid } : null,
     },
+    emojiName: value.emojiName,
     exampleId: value.exampleId,
     zoom: value.zoom,
     simpleTables: value.simpleTables,
@@ -53,8 +56,16 @@ export function cloneSnapshot(value: SettingsSnapshot): SettingsSnapshot {
   };
 }
 
+/**
+ * The chart example is a view preference of the modal, not a setting: it
+ * repaints the preview live and must never make the draft dirty.
+ */
+function comparableSnapshot(value: SettingsSnapshot): string {
+  return JSON.stringify({ ...value, exampleId: "" });
+}
+
 function sameSnapshot(left: SettingsSnapshot, right: SettingsSnapshot): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return comparableSnapshot(left) === comparableSnapshot(right);
 }
 
 export function isDraftDirty(
@@ -148,6 +159,13 @@ export function setDraftTheme(
   scheme: Scheme
 ): SettingsSnapshot {
   return { ...cloneSnapshot(draft), themeName, scheme };
+}
+
+export function setDraftEmoji(
+  draft: SettingsSnapshot,
+  emojiName: string
+): SettingsSnapshot {
+  return { ...cloneSnapshot(draft), emojiName };
 }
 
 export function setDraftFont(
@@ -253,6 +271,10 @@ export function needsReload(
     return true;
   }
   if (applied.scheme !== draft.scheme) {
+    return true;
+  }
+  // Emoji packs expand `:shortcode:` during the server render.
+  if (applied.emojiName !== draft.emojiName) {
     return true;
   }
   const before = effectiveBlocks(data, applied);

@@ -21,6 +21,7 @@ describe("settings routes", () => {
     });
     expect(parseSettingsRouteHash("#/sistema")).toEqual({ section: "sistema", anchor: null });
     expect(parseSettingsRouteHash("#/widgets")).toEqual({ section: "widgets", anchor: null });
+    expect(parseSettingsRouteHash("#/emojis")).toEqual({ section: "emojis", anchor: null });
   });
 
   it("parses the import subpage", () => {
@@ -76,6 +77,7 @@ describe("settings routes", () => {
     expect(parseSettingsRouteHash("#/")).toBeNull();
     expect(parseSettingsRouteHash("#/aparencia/extra")).toBeNull();
     expect(parseSettingsRouteHash("#/sistema/codigo")).toBeNull();
+    expect(parseSettingsRouteHash("#/emojis/importar")).toBeNull();
     expect(parseSettingsRouteHash("#/widgets/outro")).toBeNull();
     expect(parseSettingsRouteHash("#/temas/outro")).toBeNull();
     expect(parseSettingsRouteHash("#/temas/importar/extra")).toBeNull();

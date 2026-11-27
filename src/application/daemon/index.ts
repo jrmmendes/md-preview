@@ -1,7 +1,10 @@
 import { randomBytes } from "node:crypto";
 
 import type { Config } from "../../core/config";
+import { configEmojisDir } from "../../core/config";
 import { themesDir } from "../../core/config-file";
+import { createEmojiStore, type EmojiStore } from "../../core/emoji/store";
+import { getEmojiStore, setEmojiStore } from "../../core/emoji/index";
 import { warmup } from "../../core/markdown/render";
 import { clearDaemonState, updateDaemonState, writeDaemonState } from "../../core/state";
 import { getThemeStore, setThemeStore } from "../../core/themes/index";
@@ -41,6 +44,7 @@ export interface CreateDaemonOptions {
   themeStore?: ThemeStore;
   shikiThemeStore?: ShikiThemeStore;
   mermaidThemeStore?: MermaidThemeStore;
+  emojiStore?: EmojiStore;
 }
 
 export function createDaemon(config: Config, options: CreateDaemonOptions = {}): DaemonHandle {
@@ -117,6 +121,16 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     });
   setMermaidThemeStore(mermaidThemeStore);
 
+  const emojiStore =
+    options.emojiStore ??
+    createEmojiStore({
+      dir: configEmojisDir(config),
+      watch: true,
+      logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+      onChange: (change) => broadcast("emojis", change),
+    });
+  setEmojiStore(emojiStore);
+
   const registry = createSlugRegistry({
     onVersion: (slug, version) => broadcast("version", { slug, version }),
     onSlugs: (slugs) => broadcast("slugs", slugs),
@@ -151,6 +165,12 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
         setMermaidThemeStore(null);
       }
     }
+    if (!options.emojiStore) {
+      emojiStore.close();
+      if (getEmojiStore() === emojiStore) {
+        setEmojiStore(null);
+      }
+    }
     clearDaemonState(config.stateFile);
     try {
       server?.stop(true);
@@ -165,6 +185,7 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     themes: themeStore,
     shikiThemes: shikiThemeStore,
     mermaidThemes: mermaidThemeStore,
+    emojis: emojiStore,
     registry,
     token,
     heartbeatMs: options.heartbeatMs,

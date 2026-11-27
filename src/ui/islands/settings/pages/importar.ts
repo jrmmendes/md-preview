@@ -12,7 +12,10 @@ import type {
 } from "../../../../core/contract";
 import { themeLabel } from "../catalog";
 import { contentBlock, el, sectionHeader } from "../components";
-import { renderImportPanel } from "../components/import-panel";
+import {
+  renderImportPanel,
+  type ImportPanelItem,
+} from "../components/import-panel";
 import {
   buildMermaidImportPayload,
   deriveMermaidName,
@@ -47,11 +50,49 @@ export interface ImportPageContext {
   onMermaidDeleted(name: string): void;
 }
 
-export function renderImportPage(ctx: ImportPageContext): HTMLElement {
-  const userThemes = ctx.catalog.filter((entry) => entry.source === "user");
-  const customShiki = ctx.shikiThemes.filter((entry) => entry.source === "custom");
-  const customMermaid = ctx.mermaidThemes.filter((entry) => entry.source === "custom");
+function themeItem(entry: ThemeCatalogEntry): ImportPanelItem {
+  return {
+    name: entry.name,
+    label: themeLabel(entry.name),
+    meta: `${entry.source ?? "user"} · ${entry.kind}`,
+  };
+}
 
+function userThemes(entries: ThemeCatalogEntry[]): ImportPanelItem[] {
+  return entries
+    .filter((entry) => entry.source === "user")
+    .map(themeItem);
+}
+
+function shikiItem(entry: ShikiThemeEntry): ImportPanelItem {
+  return {
+    name: entry.name,
+    label: entry.label,
+    meta: `${entry.source} · ${entry.kind}`,
+  };
+}
+
+function customShiki(entries: ShikiThemeEntry[]): ImportPanelItem[] {
+  return entries
+    .filter((entry) => entry.source === "custom")
+    .map(shikiItem);
+}
+
+function mermaidItem(entry: MermaidThemeEntry): ImportPanelItem {
+  return {
+    name: entry.name,
+    label: entry.label,
+    meta: `${entry.source} · base ${entry.theme}`,
+  };
+}
+
+function customMermaid(entries: MermaidThemeEntry[]): ImportPanelItem[] {
+  return entries
+    .filter((entry) => entry.source === "custom")
+    .map(mermaidItem);
+}
+
+export function renderImportPage(ctx: ImportPageContext): HTMLElement {
   return el(
     "div",
     { class: "mdprv-settings-page" },
@@ -74,11 +115,9 @@ export function renderImportPage(ctx: ImportPageContext): HTMLElement {
           endpoint: "/__themes",
           deleteEndpoint: (name) => `/__themes/${encodeURIComponent(name)}`,
           listTitle: "Temas de cores instalados",
-          items: userThemes.map((entry) => ({
-            name: entry.name,
-            label: themeLabel(entry.name),
-            meta: `${entry.source ?? "user"} · ${entry.kind}`,
-          })),
+          items: userThemes(ctx.catalog),
+          toItem: themeItem,
+          itemsFrom: userThemes,
           buildPayload: buildThemeImportPayload,
           deriveName: deriveThemeName,
           slugFromFile: themeSlugFromFile,
@@ -103,11 +142,9 @@ export function renderImportPage(ctx: ImportPageContext): HTMLElement {
           endpoint: "/__shiki-themes",
           deleteEndpoint: (name) => `/__shiki-themes/${encodeURIComponent(name)}`,
           listTitle: "Temas Shiki importados",
-          items: customShiki.map((entry) => ({
-            name: entry.name,
-            label: entry.label,
-            meta: `${entry.source} · ${entry.kind}`,
-          })),
+          items: customShiki(ctx.shikiThemes),
+          toItem: shikiItem,
+          itemsFrom: customShiki,
           buildPayload: (text, name) => buildImportPayload(text, name || "tema"),
           deriveName: deriveShikiName,
           slugFromFile: shikiSlugFromFile,
@@ -132,11 +169,9 @@ export function renderImportPage(ctx: ImportPageContext): HTMLElement {
           endpoint: "/__mermaid-themes",
           deleteEndpoint: (name) => `/__mermaid-themes/${encodeURIComponent(name)}`,
           listTitle: "Temas Mermaid importados",
-          items: customMermaid.map((entry) => ({
-            name: entry.name,
-            label: entry.label,
-            meta: `${entry.source} · base ${entry.theme}`,
-          })),
+          items: customMermaid(ctx.mermaidThemes),
+          toItem: mermaidItem,
+          itemsFrom: customMermaid,
           buildPayload: buildMermaidImportPayload,
           deriveName: deriveMermaidName,
           slugFromFile: mermaidSlugFromFile,

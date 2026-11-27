@@ -294,7 +294,14 @@ export function renderWidgetsPage(ctx: WidgetsContext): HTMLElement {
       children: [
         tableToggle,
         wrapToggle,
-        el("div", { class: "mdprv-settings-widget-preview" }, tablePreview()),
+        el(
+          "div",
+          {
+            class: "mdprv-settings-widget-preview",
+            dataset: { preview: "tables" },
+          },
+          tablePreview()
+        ),
       ],
     }),
     widgetBlock({
@@ -303,7 +310,14 @@ export function renderWidgetsPage(ctx: WidgetsContext): HTMLElement {
       description: "Como os blocos de diff são exibidos.",
       children: [
         diffToggle,
-        el("div", { class: "mdprv-settings-widget-preview" }, diffPreview()),
+        el(
+          "div",
+          {
+            class: "mdprv-settings-widget-preview",
+            dataset: { preview: "diffs" },
+          },
+          diffPreview()
+        ),
       ],
     })
   );

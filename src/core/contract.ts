@@ -1,3 +1,4 @@
+import type { EmojiStyle } from "./emoji/constants";
 import type { LoaderName } from "./loader";
 import type { MermaidThemeName, ShikiThemeName } from "./themes/constants";
 export type { LoaderName };
@@ -30,12 +31,53 @@ export interface PageThemePayload {
   mermaidTheme: { light: MermaidThemeName; dark: MermaidThemeName };
 }
 
+/** One entry of the dynamic emoji pack catalog shipped to the modal. */
+export interface EmojiPackEntry {
+  name: string;
+  label: string;
+  description?: string;
+  style: EmojiStyle;
+  source: "builtin" | "user";
+  count: number;
+  license?: string;
+  attribution?: string;
+}
+
+/** One shortcode/value pair used by the settings preview grid. */
+export interface EmojiSample {
+  name: string;
+  value: string;
+  /** Whether `<configDir>/emojis/assets/<pack>/<name>.svg` exists. */
+  asset?: boolean;
+}
+
+/** Lazy preview payload for `GET /__emoji-samples/<pack>`. */
+export interface EmojiSamplesPayload {
+  name: string;
+  style: EmojiStyle;
+  total: number;
+  samples: EmojiSample[];
+}
+
+/** Effective emoji pack for the rendered page. */
+export interface PageEmojiPayload {
+  name: string;
+  style: EmojiStyle;
+}
+
+/** SSE payload for emoji packs added/edited/removed on disk. */
+export interface EmojisEvent {
+  names: string[];
+  changed: string[];
+  version: number;
+}
+
 /** Read-only daemon settings shown on the modal's System page. */
 export interface PageConfigPayload {
   port: number;
   idleMinutes: number;
   seedThemes: boolean;
-  paths: { config: string; themes: string; state: string };
+  paths: { config: string; themes: string; emojis: string; state: string };
 }
 
 export interface PageInput {

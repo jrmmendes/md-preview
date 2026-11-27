@@ -83,7 +83,12 @@ const SHIKI_THEMES: ShikiThemeEntry[] = [
   { name: "nord", label: "Nord", kind: "dark", source: "builtin" },
 ];
 
-const DATA = { theme: THEME, catalog: [AUTO, NORD], shikiThemes: SHIKI_THEMES };
+const DATA = {
+  theme: THEME,
+  catalog: [AUTO, NORD],
+  shikiThemes: SHIKI_THEMES,
+  emojis: [],
+};
 
 const NO_BLOCKS: Blocks = { fonte: false, loader: false, codigo: false, graficos: false };
 
@@ -115,7 +120,7 @@ describe("page payload", () => {
       port: 8766,
       idleMinutes: 15,
       seedThemes: true,
-      paths: { config: "/c/config.json", themes: "/c/themes", state: "/s/daemon.json" },
+      paths: { config: "/c/config.json", themes: "/c/themes", emojis: "/c/emojis", state: "/s/daemon.json" },
     };
     expect(parsePageThemeData({ theme: THEME, catalog: [AUTO], config })?.config).toEqual(config);
     expect(parsePageThemeData({ theme: THEME, catalog: [AUTO] })?.config).toBeNull();

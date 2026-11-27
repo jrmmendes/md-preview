@@ -495,8 +495,12 @@ describe("table wrap CSS", () => {
       .split("/* --- automatic cell wrapping (`mdprv_table_wrap`) --- */")[1]
       ?.split("}")[0];
     expect(rule).toBeDefined();
-    expect(rule).toContain("html.mdprv-wrap-cells .mdprv-table .mdprv-grid th");
-    expect(rule).toContain("html.mdprv-wrap-cells .mdprv-table .mdprv-grid td");
+    expect(rule).toContain(
+      ":is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-wrap-cells .mdprv-table .mdprv-grid th"
+    );
+    expect(rule).toContain(
+      ":is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-wrap-cells .mdprv-table .mdprv-grid td"
+    );
     expect(rule).toContain("height: auto");
     expect(rule).toContain("white-space: normal");
     expect(rule).toContain("overflow-wrap: anywhere");
@@ -506,5 +510,52 @@ describe("table wrap CSS", () => {
   it("keeps the cell detail panel on pre-wrap", () => {
     expect(css).toContain(".mdprv-lb-panel-body");
     expect(css).toContain("white-space: pre-wrap");
+  });
+});
+
+describe("simple table CSS", () => {
+  const css = readFileSync(
+    join(import.meta.dir, "../src/ui/styles/table.css"),
+    "utf8"
+  );
+  const simple =
+    css
+      .split("/* --- simple table mode (global preference) ---")[1]
+      ?.split("/* --- fullscreen dialog --- */")[0] ?? "";
+
+  it("inherits the rounded frame from the full table mode", () => {
+    expect(simple).not.toMatch(/html\.mdprv-simple-tables \.mdprv-table\s*\{/);
+    const base = css.split(".mdprv-table {")[1]?.split("}")[0] ?? "";
+    expect(base).toContain("border: 1px solid var(--mdprv-border)");
+    expect(base).toContain("border-radius: var(--mdprv-radius-md, 6px)");
+  });
+
+  it("still hides the spreadsheet gutters and column hairlines", () => {
+    expect(simple).toContain(
+      ":is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-sheet-corner"
+    );
+    expect(simple).toContain("display: none");
+    expect(simple).toContain(
+      ":is(html:not(.mdprv-settings-open), .mdprv-settings-widget-preview).mdprv-simple-tables .mdprv-grid th"
+    );
+  });
+});
+
+describe("active cell highlight CSS", () => {
+  const css = readFileSync(
+    join(import.meta.dir, "../src/ui/styles/table.css"),
+    "utf8"
+  );
+  const rule =
+    css.split(".mdprv-grid td.mdprv-active,")[1]?.split("}")[0] ?? "";
+
+  it("closes the ring on every side instead of relying on the clipped shadow", () => {
+    expect(rule).toContain("box-shadow: inset 0 0 0 2px var(--mdprv-accent)");
+    expect(rule).toContain("outline: 2px solid var(--mdprv-accent)");
+    expect(rule).toContain("outline-offset: -2px");
+  });
+
+  it("keeps the ring inside the cell so it cannot leak past the frame", () => {
+    expect(rule).not.toMatch(/outline-offset:\s*[0-9]/);
   });
 });

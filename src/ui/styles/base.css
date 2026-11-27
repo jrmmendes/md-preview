@@ -1,4 +1,8 @@
 *{box-sizing:border-box}
+/* The settings modal hides the page scrollbar; `scrollbar-gutter` is dropped
+   once the viewport becomes non-scrollable, so the modal measures the gutter
+   and compensates with this padding instead (no horizontal shift). */
+html{padding-right:var(--mdprv-scrollbar-gutter,0px)}
 body{margin:0;padding:0;font-family:var(--mdprv-font,var(--mdprv-font-stack,system-ui,sans-serif));font-size:var(--mdprv-font-size,17px);line-height:var(--mdprv-line-height,1.65);font-weight:var(--mdprv-font-weight,400);color:var(--mdprv-fg);background:var(--mdprv-bg);word-wrap:break-word}
 article.markdown-body{max-width:var(--mdprv-content-width,46rem);margin:0 auto;padding:var(--mdprv-article-padding-y,2.5rem) var(--mdprv-article-padding-x,1.25rem) var(--mdprv-article-padding-bottom,6rem)}
 h1,h2,h3,h4,h5,h6{margin:1.8em 0 .6em;line-height:var(--mdprv-heading-line-height,1.25);font-weight:var(--mdprv-font-weight-bold,600);scroll-margin-top:var(--mdprv-scroll-offset,7rem)}
@@ -21,6 +25,9 @@ table{border-collapse:collapse;margin:0 0 1em;display:block;overflow:auto}
 th,td{border:1px solid var(--mdprv-border);padding:var(--mdprv-table-cell-padding,.4em .75em)}
 th{background:var(--mdprv-code-bg);font-weight:var(--mdprv-font-weight-bold,600)}
 img{max-width:100%}
+/* Emoji SVGs are square glyphs: size them like text so a row with emoji keeps
+   the same line height as one without. */
+.mdprv-emoji{width:1em;height:1em;display:inline-block;vertical-align:-0.12em}
 hr{height:1px;border:0;background:var(--mdprv-border);margin:2em 0}
 del{color:var(--mdprv-muted)}
 sup{font-size:.75em}

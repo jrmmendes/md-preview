@@ -3,10 +3,11 @@
 # md-preview
 
 Abra arquivos Markdown no navegador: renderização local, live reload e temas.
-Inclui os 65 temas Shiki embutidos e importação de temas de cores
-(`theme.json`), Shiki (`.shiki.json`) e Mermaid (`.mermaid.json`) em
-**Temas → Importar** no modal de configurações. As mudanças do modal ficam em
-rascunho até **Salvar** (`Ctrl/Cmd+S`); fechar sem salvar descarta tudo.
+Inclui os 65 temas Shiki embutidos, pacotes de emojis (`:smile:`) e importação
+de temas de cores (`theme.json`), Shiki (`.shiki.json`), Mermaid
+(`.mermaid.json`) e emojis (`emoji.json`) no modal de configurações. As mudanças
+do modal ficam em rascunho até **Salvar** (`Ctrl/Cmd+S`); fechar sem salvar
+descarta tudo.
 
 <img width="1804" height="1116" alt="Documento Markdown renderizado no md-preview" src="https://github.com/user-attachments/assets/46cf31a6-d856-4592-b308-672c289a4966" />
 
@@ -104,6 +105,17 @@ cp themes/tropical/*.json "$themes/"
 
 Ou importe um arquivo por vez em **Temas → Importar** (`Ctrl+,`). O nome do
 arquivo é o slug usado pelo app; não renomeie os JSON.
+
+## Emojis
+
+Shortcodes `:smile:` usam o pacote embutido `github` (emoji nativo do sistema).
+Pacotes próprios ficam em `~/.config/md-preview/emojis/<slug>.json`, com assets
+SVG opcionais em `emojis/assets/<slug>/<shortcode>.svg`. Em **Emojis**
+(`Ctrl+,`) dá para ver o catálogo, trocar o pacote ativo, pré-visualizar as
+amostras e importar um JSON de até 256 KiB; a troca vale ao **Salvar**
+(cookie `mdprv_emoji`) e um `?emoji=<slug>` tem prioridade na URL. Formato,
+limites e CLI (`md-preview emoji list|validate|path|seed`) em
+[`docs/emoji-authoring.md`](docs/emoji-authoring.md).
 
 ## Tabelas interativas
 

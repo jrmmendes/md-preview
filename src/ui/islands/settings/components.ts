@@ -95,6 +95,8 @@ const ICONS = {
     '<path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6.5A3.5 3.5 0 0 0 22 8.5 9 9 0 0 0 12 3z"></path><circle cx="7.5" cy="10" r="1"></circle><circle cx="10" cy="6.5" r="1"></circle><circle cx="15" cy="6.5" r="1"></circle>',
   terminal: '<rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m7 10 3 3-3 3M13 16h4"></path>',
   activity: '<path d="M3 12h4l3-8 4 16 3-8h4"></path>',
+  smile:
+    '<circle cx="12" cy="12" r="9"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><path d="M9 9h.01M15 9h.01"></path>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 10h18M9 4v16M15 4v16"></path>',
   code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"></path>',
   diff: '<path d="M7 4v11a3 3 0 0 0 3 3h7"></path><path d="m14 15 3 3-3 3"></path><path d="M17 20V9a3 3 0 0 0-3-3H7"></path><path d="M10 3 7 6l3 3"></path>',
@@ -105,6 +107,8 @@ const ICONS = {
   copy: '<rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path>',
   pencil:
     '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>',
+  trash:
+    '<path d="M3 6h18"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M10 11v6M14 11v6"></path>',
   import:
     '<path d="M12 3v10"></path><path d="m8 9 4 4 4-4"></path><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path>',

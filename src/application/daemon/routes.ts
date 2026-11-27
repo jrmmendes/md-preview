@@ -2,12 +2,14 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 
-import { configFile, configThemesDir, type Config } from "../../core/config";
+import { configEmojisDir, configFile, configThemesDir, type Config } from "../../core/config";
 import type {
   ActivateEvent,
   PageConfigPayload,
   SnapshotEvent,
 } from "../../core/contract";
+import { resolveEmojiPackName } from "../../core/emoji/resolve";
+import type { EmojiStore } from "../../core/emoji/store";
 import { renderPage } from "../../core/page";
 import { normalizeContent, renderMarkdown } from "../../core/markdown/render";
 import {
@@ -52,6 +54,13 @@ import {
 } from "./shiki-import";
 import { deleteColorTheme, importColorTheme } from "./theme-import";
 import { deleteMermaidTheme, importMermaidTheme } from "./mermaid-import";
+import {
+  deleteEmojiPack,
+  emojiSamplesResponse,
+  emojisPayload,
+  importEmojiPack,
+} from "./emoji-import";
+import { serveEmojiAsset } from "./emoji-assets";
 import { loadShell } from "./shell";
 import type { SlugEntry, SlugRegistry } from "./watch";
 
@@ -78,6 +87,7 @@ export interface RouteDeps {
   themes: ThemeStore;
   shikiThemes: ShikiThemeStore;
   mermaidThemes: MermaidThemeStore;
+  emojis: EmojiStore;
   registry: SlugRegistry;
   token: string;
   onActivity: () => void;
@@ -284,6 +294,7 @@ function pageConfig(config: Config): PageConfigPayload {
     paths: {
       config: configFile(config),
       themes: configThemesDir(config),
+      emojis: configEmojisDir(config),
       state: config.stateFile,
     },
   };
@@ -532,6 +543,13 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       config.theme,
       themes
     );
+    const emojiName = resolveEmojiPackName(
+      url.searchParams.get("emoji"),
+      cookieValue(req.headers.get("cookie"), "mdprv_emoji"),
+      config.emoji,
+      deps.emojis
+    );
+    const emojiPack = deps.emojis.get(emojiName);
     const prefs = parseThemePrefs(cookieValue(req.headers.get("cookie"), THEME_PREFS_COOKIE), {
       isShikiTheme: isKnownShikiTheme,
       isMermaidTheme: isKnownMermaidTheme,
@@ -549,6 +567,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
     const body = await renderMarkdown(normalizeContent(markdownBody), themeName, slug, {
       docLinkResolver: createDocLinkResolver(registry, slug, themeParam),
       themeOverrides: prefs,
+      emoji: emojiPack,
     });
     const nonce = randomBytes(16).toString("base64");
     return new Response(
@@ -565,7 +584,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         },
         addNonce(loadShell(), nonce),
         themes,
-        { prefs, config: pageConfig(config) }
+        { prefs, config: pageConfig(config), emojiName: emojiPack.name }
       ),
       {
         headers: {
@@ -738,6 +757,33 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         dir: deps.mermaidThemes.dir,
         store: deps.mermaidThemes,
       });
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__emojis") {
+      return json(emojisPayload(deps.emojis), 200, method === "HEAD");
+    }
+    if (method === "POST" && route === "/__emojis") {
+      return importEmojiPack(req, { dir: deps.emojis.dir, store: deps.emojis });
+    }
+    if (method === "DELETE" && route.startsWith("/__emojis/")) {
+      const name = route.slice("/__emojis/".length);
+      return deleteEmojiPack(req, name, { dir: deps.emojis.dir, store: deps.emojis });
+    }
+    if ((method === "GET" || method === "HEAD") && route.startsWith("/__emoji-samples/")) {
+      const name = route.slice("/__emoji-samples/".length);
+      return emojiSamplesResponse(name, deps.emojis, method === "HEAD");
+    }
+    if ((method === "GET" || method === "HEAD") && route.startsWith("/__emoji-assets/")) {
+      const rest = route.slice("/__emoji-assets/".length);
+      const slash = rest.indexOf("/");
+      if (slash <= 0) {
+        return text("not found", 404, method === "HEAD");
+      }
+      return serveEmojiAsset(
+        rest.slice(0, slash),
+        rest.slice(slash + 1),
+        deps.emojis,
+        method === "HEAD"
+      );
     }
     if ((method === "GET" || method === "HEAD") && route === "/__preview/code") {
       const requested = url.searchParams.get("theme");

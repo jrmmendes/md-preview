@@ -13,6 +13,9 @@ import {
 import { renderCsvTable, renderGfmTableClose, renderGfmTableOpen, renderTableRawHtml } from "./table";
 import { renderTree } from "./tree";
 import type { DocLinkState } from "../doc-links";
+import { EMOJI_SHORTCODE_PATTERN } from "../emoji/constants";
+import { getEmojiStore, emojiAssetExists } from "../emoji/index";
+import type { EmojiPack } from "../emoji/types";
 import type { ThemePrefs } from "../../shared/theme-prefs";
 
 export { warmup };
@@ -29,6 +32,8 @@ export interface RenderOptions {
   docLinkResolver?: DocLinkResolver;
   /** Per-browser Shiki/Mermaid overrides for this request. */
   themeOverrides?: ThemePrefs | null;
+  /** Emoji pack for `:shortcode:` expansion; defaults to the active store. */
+  emoji?: EmojiPack | null;
 }
 
 interface OpenTable {
@@ -45,6 +50,8 @@ interface RenderEnv {
   tableSeq?: number;
   /** Open GFM tables, used to close the wrapper after `</table>`. */
   tableStack?: OpenTable[];
+  /** Per-render memo for emoji SVG asset lookups. */
+  emojiAssets?: Map<string, boolean>;
 }
 
 /**
@@ -84,17 +91,36 @@ const mdCache = new Map<string, MarkdownIt>();
  * Renderers embed the Shiki pair in their render rules, so the cache key must
  * include it; otherwise the first request would pin its overrides for all
  * later requests with the same theme name. Custom themes use the internal
- * content-addressed name, so editing one invalidates the renderer.
+ * content-addressed name, so editing one invalidates the renderer. The emoji
+ * pack id does the same for `:shortcode:` rules.
  */
 function rendererKey(
   themeName: string,
   light: string,
-  dark: string
+  dark: string,
+  emojiId: string
 ): string {
-  return `${themeName}|${light}|${dark}`;
+  return `${themeName}|${light}|${dark}|${emojiId}`;
 }
 
-function createRenderer(themeName: string, pair: ShikiPair): MarkdownIt {
+const SHORTCODE_INLINE = new RegExp(`^:(${EMOJI_SHORTCODE_PATTERN}):`);
+
+function emojiHtml(
+  pack: EmojiPack,
+  name: string,
+  value: string,
+  hasAsset: (shortcode: string) => boolean
+): string {
+  if (value.startsWith("data:image/")) {
+    return `<img class="mdprv-emoji" src="${value}" alt=":${name}:" loading="lazy">`;
+  }
+  if (pack.style !== "native" && hasAsset(name)) {
+    return `<img class="mdprv-emoji" src="/__emoji-assets/${pack.name}/${encodeURIComponent(name)}.svg" alt=":${name}:" loading="lazy">`;
+  }
+  return Bun.escapeHTML(value);
+}
+
+function createRenderer(themeName: string, pair: ShikiPair, emoji: EmojiPack): MarkdownIt {
   const md = new MarkdownIt({
     html: true,
     linkify: true,
@@ -108,6 +134,46 @@ function createRenderer(themeName: string, pair: ShikiPair): MarkdownIt {
 
   md.options.highlight = (code: string, lang: string): string =>
     codeToHtmlWithPair(code, lang, pair);
+
+  // `:shortcode:` expansion. Inline code spans are consumed by the backtick
+  // rule before this position, so `:x:` inside backticks stays literal; an
+  // unknown name simply declines the match and markdown-it emits the text.
+  md.inline.ruler.before("emphasis", "emoji", (state, silent) => {
+    if (state.src.charCodeAt(state.pos) !== 0x3a) {
+      return false;
+    }
+    const match = SHORTCODE_INLINE.exec(state.src.slice(state.pos, state.pos + 70));
+    if (!match) {
+      return false;
+    }
+    const name = match[1]!;
+    if (!Object.prototype.hasOwnProperty.call(emoji.shortcodes, name)) {
+      return false;
+    }
+    if (!silent) {
+      const token = state.push("emoji", "", 0);
+      token.content = name;
+      token.meta = emoji.shortcodes[name];
+    }
+    state.pos += match[0].length;
+    return true;
+  });
+
+  md.renderer.rules.emoji = (tokens, idx, _options, env) => {
+    const renderEnv = env as RenderEnv;
+    const hasAsset = (shortcode: string): boolean => {
+      const cache = (renderEnv.emojiAssets ??= new Map<string, boolean>());
+      const cached = cache.get(shortcode);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const exists = emojiAssetExists(emoji.name, shortcode);
+      cache.set(shortcode, exists);
+      return exists;
+    };
+    const token = tokens[idx]!;
+    return emojiHtml(emoji, token.content, String(token.meta ?? ""), hasAsset);
+  };
 
   const defaultFence = md.renderer.rules.fence!;
   md.renderer.rules.fence = (tokens, idx, options, env, self) => {
@@ -220,11 +286,11 @@ function createRenderer(themeName: string, pair: ShikiPair): MarkdownIt {
   return md;
 }
 
-function rendererFor(themeName: string, pair: ShikiPair): MarkdownIt {
-  const key = rendererKey(themeName, pair.light, pair.dark);
+function rendererFor(themeName: string, pair: ShikiPair, emoji: EmojiPack): MarkdownIt {
+  const key = rendererKey(themeName, pair.light, pair.dark, emoji.id);
   let md = mdCache.get(key);
   if (!md) {
-    md = createRenderer(themeName, pair);
+    md = createRenderer(themeName, pair, emoji);
     mdCache.set(key, md);
     if (mdCache.size > MAX_RENDERERS) {
       const oldest = mdCache.keys().next().value;
@@ -251,7 +317,8 @@ export async function renderMarkdown(
 ): Promise<string> {
   await warmup();
   const pair = await prepareShikiPair(themeName, options.themeOverrides ?? null);
-  const md = rendererFor(themeName, pair);
+  const emoji = options.emoji ?? getEmojiStore().get(null);
+  const md = rendererFor(themeName, pair, emoji);
   const env: RenderEnv = { slug, source: content };
   if (options.docLinkResolver) {
     env.docLinkResolver = options.docLinkResolver;

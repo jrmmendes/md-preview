@@ -10,6 +10,7 @@
   "files": [
     "bin/",
     "themes/",
+    "emojis/",
     "dist/client/",
     "README.md"
   ],

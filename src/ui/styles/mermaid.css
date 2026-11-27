@@ -1,4 +1,7 @@
+/* `mermaid.run` swaps the fence text for the SVG after load; the reserved
+   height keeps the text fallback from collapsing the surrounding flow. */
 pre.mermaid{position:relative;background:transparent;border:0;text-align:center;overflow:visible}
+pre.mermaid:not(:has(> svg)){min-height:10rem}
 pre.mermaid svg{max-width:100%;height:auto}
 .mdprv-mermaid-fs{position:absolute;top:.4rem;right:.4rem;z-index:5;display:inline-flex;align-items:center;justify-content:center;width:1.9rem;height:1.9rem;padding:0;border:1px solid var(--mdprv-border);border-radius:var(--mdprv-radius-md,6px);background:var(--mdprv-bg);color:var(--mdprv-muted);cursor:pointer;opacity:0;transition:opacity var(--mdprv-duration-fast,.15s),color var(--mdprv-duration-fast,.15s),background var(--mdprv-duration-fast,.15s)}
 pre.mermaid:hover .mdprv-mermaid-fs,.mdprv-mermaid-fs:focus-visible{opacity:1}

@@ -88,6 +88,11 @@ interface TableState {
 interface TableController {
   block: HTMLElement;
   sync(): void;
+  /**
+   * Layout changed without a class flip (container resize, font swap, zoom):
+   * drop the cached row heights and resync the gutters on the next frame.
+   */
+  invalidate(): void;
   naturalWidth(): number;
   reposition(): void;
   closePopover(refocus: boolean): void;
@@ -98,16 +103,16 @@ interface TableController {
 }
 
 const SORT_ICON =
-  '<svg class="mdprv-table-sort-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>';
+  '<span class="mdprv-icon mdprv-table-sort-icon" data-icon="sort" aria-hidden="true"></span>';
 
 const FUNNEL_ICON =
-  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9z"></path></svg>';
+  '<span class="mdprv-icon" data-icon="funnel" aria-hidden="true"></span>';
 
 const FUNNEL_BADGE =
   '<span class="mdprv-table-fcount" aria-hidden="true" hidden></span>';
 
 const CLOSE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="M6 6l12 12"></path></svg>';
+  '<span class="mdprv-icon" data-icon="close" aria-hidden="true"></span>';
 
 /** Tooltip/keyboard affordance shared by every data cell. */
 const CELL_DETAIL_HINT = "Duplo clique para ver o conteúdo completo";
@@ -140,6 +145,36 @@ const ROW_HEIGHT_FALLBACK = 26;
 
 const CONTROLLERS = new Map<HTMLElement, TableController>();
 const POPOVER_CLOSERS = new Set<(refocus: boolean) => void>();
+
+/**
+ * One observer for every table on the page. Gutter sizes are a pixel snapshot
+ * of the grid, so any change to the table's own box (window splitter, sidebar,
+ * settings preview, font swap, wrap toggle or zoom) has to invalidate it.
+ * Watching the `<table>` rather than `window` also covers containers that
+ * resize without a viewport change.
+ */
+let tableResizeObserver: ResizeObserver | null = null;
+
+function ensureTableResizeObserver(): ResizeObserver | null {
+  if (tableResizeObserver || typeof ResizeObserver === "undefined") {
+    return tableResizeObserver;
+  }
+  tableResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const block = entry.target as HTMLElement;
+      const controller = CONTROLLERS.get(block);
+      if (!controller || !block.isConnected) {
+        tableResizeObserver?.unobserve(block);
+        if (!block.isConnected) {
+          CONTROLLERS.delete(block);
+        }
+        continue;
+      }
+      controller.invalidate();
+    }
+  });
+  return tableResizeObserver;
+}
 
 function reducedMotion(): boolean {
   return (
@@ -2898,6 +2933,10 @@ function setupTable(block: HTMLElement): TableController | null {
       rowHeights = new WeakMap();
       syncGutterSizes();
     },
+    invalidate: () => {
+      rowHeights = new WeakMap();
+      requestSync();
+    },
     naturalWidth: () => naturalWidth(),
     reposition: repositionPopover,
     closePopover,
@@ -4119,17 +4158,54 @@ function setupLightbox(): void {
     }, 150)
   );
 }
+/**
+ * Boot every table block under `root` that the island has not seen yet.
+ *
+ * Used at page load and again for tables created later (the settings preview),
+ * so both go through the same island instead of hand-written static markup.
+ */
+export function initTablesIn(root: ParentNode): void {
+  const observer = ensureTableResizeObserver();
+  // Settings pages are rebuilt on every route change; drop controllers whose
+  // block left the DOM before booting the new ones.
+  for (const block of CONTROLLERS.keys()) {
+    if (!block.isConnected) {
+      CONTROLLERS.delete(block);
+      observer?.unobserve(block);
+    }
+  }
+  const blocks: HTMLElement[] = [];
+  if (root instanceof HTMLElement && root.matches("[data-mdprv-table]")) {
+    blocks.push(root);
+  }
+  root
+    .querySelectorAll<HTMLElement>("[data-mdprv-table]")
+    .forEach((block) => blocks.push(block));
+  for (const block of blocks) {
+    const controller = setupTable(block);
+    if (controller) {
+      observer?.observe(block);
+    }
+  }
+}
+
+/**
+ * Re-measure connected tables inside `root` after a preview-scoped class flip
+ * (`mdprv-simple-tables` / `mdprv-wrap-cells`). The document-level observer
+ * only watches `<html>`, so a preview wrapper needs its own nudge.
+ */
+export function syncTablesIn(root: ParentNode): void {
+  for (const controller of CONTROLLERS.values()) {
+    if (controller.block.isConnected && root.contains(controller.block)) {
+      controller.sync();
+    }
+  }
+}
+
 export function initTable(): void {
   function run(): void {
     setupLightbox();
-    const blocks = document.querySelectorAll<HTMLElement>("[data-mdprv-table]");
-    const instances: TableController[] = [];
-    blocks.forEach((block) => {
-      const controller = setupTable(block);
-      if (controller) {
-        instances.push(controller);
-      }
-    });
+    initTablesIn(document);
 
     const root = document.documentElement;
     let globalRaw = root.classList.contains("mdprv-raw-open");
@@ -4139,8 +4215,10 @@ export function initTable(): void {
       const nextRaw = root.classList.contains("mdprv-raw-open");
       if (nextRaw !== globalRaw) {
         globalRaw = nextRaw;
-        for (const controller of instances) {
-          controller.setGlobalRaw(globalRaw);
+        for (const controller of CONTROLLERS.values()) {
+          if (controller.block.isConnected) {
+            controller.setGlobalRaw(globalRaw);
+          }
         }
       }
       const nextSimple = root.classList.contains("mdprv-simple-tables");
@@ -4150,7 +4228,10 @@ export function initTable(): void {
         wrapCells = nextWrap;
         // CSS hides/shows the gutters or lets row heights grow with wrapped
         // cells; re-measure the frame and reset the cached row heights.
-        for (const controller of instances) {
+        for (const controller of CONTROLLERS.values()) {
+          if (!controller.block.isConnected) {
+            continue;
+          }
           controller.sync();
           controller.reposition();
         }

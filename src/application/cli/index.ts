@@ -8,6 +8,7 @@ import { serve } from "./commands/serve";
 import { configInit } from "./commands/config";
 import { themeList, themePath, themeSeed, themeValidate } from "./commands/theme";
 import { emojiList, emojiPath, emojiSeed, emojiValidate } from "./commands/emoji";
+import { iconList, iconPath, iconSeed, iconValidate } from "./commands/icons";
 import { VERSION } from "../../core/version";
 
 function fail(message: string): never {
@@ -142,6 +143,36 @@ emoji
   .description("Create the emojis directory and seed the builtin pack and schema")
   .action(async () => {
     await emojiSeed();
+  });
+
+const icon = program.command("icons").description("Inspect and validate icon packs");
+icon
+  .command("list")
+  .description("List builtin and user icon packs")
+  .option("--json", "print JSON")
+  .action(async (options: { json?: boolean }) => {
+    await iconList(options);
+  });
+icon
+  .command("validate")
+  .description("Validate an icon pack JSON file")
+  .argument("<file>", "icon pack JSON file")
+  .action(async (file: string) => {
+    if (!(await iconValidate(file))) {
+      process.exitCode = 1;
+    }
+  });
+icon
+  .command("path")
+  .description("Print the configuration and icon directories")
+  .action(async () => {
+    await iconPath();
+  });
+icon
+  .command("seed")
+  .description("Create the icons directory and seed the builtin pack and schema")
+  .action(async () => {
+    await iconSeed();
   });
 
 const config = program.command("config").description("Manage the configuration file");

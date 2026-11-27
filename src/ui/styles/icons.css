@@ -1,0 +1,59 @@
+/*
+ * Mask-based icon surface.
+ *
+ * `<span class="mdprv-icon" data-icon="key">` paints the glyph with
+ * `currentColor` through a mask. The daemon emits one
+ * `--mdprv-icon-<key>: url(...)` per page, pointing at the active pack; the
+ * per-key rules below only map `data-icon` to that variable, so the URLs are
+ * never bundled by Bun and switching packs needs no reload.
+ *
+ * The mask falls back to a fully transparent gradient when the variable is
+ * missing, so a stray span never paints a solid `currentColor` box.
+ */
+.mdprv-icon{display:inline-block;flex:none;width:1em;height:1em;vertical-align:middle;background-color:currentColor;
+-webkit-mask-image:var(--mdprv-icon-src,linear-gradient(#0000,#0000));mask-image:var(--mdprv-icon-src,linear-gradient(#0000,#0000));
+-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+-webkit-mask-position:center;mask-position:center;
+-webkit-mask-size:contain;mask-size:contain}
+[data-icon="copy"]{--mdprv-icon-src:var(--mdprv-icon-copy)}
+[data-icon="check"]{--mdprv-icon-src:var(--mdprv-icon-check)}
+[data-icon="csv"]{--mdprv-icon-src:var(--mdprv-icon-csv)}
+[data-icon="filter"]{--mdprv-icon-src:var(--mdprv-icon-filter)}
+[data-icon="funnel"]{--mdprv-icon-src:var(--mdprv-icon-funnel)}
+[data-icon="sort"]{--mdprv-icon-src:var(--mdprv-icon-sort)}
+[data-icon="pivot"]{--mdprv-icon-src:var(--mdprv-icon-pivot)}
+[data-icon="header-row"]{--mdprv-icon-src:var(--mdprv-icon-header-row)}
+[data-icon="header-col"]{--mdprv-icon-src:var(--mdprv-icon-header-col)}
+[data-icon="chart"]{--mdprv-icon-src:var(--mdprv-icon-chart)}
+[data-icon="fullscreen"]{--mdprv-icon-src:var(--mdprv-icon-fullscreen)}
+[data-icon="chevron"]{--mdprv-icon-src:var(--mdprv-icon-chevron)}
+[data-icon="chevron-down"]{--mdprv-icon-src:var(--mdprv-icon-chevron-down)}
+[data-icon="folder"]{--mdprv-icon-src:var(--mdprv-icon-folder)}
+[data-icon="file"]{--mdprv-icon-src:var(--mdprv-icon-file)}
+[data-icon="close"]{--mdprv-icon-src:var(--mdprv-icon-close)}
+[data-icon="settings"]{--mdprv-icon-src:var(--mdprv-icon-settings)}
+[data-icon="sidebar"]{--mdprv-icon-src:var(--mdprv-icon-sidebar)}
+[data-icon="history"]{--mdprv-icon-src:var(--mdprv-icon-history)}
+[data-icon="top"]{--mdprv-icon-src:var(--mdprv-icon-top)}
+[data-icon="zen"]{--mdprv-icon-src:var(--mdprv-icon-zen)}
+[data-icon="zen-exit"]{--mdprv-icon-src:var(--mdprv-icon-zen-exit)}
+[data-icon="palette"]{--mdprv-icon-src:var(--mdprv-icon-palette)}
+[data-icon="terminal"]{--mdprv-icon-src:var(--mdprv-icon-terminal)}
+[data-icon="activity"]{--mdprv-icon-src:var(--mdprv-icon-activity)}
+[data-icon="smile"]{--mdprv-icon-src:var(--mdprv-icon-smile)}
+[data-icon="table"]{--mdprv-icon-src:var(--mdprv-icon-table)}
+[data-icon="code"]{--mdprv-icon-src:var(--mdprv-icon-code)}
+[data-icon="diff"]{--mdprv-icon-src:var(--mdprv-icon-diff)}
+[data-icon="layers"]{--mdprv-icon-src:var(--mdprv-icon-layers)}
+[data-icon="info"]{--mdprv-icon-src:var(--mdprv-icon-info)}
+[data-icon="reset"]{--mdprv-icon-src:var(--mdprv-icon-reset)}
+[data-icon="pencil"]{--mdprv-icon-src:var(--mdprv-icon-pencil)}
+[data-icon="trash"]{--mdprv-icon-src:var(--mdprv-icon-trash)}
+[data-icon="import"]{--mdprv-icon-src:var(--mdprv-icon-import)}
+[data-icon="save"]{--mdprv-icon-src:var(--mdprv-icon-save)}
+[data-icon="chart-bar"]{--mdprv-icon-src:var(--mdprv-icon-chart-bar)}
+[data-icon="chart-hbar"]{--mdprv-icon-src:var(--mdprv-icon-chart-hbar)}
+[data-icon="chart-line"]{--mdprv-icon-src:var(--mdprv-icon-chart-line)}
+[data-icon="chart-area"]{--mdprv-icon-src:var(--mdprv-icon-chart-area)}
+[data-icon="chart-pie"]{--mdprv-icon-src:var(--mdprv-icon-chart-pie)}
+[data-icon="chart-scatter"]{--mdprv-icon-src:var(--mdprv-icon-chart-scatter)}

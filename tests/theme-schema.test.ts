@@ -52,6 +52,14 @@ describe("validateTheme", () => {
     expect(theme.charts.palette).toEqual([...DEFAULT_CHART_PALETTE_DARK]);
   });
 
+  it("keeps an explicit radius scale such as Plasma's 5px", () => {
+    const theme = validateTheme(
+      "sample",
+      fixed({ radii: { none: 0, sm: 4, md: 5, lg: 8, xl: 12, pill: 999, circle: 9999 } })
+    ) as FixedTheme;
+    expect(theme.radii).toEqual({ none: 0, sm: 4, md: 5, lg: 8, xl: 12, pill: 999, circle: 9999 });
+  });
+
   it("normalizes an omitted loader to classic", () => {
     const theme = validateTheme("sample", fixed()) as FixedTheme;
     expect(theme.loader).toBe("classic");

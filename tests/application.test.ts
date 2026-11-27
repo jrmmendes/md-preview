@@ -106,6 +106,7 @@ function makeConfig(stateFile: string, idleMs = 60_000): Config {
     stateFile,
     theme: "auto",
     emoji: "github",
+    icons: "breeze",
     loader: "classic",
     loaderFrom: "default",
     zoomSensitivity: 1.1,
@@ -420,7 +421,7 @@ describe("application daemon themes", () => {
         themes: string[];
         errors: unknown[];
       };
-      expect(initial.themes).toHaveLength(9);
+      expect(initial.themes).toHaveLength(12);
       expect(initial.themes[0]).toBe("auto");
       expect(initial.errors).toEqual([]);
 

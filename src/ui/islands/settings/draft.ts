@@ -29,6 +29,8 @@ export interface SettingsSnapshot {
   stored: StoredValues;
   /** Active emoji pack slug; applied through the `mdprv_emoji` cookie. */
   emojiName: string;
+  /** Active icon pack slug; applied through the `mdprv_icons` cookie. */
+  iconName: string;
   exampleId: string;
   zoom: number;
   simpleTables: boolean;
@@ -48,6 +50,7 @@ export function cloneSnapshot(value: SettingsSnapshot): SettingsSnapshot {
       mermaid: value.stored.mermaid ? { ...value.stored.mermaid } : null,
     },
     emojiName: value.emojiName,
+    iconName: value.iconName,
     exampleId: value.exampleId,
     zoom: value.zoom,
     simpleTables: value.simpleTables,
@@ -168,6 +171,13 @@ export function setDraftEmoji(
   return { ...cloneSnapshot(draft), emojiName };
 }
 
+export function setDraftIcon(
+  draft: SettingsSnapshot,
+  iconName: string
+): SettingsSnapshot {
+  return { ...cloneSnapshot(draft), iconName };
+}
+
 export function setDraftFont(
   draft: SettingsSnapshot,
   value: StoredValues["font"]
@@ -275,6 +285,10 @@ export function needsReload(
   }
   // Emoji packs expand `:shortcode:` during the server render.
   if (applied.emojiName !== draft.emojiName) {
+    return true;
+  }
+  // The mask URLs for the icon surface are emitted with the page.
+  if (applied.iconName !== draft.iconName) {
     return true;
   }
   const before = effectiveBlocks(data, applied);

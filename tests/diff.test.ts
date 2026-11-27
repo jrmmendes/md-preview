@@ -308,7 +308,7 @@ describe("renderDiff", () => {
     expect(html).toContain('data-diff-view-target="split" aria-pressed="false"');
     expect(html).toContain('class="mdprv-diff-btn mdprv-diff-copy" data-diff-copy');
     expect(html).toContain('aria-label="Copiar diff"');
-    expect(html).toContain("<svg");
+    expect(html).toContain('data-icon="copy"');
     expect(html).toContain('class="mdprv-diff-pane mdprv-diff-pane--inline"');
     expect(html).toContain(
       'class="mdprv-diff-pane mdprv-diff-pane--split" data-diff-pane="split" hidden'

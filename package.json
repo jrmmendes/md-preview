@@ -11,12 +11,14 @@
     "bin/",
     "themes/",
     "emojis/",
+    "icons/",
     "dist/client/",
     "README.md"
   ],
   "scripts": {
     "build": "bun run build.ts",
     "build:client": "bun run build.ts --client-only",
+    "icons:assets": "bun run scripts/build-icon-assets.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.ui.json",
     "test": "bun test",
     "prepack": "bun run build"

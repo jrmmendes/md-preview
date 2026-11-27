@@ -47,6 +47,8 @@ const THEME_COOKIE = "mdprv_theme";
 
 const EMOJI_COOKIE = "mdprv_emoji";
 
+const ICON_COOKIE = "mdprv_icons";
+
 export type CollapsedSide = "left" | "right";
 
 export type DiffView = "inline" | "split";
@@ -184,6 +186,16 @@ export function setEmoji(name: string): void {
 /** Drops the explicit pack so resolution falls back to config then `github`. */
 export function clearEmoji(): void {
   cookieDelete(EMOJI_COOKIE);
+}
+
+/** Active icon pack; mirrors the theme/emoji cookies (written only on Save). */
+export function setIcons(name: string): void {
+  cookieSet(ICON_COOKIE, name);
+}
+
+/** Drops the explicit pack so resolution falls back to config then `breeze`. */
+export function clearIcons(): void {
+  cookieDelete(ICON_COOKIE);
 }
 
 export function getWidth(): number | null {

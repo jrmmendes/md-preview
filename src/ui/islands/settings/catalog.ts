@@ -4,13 +4,16 @@
  */
 import type { LoaderName } from "../../../core/loader";
 import { isEmojiStyle } from "../../../core/emoji/constants";
+import { isIconStyle } from "../../../core/icons/constants";
 import type { MermaidThemeName, ShikiThemeName } from "../../../core/themes/constants";
 import { THEME_PREFS_BLOCKS_KEY } from "../../../shared/theme-prefs";
 import type {
   EmojiPackEntry,
+  IconPackEntry,
   MermaidThemeEntry,
   PageConfigPayload,
   PageEmojiPayload,
+  PageIconsPayload,
   PageThemePayload,
   ShikiThemeEntry,
   ThemeCatalogEntry,
@@ -58,6 +61,9 @@ export interface PageThemeData {
   /** Pack resolved for this request; absent in pages cached before Phase A. */
   emoji?: PageEmojiPayload | null;
   emojis: EmojiPackEntry[];
+  /** Active icon pack; absent in pages cached before the icon feature. */
+  icons?: PageIconsPayload | null;
+  iconPacks: IconPackEntry[];
   config?: PageConfigPayload | null;
 }
 
@@ -130,6 +136,7 @@ function isConfig(value: unknown): value is PageConfigPayload {
     typeof paths.config === "string" &&
     typeof paths.themes === "string" &&
     typeof paths.emojis === "string" &&
+    typeof paths.icons === "string" &&
     typeof paths.state === "string"
   );
 }
@@ -161,6 +168,37 @@ function isEmojiPayload(value: unknown): value is PageEmojiPayload {
 /** Keeps only well-formed catalog entries; used by the page payload and sync. */
 export function parseEmojiEntries(raw: unknown): EmojiPackEntry[] {
   return Array.isArray(raw) ? raw.filter(isEmojiEntry) : [];
+}
+
+function isIconEntry(value: unknown): value is IconPackEntry {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    value.name !== "" &&
+    typeof value.label === "string" &&
+    isIconStyle(value.style) &&
+    (value.source === "builtin" || value.source === "user") &&
+    typeof value.count === "number" &&
+    Number.isFinite(value.count) &&
+    value.count >= 0 &&
+    (value.default === undefined || typeof value.default === "boolean") &&
+    (value.description === undefined || typeof value.description === "string") &&
+    (value.license === undefined || typeof value.license === "string") &&
+    (value.attribution === undefined || typeof value.attribution === "string")
+  );
+}
+
+function isIconPayload(value: unknown): value is PageIconsPayload {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    isIconStyle(value.style)
+  );
+}
+
+/** Keeps only well-formed icon catalog entries; used by payload and sync. */
+export function parseIconEntries(raw: unknown): IconPackEntry[] {
+  return Array.isArray(raw) ? raw.filter(isIconEntry) : [];
 }
 
 function isShikiEntry(value: unknown): value is ShikiThemeEntry {
@@ -221,6 +259,8 @@ export function parsePageThemeData(raw: unknown): PageThemeData | null {
     mermaidThemes,
     emoji: isEmojiPayload(raw.emoji) ? raw.emoji : null,
     emojis: parseEmojiEntries(raw.emojis),
+    icons: isIconPayload(raw.icons) ? raw.icons : null,
+    iconPacks: parseIconEntries(raw.iconPacks),
     config,
   };
 }

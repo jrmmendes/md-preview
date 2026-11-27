@@ -42,14 +42,11 @@ function reload(): void {
   location.reload();
 }
 
-/** `auto` follows its github variants; a fixed theme only reacts to itself. */
-function themeChanged(active: string, changed: string[]): boolean {
-  if (active === "auto") {
-    return (
-      changed.includes("auto") ||
-      changed.includes("github-light") ||
-      changed.includes("github-dark")
-    );
+/** An `auto` theme follows the system scheme and reacts to any theme change;
+ *  a fixed theme only reacts to its own file. */
+function themeChanged(active: string, kind: string | null, changed: string[]): boolean {
+  if (kind === "auto") {
+    return changed.length > 0;
   }
   return changed.includes(active);
 }
@@ -72,8 +69,12 @@ export function initLiveReload(): void {
   });
 
   on("themes", (data) => {
-    const active = document.documentElement.getAttribute("data-theme") ?? "auto";
-    if (!themeChanged(active, data.changed)) {
+    const root = document.documentElement;
+    const active = root.getAttribute("data-theme") ?? "auto";
+    const kind =
+      root.getAttribute("data-theme-kind") ??
+      (active === "auto" ? "auto" : null);
+    if (!themeChanged(active, kind, data.changed)) {
       return;
     }
     reload();
@@ -108,6 +109,17 @@ export function initLiveReload(): void {
     const changed = Array.isArray(data.changed) ? data.changed : [];
     // Only an edit/removal of the effective pack changes the rendered HTML;
     // the settings catalog itself updates in place in the modal island.
+    if (active === "" || !changed.includes(active)) {
+      return;
+    }
+    reload();
+  });
+
+  on("icons", (data) => {
+    const active = document.documentElement.getAttribute("data-icons") ?? "";
+    const changed = Array.isArray(data.changed) ? data.changed : [];
+    // The generated CSS points at the active pack; reload so its mask URLs
+    // are re-emitted when that pack is edited or removed.
     if (active === "" || !changed.includes(active)) {
       return;
     }

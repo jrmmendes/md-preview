@@ -76,6 +76,7 @@ describe("ui shell", () => {
     expect(SHELL).toContain('data-shiki-light="{{mdprv-shiki-light}}"');
     expect(SHELL).toContain('data-shiki-dark="{{mdprv-shiki-dark}}"');
     expect(SHELL).toContain('data-emoji="{{mdprv-emoji}}"');
+    expect(SHELL).toContain('data-icons="{{mdprv-icons}}"');
     expect(SHELL).toContain('data-loader="{{mdprv-loader}}"');
     expect(SHELL).toContain('data-loader-dark="{{mdprv-loader-dark}}"');
     const head = SHELL.slice(0, SHELL.indexOf("<body>"));
@@ -87,6 +88,8 @@ describe("ui shell", () => {
   it("ships the JSON payload consumed by the islands", () => {
     expect(SHELL).toContain('<script type="application/json" id="mdprv-data">{{mdprv-data}}</script>');
     expect(SHELL).toContain("<style id=\"mdprv-theme-css\">{{mdprv-theme-css}}</style>");
+    expect(SHELL).toContain("<style id=\"mdprv-icon-css\">{{mdprv-icon-css}}</style>");
+    expect(SHELL).not.toContain("<svg");
   });
 
   it("exposes a single visually hidden live status region", () => {

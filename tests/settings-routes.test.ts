@@ -22,6 +22,7 @@ describe("settings routes", () => {
     expect(parseSettingsRouteHash("#/sistema")).toEqual({ section: "sistema", anchor: null });
     expect(parseSettingsRouteHash("#/widgets")).toEqual({ section: "widgets", anchor: null });
     expect(parseSettingsRouteHash("#/emojis")).toEqual({ section: "emojis", anchor: null });
+    expect(parseSettingsRouteHash("#/icons")).toEqual({ section: "icons", anchor: null });
   });
 
   it("parses the import subpage", () => {

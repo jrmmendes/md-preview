@@ -11,6 +11,7 @@ import type { LoaderName } from "../../../core/loader";
 import type { MermaidThemeName, ShikiThemeName } from "../../../core/themes/constants";
 import type {
   EmojiPackEntry,
+  IconPackEntry,
   MermaidThemeEntry,
   ShikiThemeEntry,
 } from "../../../core/contract";
@@ -20,7 +21,9 @@ import {
   getSimpleTables,
   getTableWrap,
   clearEmoji,
+  clearIcons,
   setEmoji,
+  setIcons,
   setSimpleDiffs,
   setSimpleTables,
   setTableWrap,
@@ -44,6 +47,7 @@ import {
   entryScheme,
   findCatalogEntry,
   parseEmojiEntries,
+  parseIconEntries,
   parsePageThemeData,
   resolvePresets,
   sanitizeMermaidValue,
@@ -89,6 +93,7 @@ import {
   setDraftEmoji,
   setDraftExample,
   setDraftFont,
+  setDraftIcon,
   setDraftLoader,
   setDraftMermaid,
   setDraftShiki,
@@ -100,6 +105,7 @@ import {
   type SettingsSnapshot,
 } from "./draft";
 import { formatZoom, currentZoom } from "./pages/widgets";
+import { initTablesIn, syncTablesIn } from "../table";
 import {
   WIDGET_PREVIEW_CLASSES,
   widgetPreviewClasses,
@@ -115,8 +121,10 @@ import {
   renderEmojisPage,
   type EmojisPageHandle,
 } from "./pages/emojis";
+import { renderIconsPage, type IconsPageHandle } from "./pages/icons";
 import { clearCodePreviewCache } from "./previews/code";
 import type { EmojiImportResult } from "./previews/emoji-import";
+import type { IconImportResult } from "./previews/icon-import";
 import type { ShikiImportResult } from "./previews/shiki-import";
 import type { ThemeImportResult } from "./previews/theme-import";
 import type { MermaidImportResult } from "./previews/mermaid-import";
@@ -240,6 +248,11 @@ export function initSettings(): void {
       data.emojis.find((entry) => entry.name === "github")?.name ??
       data.emojis[0]?.name ??
       "github",
+    iconName:
+      data.icons?.name ??
+      data.iconPacks.find((entry) => entry.default === true)?.name ??
+      data.iconPacks[0]?.name ??
+      "breeze",
     exampleId: lastExample(),
     zoom: currentZoom(),
     simpleTables: getSimpleTables(),
@@ -254,6 +267,7 @@ export function initSettings(): void {
   let chartsPreview: ChartsPreviewHandle | null = null;
   let appearancePage: AppearancePageHandle | null = null;
   let emojisPage: EmojisPageHandle | null = null;
+  let iconsPage: IconsPageHandle | null = null;
 
   function presetsFor(snapshot: SettingsSnapshot) {
     return resolvePresets(state.data, snapshot.themeName, snapshot.scheme);
@@ -285,6 +299,9 @@ export function initSettings(): void {
         node.dataset.preview === "diffs" ? "diffs" : "tables";
       node.classList.remove(...WIDGET_PREVIEW_CLASSES);
       node.classList.add(...widgetPreviewClasses(target, snapshot));
+      // The table island observes `<html>`, not this wrapper, so a preview
+      // table must be re-measured explicitly once its classes flip.
+      syncTablesIn(node);
     }
   }
 
@@ -320,6 +337,7 @@ export function initSettings(): void {
     chartsPreview = null;
     appearancePage = null;
     emojisPage = null;
+    iconsPage = null;
 
     let content: HTMLElement;
     if (route.section === "temas") {
@@ -361,6 +379,15 @@ export function initSettings(): void {
         deletedEmoji,
       });
       content = emojisPage.root;
+    } else if (route.section === "icons") {
+      iconsPage = renderIconsPage({
+        icons: state.data.iconPacks,
+        iconName: draft.iconName,
+        selectIcon,
+        importedIcon,
+        deletedIcon,
+      });
+      content = iconsPage.root;
     } else if (route.section === "sistema") {
       content = renderSistemaPage(state.data.config ?? null);
     } else {
@@ -379,6 +406,9 @@ export function initSettings(): void {
 
     modal.render(content, route);
     syncWidgetPreviewClasses(draft);
+    // Preview tables are created after `initTable()` ran at boot. Boot them
+    // through the same island so their gutters are measured from the grid.
+    initTablesIn(content);
     sessionSet(LAST_ROUTE_KEY, settingsRouteString(route));
     updateDirty();
 
@@ -424,6 +454,18 @@ export function initSettings(): void {
       return;
     }
     draft = setDraftEmoji(draft, name);
+    updateDirty();
+  }
+
+  /**
+   * The icons list already moved the radio in-place and painted the preview;
+   * the selection must not re-render the page or touch the import form.
+   */
+  function selectIcon(name: string): void {
+    if (!state.data.iconPacks.some((entry) => entry.name === name)) {
+      return;
+    }
+    draft = setDraftIcon(draft, name);
     updateDirty();
   }
 
@@ -588,6 +630,20 @@ export function initSettings(): void {
       const url = new URL(location.href);
       if (url.searchParams.has("emoji")) {
         url.searchParams.delete("emoji");
+        history.replaceState(
+          history.state,
+          "",
+          `${url.pathname}${url.search}${location.hash}`
+        );
+      }
+    }
+
+    if (applied.iconName !== target.iconName) {
+      setIcons(target.iconName);
+      // Drop an explicit `?icons=` so the saved cookie wins on reload.
+      const url = new URL(location.href);
+      if (url.searchParams.has("icons")) {
+        url.searchParams.delete("icons");
         history.replaceState(
           history.state,
           "",
@@ -929,6 +985,95 @@ export function initSettings(): void {
     })();
   }
 
+  /**
+   * Moves the draft to a pack that still exists after a catalog change. The
+   * applied snapshot is left alone on purpose: removing the active pack is a
+   * change like any other and must go through Save (cookie + reload).
+   */
+  function ensureIconSelection(): void {
+    const names = new Set(state.data.iconPacks.map((entry) => entry.name));
+    const fallback =
+      state.data.iconPacks.find((entry) => entry.default === true)?.name ??
+      state.data.iconPacks.find((entry) => entry.name === "breeze")?.name ??
+      state.data.iconPacks[0]?.name;
+    if (!fallback) {
+      return;
+    }
+    if (!names.has(draft.iconName)) {
+      draft = setDraftIcon(draft, fallback);
+    }
+  }
+
+  async function refreshIconCatalog(): Promise<boolean> {
+    try {
+      const response = await fetch("/__icons", {
+        headers: { accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return false;
+      }
+      const body = (await response.json()) as { icons?: unknown };
+      if (!Array.isArray(body.icons)) {
+        return false;
+      }
+      state.data.iconPacks = parseIconEntries(body.icons);
+      ensureIconSelection();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Import only adds to the catalog; the page already updated its list. */
+  function importedIcon(result: IconImportResult): void {
+    state.data.iconPacks =
+      result.icons.length > 0
+        ? result.icons
+        : [
+            ...state.data.iconPacks.filter(
+              (entry) => entry.name !== result.icon.name
+            ),
+            result.icon,
+          ];
+    ensureIconSelection();
+  }
+
+  function deletedIcon(name: string): void {
+    const wasApplied = applied.iconName === name;
+    state.data.iconPacks = state.data.iconPacks.filter(
+      (entry) => entry.name !== name
+    );
+    if (wasApplied) {
+      // The deletion is immediate; do not let a stale cookie reactivate the
+      // slug if the same pack is imported again later.
+      clearIcons();
+      const url = new URL(location.href);
+      if (url.searchParams.get("icons") === name) {
+        url.searchParams.delete("icons");
+        history.replaceState(
+          history.state,
+          "",
+          `${url.pathname}${url.search}${location.hash}`
+        );
+      }
+    }
+    ensureIconSelection();
+    updateDirty();
+    void (async () => {
+      if (!(await refreshIconCatalog())) {
+        return;
+      }
+      if (!modal.isOpen()) {
+        return;
+      }
+      if (iconsPage) {
+        iconsPage.update(state.data.iconPacks, draft.iconName);
+      }
+      updateDirty();
+    })();
+  }
+
   modal = createSettingsModal({
     root,
     trigger,
@@ -976,11 +1121,12 @@ export function initSettings(): void {
     }
     syncing = true;
     try {
-      const [themeRes, shikiRes, mermaidRes, emojiRes] = await Promise.all([
+      const [themeRes, shikiRes, mermaidRes, emojiRes, iconRes] = await Promise.all([
         fetch("/__themes", { headers: { accept: "application/json" }, cache: "no-store" }),
         fetch("/__shiki-themes", { headers: { accept: "application/json" }, cache: "no-store" }),
         fetch("/__mermaid-themes", { headers: { accept: "application/json" }, cache: "no-store" }),
         fetch("/__emojis", { headers: { accept: "application/json" }, cache: "no-store" }),
+        fetch("/__icons", { headers: { accept: "application/json" }, cache: "no-store" }),
       ]);
       if (themeRes.ok) {
         const body = (await themeRes.json()) as { catalog?: unknown };
@@ -1025,11 +1171,21 @@ export function initSettings(): void {
           ensureEmojiSelection();
         }
       }
+      if (iconRes.ok) {
+        const body = (await iconRes.json()) as { icons?: unknown };
+        if (Array.isArray(body.icons)) {
+          state.data.iconPacks = parseIconEntries(body.icons);
+          ensureIconSelection();
+        }
+      }
       if (modal.isOpen()) {
-        // The Emojis page updates in place; re-rendering it would reset the
-        // preview and any JSON typed in the import form.
+        // The Emojis/Icons pages update in place; re-rendering them would
+        // reset their previews and any JSON typed in the import form.
         if (modal.currentRoute().section === "emojis" && emojisPage) {
           emojisPage.update(state.data.emojis, draft.emojiName);
+          updateDirty();
+        } else if (modal.currentRoute().section === "icons" && iconsPage) {
+          iconsPage.update(state.data.iconPacks, draft.iconName);
           updateDirty();
         } else if (canRerender()) {
           renderPreservingView(modal.currentRoute());
@@ -1054,6 +1210,7 @@ export function initSettings(): void {
   on("shiki-themes", scheduleCatalogSync);
   on("mermaid-themes", scheduleCatalogSync);
   on("emojis", scheduleCatalogSync);
+  on("icons", scheduleCatalogSync);
 
   document.addEventListener("keydown", (event) => {
     if (!(event.metaKey || event.ctrlKey) || event.key !== ",") {

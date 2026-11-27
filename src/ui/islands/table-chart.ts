@@ -26,12 +26,12 @@ export const CHART_KIND_LABELS: Record<ChartKind, string> = {
 
 /** Mini previews shown next to each option in the chart popover. */
 export const CHART_PREVIEWS: Record<ChartKind, string> = {
-  bar: '<svg viewBox="0 0 28 20" aria-hidden="true"><rect x="3" y="9" width="4" height="8"></rect><rect x="10" y="3" width="4" height="14"></rect><rect x="17" y="6" width="4" height="11"></rect><rect x="24" y="11" width="2" height="6"></rect></svg>',
-  hbar: '<svg viewBox="0 0 28 20" aria-hidden="true"><rect x="2" y="3" width="18" height="3"></rect><rect x="2" y="9" width="23" height="3"></rect><rect x="2" y="15" width="13" height="3"></rect></svg>',
-  line: '<svg viewBox="0 0 28 20" aria-hidden="true"><polyline points="2,16 8,10 14,13 20,5 26,8"></polyline><circle cx="8" cy="10" r="1.6"></circle><circle cx="20" cy="5" r="1.6"></circle></svg>',
-  area: '<svg viewBox="0 0 28 20" aria-hidden="true"><path d="M2 16 8 10 14 13 20 5 26 8V18H2Z" class="mdprv-chart-preview-fill"></path><polyline points="2,16 8,10 14,13 20,5 26,8"></polyline></svg>',
-  pie: '<svg viewBox="0 0 28 20" aria-hidden="true"><path d="M14 10V2a8 8 0 0 1 7 4Z"></path><path d="M14 10 21 6a8 8 0 0 1-7 12Z" class="mdprv-chart-preview-fill"></path><circle cx="14" cy="10" r="8"></circle><circle cx="14" cy="10" r="3.4" class="mdprv-chart-preview-hole"></circle></svg>',
-  scatter: '<svg viewBox="0 0 28 20" aria-hidden="true"><circle cx="4" cy="15" r="1.6"></circle><circle cx="9" cy="11" r="1.6"></circle><circle cx="13" cy="13" r="1.6"></circle><circle cx="18" cy="6" r="1.6"></circle><circle cx="24" cy="9" r="1.6"></circle></svg>',
+  bar: '<span class="mdprv-icon" data-icon="chart-bar" aria-hidden="true"></span>',
+  hbar: '<span class="mdprv-icon" data-icon="chart-hbar" aria-hidden="true"></span>',
+  line: '<span class="mdprv-icon" data-icon="chart-line" aria-hidden="true"></span>',
+  area: '<span class="mdprv-icon" data-icon="chart-area" aria-hidden="true"></span>',
+  pie: '<span class="mdprv-icon" data-icon="chart-pie" aria-hidden="true"></span>',
+  scatter: '<span class="mdprv-icon" data-icon="chart-scatter" aria-hidden="true"></span>',
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";

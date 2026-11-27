@@ -7,6 +7,7 @@ import { loadConfig } from "../src/core/config";
 import {
   defaultConfig,
   emojisDir,
+  iconsDir,
   readConfigFile,
   resolveConfigDir,
   themesDir,
@@ -32,17 +33,19 @@ describe("config.json", () => {
     const dir = tempDir();
     writeFileSync(
       join(dir, "config.json"),
-      JSON.stringify({ theme: "nord", emoji: "custom", port: 9100, seedThemes: false })
+      JSON.stringify({ theme: "nord", emoji: "custom", icons: "custom", port: 9100, seedThemes: false })
     );
     const config = loadConfig({}, { configDir: dir });
     expect(config.theme).toBe("nord");
     expect(config.emoji).toBe("custom");
+    expect(config.icons).toBe("custom");
     expect(config.port).toBe(9100);
     expect(config.seedThemes).toBe(false);
 
     const overridden = loadConfig({ MDPRV_PORT: "9200", MDPRV_SEED_THEMES: "1" }, { configDir: dir });
     expect(overridden.theme).toBe("nord");
     expect(overridden.emoji).toBe("custom");
+    expect(overridden.icons).toBe("custom");
     expect(overridden.port).toBe(9200);
     expect(overridden.seedThemes).toBe(true);
   });
@@ -86,5 +89,6 @@ describe("config.json", () => {
     expect(resolveConfigDir({ MDPRV_CONFIG_DIR: dir })).toBe(dir);
     expect(themesDir(dir)).toBe(join(dir, "themes"));
     expect(emojisDir(dir)).toBe(join(dir, "emojis"));
+    expect(iconsDir(dir)).toBe(join(dir, "icons"));
   });
 });

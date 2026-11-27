@@ -98,6 +98,7 @@ function snapshot(emojiName = "github"): SettingsSnapshot {
     blocks: { fonte: false, loader: false, codigo: false, graficos: false },
     stored: { font: null, loader: null, shiki: null, mermaid: null },
     emojiName,
+    iconName: "breeze",
     exampleId: "fluxo",
     zoom: 1.1,
     simpleTables: false,
@@ -179,6 +180,7 @@ describe("settings emoji payload", () => {
         config: "/c/config.json",
         themes: "/c/themes",
         emojis: "/c/emojis",
+        icons: "/c/icons",
         state: "/s/daemon.json",
       },
     };

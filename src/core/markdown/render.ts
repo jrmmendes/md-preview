@@ -93,6 +93,11 @@ const mdCache = new Map<string, MarkdownIt>();
  * later requests with the same theme name. Custom themes use the internal
  * content-addressed name, so editing one invalidates the renderer. The emoji
  * pack id does the same for `:shortcode:` rules.
+ *
+ * Icon packs intentionally do not participate: server-generated icon markup is
+ * only `<span data-icon="key">`, and the pack URL lives in the page CSS
+ * custom properties. Switching packs therefore cannot leave stale markup in a
+ * cached renderer.
  */
 function rendererKey(
   themeName: string,

@@ -29,24 +29,24 @@ export interface CsvRenderOptions {
 }
 
 const FILTER_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>';
+  '<span class="mdprv-icon" data-icon="filter" aria-hidden="true"></span>';
 
 const PIVOT_ICON =
-  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13"></path><path d="m14 5 3 3-3 3"></path><path d="M20 16H7"></path><path d="m10 13-3 3 3 3"></path></svg>';
+  '<span class="mdprv-icon" data-icon="pivot" aria-hidden="true"></span>';
 
 const FULLSCREEN_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>';
+  '<span class="mdprv-icon" data-icon="fullscreen" aria-hidden="true"></span>';
 
 const CHART_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V11"></path><path d="M10 20V4"></path><path d="M16 20v-6"></path><path d="M22 20H2"></path></svg>';
+  '<span class="mdprv-icon" data-icon="chart" aria-hidden="true"></span>';
 
 /** Table with its first row highlighted: toggles the header row. */
 const HEADER_ROW_ICON =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M3.5 9.5h17"></path><rect x="4.9" y="5.9" width="14.2" height="2.2" rx=".6" fill="currentColor" stroke="none"></rect></svg>';
+  '<span class="mdprv-icon" data-icon="header-row" aria-hidden="true"></span>';
 
 /** Table with its first column highlighted: toggles the header column. */
 const HEADER_COL_ICON =
-  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M9.5 4.5v15"></path><rect x="4.9" y="5.9" width="3.3" height="12.4" rx=".6" fill="currentColor" stroke="none"></rect></svg>';
+  '<span class="mdprv-icon" data-icon="header-col" aria-hidden="true"></span>';
 
 function escapeText(value: string): string {
   return value

@@ -1,3 +1,4 @@
+import "./styles/icons.css";
 import "./styles/base.css";
 import "./styles/meta.css";
 import "./styles/sidebar.css";

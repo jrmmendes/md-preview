@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 
-import { configEmojisDir, configFile, configThemesDir, type Config } from "../../core/config";
+import { configEmojisDir, configFile, configIconsDir, configThemesDir, type Config } from "../../core/config";
 import type {
   ActivateEvent,
   PageConfigPayload,
@@ -10,6 +10,8 @@ import type {
 } from "../../core/contract";
 import { resolveEmojiPackName } from "../../core/emoji/resolve";
 import type { EmojiStore } from "../../core/emoji/store";
+import { resolveIconPackName } from "../../core/icons/resolve";
+import type { IconStore } from "../../core/icons/store";
 import { renderPage } from "../../core/page";
 import { normalizeContent, renderMarkdown } from "../../core/markdown/render";
 import {
@@ -61,6 +63,8 @@ import {
   importEmojiPack,
 } from "./emoji-import";
 import { serveEmojiAsset } from "./emoji-assets";
+import { serveIconAsset } from "./icons-assets";
+import { deleteIconPack, iconsPayload, importIconPack } from "./icons-import";
 import { loadShell } from "./shell";
 import type { SlugEntry, SlugRegistry } from "./watch";
 
@@ -88,6 +92,7 @@ export interface RouteDeps {
   shikiThemes: ShikiThemeStore;
   mermaidThemes: MermaidThemeStore;
   emojis: EmojiStore;
+  icons: IconStore;
   registry: SlugRegistry;
   token: string;
   onActivity: () => void;
@@ -295,6 +300,7 @@ function pageConfig(config: Config): PageConfigPayload {
       config: configFile(config),
       themes: configThemesDir(config),
       emojis: configEmojisDir(config),
+      icons: configIconsDir(config),
       state: config.stateFile,
     },
   };
@@ -550,6 +556,13 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
       deps.emojis
     );
     const emojiPack = deps.emojis.get(emojiName);
+    const iconName = resolveIconPackName(
+      url.searchParams.get("icons"),
+      cookieValue(req.headers.get("cookie"), "mdprv_icons"),
+      config.icons,
+      deps.icons
+    );
+    const iconPack = deps.icons.get(iconName);
     const prefs = parseThemePrefs(cookieValue(req.headers.get("cookie"), THEME_PREFS_COOKIE), {
       isShikiTheme: isKnownShikiTheme,
       isMermaidTheme: isKnownMermaidTheme,
@@ -584,7 +597,7 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         },
         addNonce(loadShell(), nonce),
         themes,
-        { prefs, config: pageConfig(config), emojiName: emojiPack.name }
+        { prefs, config: pageConfig(config), emojiName: emojiPack.name, iconName: iconPack.name }
       ),
       {
         headers: {
@@ -782,6 +795,29 @@ export function createRoutes(deps: RouteDeps): RoutesHandle {
         rest.slice(0, slash),
         rest.slice(slash + 1),
         deps.emojis,
+        method === "HEAD"
+      );
+    }
+    if ((method === "GET" || method === "HEAD") && route === "/__icons") {
+      return json(iconsPayload(deps.icons), 200, method === "HEAD");
+    }
+    if (method === "POST" && route === "/__icons") {
+      return importIconPack(req, { dir: deps.icons.dir, store: deps.icons });
+    }
+    if (method === "DELETE" && route.startsWith("/__icons/")) {
+      const name = route.slice("/__icons/".length);
+      return deleteIconPack(req, name, { dir: deps.icons.dir, store: deps.icons });
+    }
+    if ((method === "GET" || method === "HEAD") && route.startsWith("/__icon-assets/")) {
+      const rest = route.slice("/__icon-assets/".length);
+      const slash = rest.indexOf("/");
+      if (slash <= 0) {
+        return text("not found", 404, method === "HEAD");
+      }
+      return serveIconAsset(
+        rest.slice(0, slash),
+        rest.slice(slash + 1),
+        deps.icons,
         method === "HEAD"
       );
     }

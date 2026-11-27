@@ -1,4 +1,5 @@
 import type { EmojiStyle } from "./emoji/constants";
+import type { IconStyle } from "./icons/constants";
 import type { LoaderName } from "./loader";
 import type { MermaidThemeName, ShikiThemeName } from "./themes/constants";
 export type { LoaderName };
@@ -72,12 +73,39 @@ export interface EmojisEvent {
   version: number;
 }
 
+/** One entry of the dynamic icon pack catalog shipped to the modal. */
+export interface IconPackEntry {
+  name: string;
+  label: string;
+  description?: string;
+  style: IconStyle;
+  source: "builtin" | "user";
+  count: number;
+  /** True for the reserved builtin default pack (`breeze`). */
+  default?: boolean;
+  license?: string;
+  attribution?: string;
+}
+
+/** Effective icon pack for the rendered page. */
+export interface PageIconsPayload {
+  name: string;
+  style: IconStyle;
+}
+
+/** SSE payload for icon packs added/edited/removed on disk. */
+export interface IconsEvent {
+  names: string[];
+  changed: string[];
+  version: number;
+}
+
 /** Read-only daemon settings shown on the modal's System page. */
 export interface PageConfigPayload {
   port: number;
   idleMinutes: number;
   seedThemes: boolean;
-  paths: { config: string; themes: string; emojis: string; state: string };
+  paths: { config: string; themes: string; emojis: string; icons: string; state: string };
 }
 
 export interface PageInput {

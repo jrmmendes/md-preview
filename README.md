@@ -3,11 +3,11 @@
 # md-preview
 
 Abra arquivos Markdown no navegador: renderização local, live reload e temas.
-Inclui os 65 temas Shiki embutidos, pacotes de emojis (`:smile:`) e importação
-de temas de cores (`theme.json`), Shiki (`.shiki.json`), Mermaid
-(`.mermaid.json`) e emojis (`emoji.json`) no modal de configurações. As mudanças
-do modal ficam em rascunho até **Salvar** (`Ctrl/Cmd+S`); fechar sem salvar
-descarta tudo.
+Inclui os 65 temas Shiki embutidos, pacotes de emojis (`:smile:`) e de ícones
+(com fallback para o tema Breeze), além de importação de temas de cores
+(`theme.json`), Shiki (`.shiki.json`), Mermaid (`.mermaid.json`) e emojis
+(`emoji.json`) no modal de configurações. As mudanças do modal ficam em
+rascunho até **Salvar** (`Ctrl/Cmd+S`); fechar sem salvar descarta tudo.
 
 <img width="1804" height="1116" alt="Documento Markdown renderizado no md-preview" src="https://github.com/user-attachments/assets/46cf31a6-d856-4592-b308-672c289a4966" />
 
@@ -116,6 +116,18 @@ amostras e importar um JSON de até 256 KiB; a troca vale ao **Salvar**
 (cookie `mdprv_emoji`) e um `?emoji=<slug>` tem prioridade na URL. Formato,
 limites e CLI (`md-preview emoji list|validate|path|seed`) em
 [`docs/emoji-authoring.md`](docs/emoji-authoring.md).
+
+## Ícones
+
+A interface usa glifos SVG via CSS mask, então eles herdam `currentColor` e
+acompanham o tema. O pacote embutido `breeze` é um subconjunto do Breeze (KDE,
+LGPL-3.0-or-later); pacotes próprios ficam em
+`~/.config/md-preview/icons/<slug>.json`, com SVGs relativos ao diretório
+`icons/` ou data URIs de até 32 KiB. A seleção segue `?icons=<slug>` > cookie
+`mdprv_icons` > `icons` do `config.json` > `MDPRV_ICONS` > `breeze`, e chaves
+ausentes caem no pacote embutido. Formato, chaves e CLI
+(`md-preview icons list|validate|path|seed`) em
+[`docs/icons-authoring.md`](docs/icons-authoring.md).
 
 ## Tabelas interativas
 

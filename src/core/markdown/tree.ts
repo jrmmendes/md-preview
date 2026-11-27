@@ -105,15 +105,15 @@ const FOOTER_RE =
   /^(?:(\d+)\s+director(?:y|ies)(?:,\s*(\d+)\s+files?)?(?:,\s*\d+\s+links?)?|(\d+)\s+files?(?:,\s*\d+\s+links?)?)$/i;
 
 const CHEVRON_ICON =
-  '<svg class="mdprv-tree-chevron" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3.5 10.5 8 6 12.5"></path></svg>';
+  '<span class="mdprv-icon mdprv-tree-chevron" data-icon="chevron" aria-hidden="true"></span>';
 
 const CHEVRON_SPACER = '<span class="mdprv-tree-chevron-spacer" aria-hidden="true"></span>';
 
 const FOLDER_ICON =
-  '<svg class="mdprv-tree-icon mdprv-tree-icon--dir" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M1.75 3.25h4l1.5 1.75h7v7.75h-12.5z"></path><path d="M1.75 6h12.5"></path></svg>';
+  '<span class="mdprv-icon mdprv-tree-icon mdprv-tree-icon--dir" data-icon="folder" aria-hidden="true"></span>';
 
 const FILE_ICON =
-  '<svg class="mdprv-tree-icon mdprv-tree-icon--file" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 1.75h5l3 3v9.5H4z"></path><path d="M9 1.75v3h3"></path></svg>';
+  '<span class="mdprv-icon mdprv-tree-icon mdprv-tree-icon--file" data-icon="file" aria-hidden="true"></span>';
 
 function escapeText(value: string): string {
   return value

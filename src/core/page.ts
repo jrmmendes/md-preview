@@ -1,13 +1,17 @@
 import type { ThemePrefs } from "../shared/theme-prefs";
 import type {
   EmojiPackEntry,
+  IconPackEntry,
   PageConfigPayload,
   PageEmojiPayload,
+  PageIconsPayload,
   PageInput,
   PageThemePayload,
   ThemeCatalogEntry,
 } from "./contract";
 import { emojiPackEntries, getEmojiStore } from "./emoji/index";
+import { ICON_KEYS, iconAssetUrl, iconCssVar } from "./icons/constants";
+import { getIconStore, iconPackEntries } from "./icons/index";
 import { renderMeta } from "./meta";
 import { themeCss } from "./themes/css";
 import { themeCatalog } from "./themes/catalog";
@@ -42,6 +46,8 @@ export interface RenderPageOptions {
   config?: PageConfigPayload | null;
   /** Effective emoji pack slug resolved for this request. */
   emojiName?: string | null;
+  /** Effective icon pack slug resolved for this request. */
+  iconName?: string | null;
 }
 
 export function renderPage(
@@ -85,10 +91,20 @@ export function renderPage(
   const emojiPack = getEmojiStore().get(options.emojiName ?? null);
   const emojis: EmojiPackEntry[] = emojiPackEntries();
   const emoji: PageEmojiPayload = { name: emojiPack.name, style: emojiPack.style };
+  const iconPack = getIconStore().get(options.iconName ?? null);
+  const icons: PageIconsPayload = { name: iconPack.name, style: iconPack.style };
+  const iconPacks: IconPackEntry[] = iconPackEntries();
+  // Every key gets a mask URL pointing at the active pack. The asset route
+  // falls back to the builtin `breeze` SVG and then to a generic glyph, so a
+  // pack that omits keys never breaks the UI.
+  const iconCss = `:root{${ICON_KEYS.map(
+    (key) => `${iconCssVar(key)}:url("${iconAssetUrl(iconPack.name, key)}")`
+  ).join(";")}}`;
 
   const fill: Array<[string, string]> = [
     ["{{mdprv-title}}", Bun.escapeHTML(input.title)],
     ["{{mdprv-theme}}", theme.name],
+    ["{{mdprv-theme-kind}}", theme.kind],
     ["{{mdprv-loader}}", loader],
     ["{{mdprv-loader-dark}}", loaderDark],
     ["{{mdprv-scheme}}", scheme],
@@ -97,6 +113,8 @@ export function renderPage(
     ["{{mdprv-mermaid-light}}", themePayload.mermaidTheme.light],
     ["{{mdprv-mermaid-dark}}", themePayload.mermaidTheme.dark],
     ["{{mdprv-emoji}}", emojiPack.name],
+    ["{{mdprv-icons}}", iconPack.name],
+    ["{{mdprv-icon-css}}", iconCss],
     ["{{mdprv-zoom}}", String(input.zoomSensitivity)],
     ["{{mdprv-theme-css}}", themeCss(theme)],
     ["{{mdprv-meta}}", renderMeta(input.meta)],
@@ -111,6 +129,8 @@ export function renderPage(
         mermaidThemes,
         emojis,
         emoji,
+        icons,
+        iconPacks,
         config: options.config ?? null,
       }),
     ],

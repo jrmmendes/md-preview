@@ -90,7 +90,7 @@ export function createFontPicker(config: FontPickerConfig): FontPickerHandle {
   chevron.className = "mdprv-settings-font-chevron";
   chevron.setAttribute("aria-hidden", "true");
   chevron.innerHTML =
-    '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>';
+    '<span class="mdprv-icon" data-icon="chevron-down" aria-hidden="true"></span>';
   trigger.append(valueNode, chevron);
 
   const panel = document.createElement("div");
@@ -266,7 +266,7 @@ export function createFontPicker(config: FontPickerConfig): FontPickerHandle {
       check.className = "mdprv-settings-font-option-check";
       check.setAttribute("aria-hidden", "true");
       check.innerHTML =
-        '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"></path></svg>';
+        '<span class="mdprv-icon" data-icon="check" aria-hidden="true"></span>';
 
       node.append(copy, check);
       fragment.appendChild(node);

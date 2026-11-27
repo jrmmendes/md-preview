@@ -1,4 +1,7 @@
 import autoRaw from "../../../themes/auto.json";
+import breezeDarkRaw from "../../../themes/breeze-dark.json";
+import breezeLightRaw from "../../../themes/breeze-light.json";
+import breezeRaw from "../../../themes/breeze.json";
 import draculaRaw from "../../../themes/dracula.json";
 import githubDarkRaw from "../../../themes/github-dark.json";
 import githubLightRaw from "../../../themes/github-light.json";
@@ -15,6 +18,9 @@ import { validateTheme } from "./validate";
 
 export const BUNDLED_RAW: ReadonlyMap<string, unknown> = new Map<string, unknown>([
   ["auto", autoRaw],
+  ["breeze", breezeRaw],
+  ["breeze-dark", breezeDarkRaw],
+  ["breeze-light", breezeLightRaw],
   ["dracula", draculaRaw],
   ["github-dark", githubDarkRaw],
   ["github-light", githubLightRaw],

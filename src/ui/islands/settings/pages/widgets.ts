@@ -8,6 +8,7 @@
 import { getZoomSensitivity } from "../../../prefs";
 import type { WidgetAnchor } from "../routes";
 import { el, sectionHeader, switchRow } from "../components";
+import { tableExampleMarkup } from "../previews/table-example";
 
 const ZOOM_MIN = 1.01;
 const ZOOM_MAX = 3;
@@ -84,91 +85,16 @@ function zoomControl(initial: number, onChange: (value: number) => void): HTMLEl
   );
 }
 
-function sheetTag(label: string): HTMLElement {
-  return el("span", { class: "mdprv-sheet-tag", "aria-hidden": "true" }, label);
-}
-
+/**
+ * Same shell and island as a real document table: the markup comes from the
+ * server renderer and `initTablesIn` (called after the settings page mounts)
+ * builds the gutters from the live grid. Never mark the block as ready here;
+ * that would leave the static markup without a controller and bring back the
+ * stale header/gutter widths.
+ */
 function tablePreview(): HTMLElement {
-  const table = el(
-    "table",
-    {
-      class: "mdprv-grid",
-      role: "grid",
-      "aria-label": "Tabela de exemplo com três colunas e duas linhas de dados",
-      "aria-rowcount": "3",
-      "aria-colcount": "3",
-    },
-    el(
-      "thead",
-      {},
-      el(
-        "tr",
-        { role: "row", "aria-rowindex": "1" },
-        el("th", { role: "columnheader", scope: "col", "aria-colindex": "1" }, "Documento"),
-        el("th", { role: "columnheader", scope: "col", "aria-colindex": "2" }, "Seções"),
-        el("th", { role: "columnheader", scope: "col", "aria-colindex": "3" }, "Atualização")
-      )
-    ),
-    el(
-      "tbody",
-      {},
-      el(
-        "tr",
-        { role: "row", "aria-rowindex": "2" },
-        el("td", { role: "gridcell", "aria-colindex": "1" }, "Guia de estilo"),
-        el("td", { role: "gridcell", "aria-colindex": "2", dataset: { mdprvNum: "1" } }, "12"),
-        el("td", { role: "gridcell", "aria-colindex": "3" }, "hoje")
-      ),
-      el(
-        "tr",
-        { role: "row", "aria-rowindex": "3" },
-        el("td", { role: "gridcell", "aria-colindex": "1" }, "Notas 2.4"),
-        el("td", { role: "gridcell", "aria-colindex": "2", dataset: { mdprvNum: "1" } }, "8"),
-        el("td", { role: "gridcell", "aria-colindex": "3" }, "ontem")
-      )
-    )
-  );
-
-  return el(
-    "div",
-    {
-      class: "mdprv-table",
-      dataset: {
-        mdprvTable: "",
-        mdprvTableHeaderRow: "1",
-        mdprvTableHeaderCol: "0",
-        mdprvTablePivot: "0",
-        mdprvTableReady: "1",
-      },
-    },
-    el(
-      "div",
-      { class: "mdprv-sheet" },
-      el("div", { class: "mdprv-sheet-corner", "aria-hidden": "true" }),
-      el(
-        "div",
-        { class: "mdprv-sheet-colhead", role: "row", "aria-label": "Colunas" },
-        el(
-          "div",
-          { class: "mdprv-sheet-track" },
-          sheetTag("A"),
-          sheetTag("B"),
-          sheetTag("C")
-        )
-      ),
-      el(
-        "div",
-        { class: "mdprv-sheet-rowhead", role: "row", "aria-label": "Linhas" },
-        el(
-          "div",
-          { class: "mdprv-sheet-track" },
-          sheetTag("1"),
-          sheetTag("2")
-        )
-      ),
-      el("div", { class: "mdprv-sheet-body" }, table)
-    )
-  );
+  const host = el("div", { html: tableExampleMarkup() });
+  return host.firstElementChild as HTMLElement;
 }
 
 function diffRow(

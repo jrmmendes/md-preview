@@ -1,0 +1,10 @@
+{
+  "$schema": "./theme.schema.json",
+  "schemaVersion": 1,
+  "name": "breeze",
+  "kind": "auto",
+  "variants": {
+    "light": "breeze-light",
+    "dark": "breeze-dark"
+  }
+}

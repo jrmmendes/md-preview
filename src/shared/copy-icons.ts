@@ -1,15 +1,20 @@
 /**
- * Inline SVG icons shared by the copy buttons.
+ * Icon markup shared by the copy buttons.
  *
  * Kept free of DOM and Shiki imports so both the server renderer
- * (`src/core/markdown/diff.ts`) and the client islands can use them.
+ * (`src/core/markdown/diff.ts`, table toolbar) and the client islands can use
+ * them. The actual glyph comes from CSS (`src/ui/styles/icons.css`) via
+ * `data-icon`, so it follows `currentColor` and the active icon pack without
+ * re-rendering. Never inline pack SVGs through `innerHTML`: these spans only
+ * carry the key.
  */
 
-export const COPY_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>';
+function iconSpan(key: string): string {
+  return `<span class="mdprv-icon" data-icon="${key}" aria-hidden="true"></span>`;
+}
 
-export const CSV_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path><path d="M3 14h18"></path><path d="M9 4v16"></path></svg>';
+export const COPY_ICON = iconSpan("copy");
 
-export const CHECK_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+export const CSV_ICON = iconSpan("csv");
+
+export const CHECK_ICON = iconSpan("check");

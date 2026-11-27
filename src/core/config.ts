@@ -4,12 +4,14 @@ import { resolve } from "node:path";
 import {
   configFilePath,
   emojisDir,
+  iconsDir,
   readConfigFile,
   resolveConfigDir,
   type FileConfig,
   themesDir,
 } from "./config-file";
 import { DEFAULT_EMOJI_PACK } from "./emoji/constants";
+import { DEFAULT_ICON_PACK } from "./icons/constants";
 import { DEFAULT_LOADER, isLoaderName, LOADERS, type LoaderName } from "./loader";
 import { DEFAULT_THEME, THEME_NAME_RE } from "./themes/constants";
 
@@ -32,6 +34,7 @@ export interface Config {
   stateFile: string;
   theme: string;
   emoji: string;
+  icons: string;
   loader: LoaderName;
   loaderFrom: LoaderSource;
   zoomSensitivity: number;
@@ -97,6 +100,11 @@ function resolveEmojiName(value: unknown): string | undefined {
   return resolveThemeName(value);
 }
 
+/** Icon pack slugs share the theme slug syntax too. */
+function resolveIconName(value: unknown): string | undefined {
+  return resolveThemeName(value);
+}
+
 function resolveSeedThemes(value: unknown): boolean | undefined {
   if (typeof value === "boolean") {
     return value;
@@ -140,6 +148,8 @@ export function loadConfig(env: ConfigEnv = process.env, options: LoadConfigOpti
     resolveThemeName(env.MDPRV_THEME) ?? resolveThemeName(file.theme) ?? DEFAULT_THEME;
   const emoji =
     resolveEmojiName(env.MDPRV_EMOJI) ?? resolveEmojiName(file.emoji) ?? DEFAULT_EMOJI_PACK;
+  const icons =
+    resolveIconName(env.MDPRV_ICONS) ?? resolveIconName(file.icons) ?? DEFAULT_ICON_PACK;
   const seedThemes =
     resolveSeedThemes(env.MDPRV_SEED_THEMES) ??
     resolveSeedThemes(file.seedThemes) ??
@@ -156,6 +166,7 @@ export function loadConfig(env: ConfigEnv = process.env, options: LoadConfigOpti
     stateFile: resolveStateFile(env),
     theme: themed,
     emoji,
+    icons,
     loader: fromEnv
       ? resolveLoaderName(env.MDPRV_LOADER)
       : resolveLoaderName(typeof file.loader === "string" ? file.loader : undefined),
@@ -181,6 +192,7 @@ export function configToEnv(config: Config, base: ConfigEnv = process.env): Reco
   env.MDPRV_STATE = config.stateFile;
   env.MDPRV_THEME = config.theme;
   env.MDPRV_EMOJI = config.emoji;
+  env.MDPRV_ICONS = config.icons;
   // Only forward an explicit choice: otherwise the daemon would always see
   // `MDPRV_LOADER=classic` and the theme preset would never apply.
   if (config.loaderFrom !== "default") {
@@ -200,6 +212,10 @@ export function configThemesDir(config: Config): string {
 
 export function configEmojisDir(config: Config): string {
   return emojisDir(config.configDir);
+}
+
+export function configIconsDir(config: Config): string {
+  return iconsDir(config.configDir);
 }
 
 export function configFile(config: Config): string {

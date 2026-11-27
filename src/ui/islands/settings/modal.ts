@@ -21,6 +21,7 @@ const SECTION_ICONS: Record<SettingsSection, IconName> = {
   temas: "layers",
   aparencia: "palette",
   emojis: "smile",
+  icons: "palette",
   sistema: "terminal",
   widgets: "activity",
 };
@@ -28,6 +29,7 @@ const SECTION_ICONS: Record<SettingsSection, IconName> = {
 const TOP_LEVEL_SECTIONS: SettingsSection[] = [
   "aparencia",
   "emojis",
+  "icons",
   "widgets",
   "sistema",
 ];

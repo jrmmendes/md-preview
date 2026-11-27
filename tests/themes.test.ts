@@ -24,6 +24,9 @@ describe("builtin themes", () => {
   it("contains every expected theme", () => {
     expect(FILES.sort()).toEqual([
       "auto.json",
+      "breeze-dark.json",
+      "breeze-light.json",
+      "breeze.json",
       "dracula.json",
       "github-dark.json",
       "github-light.json",
@@ -55,7 +58,18 @@ describe("builtin themes", () => {
       for (const key of ["background", "surface", "text", "muted", "border", "accent", "code-bg", "quote"]) {
         expect(fixed.colors[key as keyof typeof fixed.colors]).toMatch(COLOR);
       }
-      expect(fixed.radii.md).toBe(6);
+      // Breeze ships the Plasma corner radius (5px); the other builtins keep
+      // the contract default (6px) until they declare their own scale.
+      const breeze = fileName === "breeze-light" || fileName === "breeze-dark";
+      expect(fixed.radii).toEqual({
+        none: 0,
+        sm: breeze ? 4 : 5,
+        md: breeze ? 5 : 6,
+        lg: 8,
+        xl: 12,
+        pill: 999,
+        circle: 9999,
+      });
       expect(fixed.typography["base-size"]).toBe(17);
       expect(fixed.layout["content-width"]).toBe("46rem");
       expect(fixed.charts.palette.length).toBeGreaterThanOrEqual(6);

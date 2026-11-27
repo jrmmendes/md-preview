@@ -329,6 +329,32 @@ describe("boot inline script", () => {
     expect(light.getAttribute("data-loader")).toBe("classic");
   });
 
+  it("resolves auto variants that are not named auto", () => {
+    const dark = boot({
+      attrs: {
+        "data-theme": "breeze",
+        "data-theme-kind": "auto",
+        "data-scheme": "light",
+        "data-loader": "classic",
+        "data-loader-dark": "ring",
+      },
+      dark: true,
+    }).document.documentElement;
+    expect(dark.getAttribute("data-scheme")).toBe("dark");
+    expect(dark.getAttribute("data-loader")).toBe("ring");
+
+    const fixed = boot({
+      attrs: {
+        "data-theme": "breeze-dark",
+        "data-theme-kind": "dark",
+        "data-scheme": "dark",
+        "data-loader": "ring",
+      },
+      dark: false,
+    }).document.documentElement;
+    expect(fixed.getAttribute("data-scheme")).toBe("dark");
+  });
+
   it("keeps the server scheme for fixed themes", () => {
     const { document } = boot({
       attrs: { "data-theme": "nord", "data-scheme": "dark", "data-loader": "ring" },

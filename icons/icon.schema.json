@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://md-preview.local/icon.schema.json",
+  "title": "md-preview icon pack",
+  "description": "Pacote de ícones SVG (schemaVersion 1). O validador de runtime em src/core/icons/validate.ts é autoritativo.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "icons"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "Deve ser igual ao nome do arquivo sem .json."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "style": {
+      "enum": ["symbolic", "fullcolor"],
+      "default": "symbolic"
+    },
+    "icons": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 42,
+      "propertyNames": {
+        "enum": [
+          "copy",
+          "check",
+          "csv",
+          "filter",
+          "funnel",
+          "sort",
+          "pivot",
+          "header-row",
+          "header-col",
+          "chart",
+          "fullscreen",
+          "chevron",
+          "chevron-down",
+          "folder",
+          "file",
+          "close",
+          "settings",
+          "sidebar",
+          "history",
+          "top",
+          "zen",
+          "zen-exit",
+          "palette",
+          "terminal",
+          "activity",
+          "smile",
+          "table",
+          "code",
+          "diff",
+          "layers",
+          "info",
+          "reset",
+          "pencil",
+          "trash",
+          "import",
+          "save",
+          "chart-bar",
+          "chart-hbar",
+          "chart-line",
+          "chart-area",
+          "chart-pie",
+          "chart-scatter"
+        ]
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_/-]*\\.svg$",
+            "maxLength": 256,
+            "description": "Caminho relativo ao diretório icons/, sem .. e sem caminho absoluto."
+          },
+          {
+            "type": "string",
+            "pattern": "^data:image/svg\\+xml;base64,[A-Za-z0-9+/]+={0,2}$",
+            "maxLength": 45000,
+            "description": "SVG inline em base64 (até 32 KiB decodificados)."
+          }
+        ]
+      }
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "attribution": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    }
+  }
+}

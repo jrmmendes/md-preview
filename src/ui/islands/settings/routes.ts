@@ -13,6 +13,7 @@ export const SETTINGS_SECTIONS = [
   "temas",
   "aparencia",
   "emojis",
+  "icons",
   "widgets",
   "sistema",
 ] as const;
@@ -137,6 +138,8 @@ export function sectionLabel(section: SettingsSection): string {
       return "Aparência";
     case "emojis":
       return "Emojis";
+    case "icons":
+      return "Ícones";
     case "sistema":
       return "Sistema";
     case "widgets":

@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 
 import configSchema from "./config.schema.json";
 import { EMOJI_DIR_NAME } from "./emoji/constants";
+import { ICON_DIR_NAME } from "./icons/constants";
 import {
   CONFIG_FILE_NAME,
   CONFIG_SCHEMA_FILE,
@@ -13,6 +14,7 @@ import {
 export interface FileConfig {
   theme?: unknown;
   emoji?: unknown;
+  icons?: unknown;
   port?: unknown;
   idle?: unknown;
   loader?: unknown;
@@ -35,6 +37,7 @@ const KNOWN_KEYS = new Set([
   "$schema",
   "theme",
   "emoji",
+  "icons",
   "port",
   "idle",
   "loader",
@@ -60,6 +63,10 @@ export function themesDir(configDir: string): string {
 
 export function emojisDir(configDir: string): string {
   return join(configDir, EMOJI_DIR_NAME);
+}
+
+export function iconsDir(configDir: string): string {
+  return join(configDir, ICON_DIR_NAME);
 }
 
 export function configFilePath(configDir: string): string {
@@ -106,6 +113,7 @@ export function readConfigFile(configDir: string, options: ReadConfigOptions = {
   result.config = {
     theme: raw.theme,
     emoji: raw.emoji,
+    icons: raw.icons,
     port: raw.port,
     idle: raw.idle,
     loader: raw.loader,
@@ -120,6 +128,7 @@ export function defaultConfig(): Record<string, unknown> {
     $schema: "./config.schema.json",
     theme: "auto",
     emoji: "github",
+    icons: "breeze",
     port: 8766,
     idle: 15,
     loader: "classic",

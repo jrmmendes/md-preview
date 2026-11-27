@@ -230,7 +230,7 @@ describe("theme and config commands", () => {
     const dir = tempDir();
     const seed = run(dir, ["theme", "seed"]);
     expect(seed.exitCode).toBe(0);
-    expect(readdirSync(join(dir, "themes"))).toHaveLength(11);
+    expect(readdirSync(join(dir, "themes"))).toHaveLength(14);
 
     const first = run(dir, ["config", "init"]);
     expect(first.exitCode).toBe(0);
@@ -277,6 +277,44 @@ describe("theme and config commands", () => {
     const seed = run(dir, ["emoji", "seed"]);
     expect(seed.exitCode).toBe(0);
     expect(readdirSync(join(dir, "emojis")).sort()).toEqual(["emoji.schema.json", "github.json"]);
+  });
+
+  it("lists, validates and seeds icon packs", () => {
+    const dir = tempDir();
+    const paths = run(dir, ["icons", "path"]);
+    expect(paths.exitCode).toBe(0);
+    expect(output(paths)).toContain(`icons: ${join(dir, "icons")}`);
+
+    const listed = run(dir, ["icons", "list", "--json"]);
+    expect(listed.exitCode).toBe(0);
+    const items = JSON.parse(listed.stdout.toString()) as Array<{
+      name: string;
+      source: string;
+      count: number;
+    }>;
+    expect(items[0]?.name).toBe("breeze");
+    expect(items[0]?.source).toBe("builtin");
+    expect(items[0]?.count).toBe(42);
+
+    const manifest = join(dir, "custom.json");
+    writeFileSync(
+      manifest,
+      JSON.stringify({ schemaVersion: 1, name: "custom", icons: { copy: "custom/copy.svg" } })
+    );
+    expect(run(dir, ["icons", "validate", manifest]).exitCode).toBe(0);
+
+    const invalid = join(dir, "broken.json");
+    writeFileSync(
+      invalid,
+      JSON.stringify({ schemaVersion: 1, name: "broken", icons: { nope: "broken/nope.svg" } })
+    );
+    const bad = run(dir, ["icons", "validate", invalid]);
+    expect(bad.exitCode).toBe(1);
+    expect(output(bad)).toContain("unknown icon key");
+
+    const seed = run(dir, ["icons", "seed"]);
+    expect(seed.exitCode).toBe(0);
+    expect(readdirSync(join(dir, "icons")).sort()).toEqual(["breeze.json", "icon.schema.json"]);
   });
 });
 

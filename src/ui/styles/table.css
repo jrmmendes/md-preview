@@ -10,7 +10,7 @@
   position: relative;
   margin: 0 0 1em;
   border: 1px solid var(--mdprv-border);
-  border-radius: var(--mdprv-radius-md, 6px);
+  border-radius: var(--mdprv-radius-lg, 8px);
   background: var(--mdprv-bg);
   overflow: hidden;
 }
@@ -83,7 +83,7 @@
   outline-offset: 1px;
 }
 
-.mdprv-table-btn svg {
+.mdprv-table-btn .mdprv-icon {
   display: block;
   width: 1rem;
   height: 1rem;
@@ -114,7 +114,7 @@
   padding: 0 .6rem;
 }
 
-.mdprv-table-btn--pivot svg {
+.mdprv-table-btn--pivot .mdprv-icon {
   width: 14px;
   height: 14px;
 }
@@ -517,7 +517,7 @@
   cursor: pointer;
 }
 
-.mdprv-table-funnel svg {
+.mdprv-table-funnel .mdprv-icon {
   display: block;
   width: 14px;
   height: 14px;
@@ -546,7 +546,7 @@
   height: 11px;
   padding: 0 2px;
   box-sizing: border-box;
-  border-radius: 6px;
+  border-radius: var(--mdprv-radius-sm, 5px);
   background: var(--mdprv-accent);
   color: var(--mdprv-accent-fg, var(--mdprv-bg));
   font-size: 8px;
@@ -801,7 +801,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--mdprv-radius-none, 0px);
   background: transparent;
   font-size: .85em;
   line-height: 1.5;
@@ -876,7 +876,7 @@
   flex: none;
   width: .7rem;
   height: .7rem;
-  border-radius: 2px;
+  border-radius: var(--mdprv-radius-sm, 5px);
   background: var(--mdprv-chart-1, var(--mdprv-accent));
 }
 
@@ -958,15 +958,10 @@
   color: currentColor;
 }
 
-.mdprv-chart-thumb svg {
+.mdprv-chart-thumb .mdprv-icon {
   display: block;
   width: 100%;
   height: 100%;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .mdprv-chart-thumb rect {
@@ -1118,7 +1113,7 @@
   max-width: none;
   margin: 0;
   border: 1px solid var(--mdprv-border);
-  border-radius: var(--mdprv-radius-md, 6px);
+  border-radius: var(--mdprv-radius-xl, 12px);
   overflow: hidden;
   background: var(--mdprv-bg);
   box-shadow: var(--mdprv-shadow-panel);
@@ -1152,7 +1147,7 @@
 .mdprv-table-handle::after {
   content: "";
   position: absolute;
-  border-radius: 9999px;
+  border-radius: var(--mdprv-radius-pill, 999px);
   background: var(--mdprv-accent);
   box-shadow: 0 0 0 1px var(--mdprv-bg);
 }
@@ -1242,7 +1237,7 @@
 .mdprv-table-handle[data-lb-handle="sw"]::after,
 .mdprv-table-handle[data-lb-handle="se"]::after {
   inset: 6px;
-  border-radius: 2px;
+  border-radius: var(--mdprv-radius-pill, 999px);
 }
 
 .mdprv-table-lightbox.mdprv-open .mdprv-table-frame:hover .mdprv-table-handle {
@@ -1333,7 +1328,7 @@
   outline-offset: 2px;
 }
 
-.mdprv-table-close svg {
+.mdprv-table-close .mdprv-icon {
   width: 1.1rem;
   height: 1.1rem;
   display: block;

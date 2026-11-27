@@ -42,7 +42,7 @@
 .mdprv-tree-raw pre {
   margin: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--mdprv-radius-none, 0px);
   background: transparent;
 }
 

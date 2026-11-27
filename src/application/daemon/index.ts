@@ -1,10 +1,12 @@
 import { randomBytes } from "node:crypto";
 
 import type { Config } from "../../core/config";
-import { configEmojisDir } from "../../core/config";
+import { configEmojisDir, configIconsDir } from "../../core/config";
 import { themesDir } from "../../core/config-file";
 import { createEmojiStore, type EmojiStore } from "../../core/emoji/store";
 import { getEmojiStore, setEmojiStore } from "../../core/emoji/index";
+import { createIconStore, type IconStore } from "../../core/icons/store";
+import { getIconStore, setIconStore } from "../../core/icons/index";
 import { warmup } from "../../core/markdown/render";
 import { clearDaemonState, updateDaemonState, writeDaemonState } from "../../core/state";
 import { getThemeStore, setThemeStore } from "../../core/themes/index";
@@ -45,6 +47,7 @@ export interface CreateDaemonOptions {
   shikiThemeStore?: ShikiThemeStore;
   mermaidThemeStore?: MermaidThemeStore;
   emojiStore?: EmojiStore;
+  iconStore?: IconStore;
 }
 
 export function createDaemon(config: Config, options: CreateDaemonOptions = {}): DaemonHandle {
@@ -131,6 +134,16 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     });
   setEmojiStore(emojiStore);
 
+  const iconStore =
+    options.iconStore ??
+    createIconStore({
+      dir: configIconsDir(config),
+      watch: true,
+      logger: { warn: (message) => process.stderr.write(`${message}\n`) },
+      onChange: (change) => broadcast("icons", change),
+    });
+  setIconStore(iconStore);
+
   const registry = createSlugRegistry({
     onVersion: (slug, version) => broadcast("version", { slug, version }),
     onSlugs: (slugs) => broadcast("slugs", slugs),
@@ -171,6 +184,12 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
         setEmojiStore(null);
       }
     }
+    if (!options.iconStore) {
+      iconStore.close();
+      if (getIconStore() === iconStore) {
+        setIconStore(null);
+      }
+    }
     clearDaemonState(config.stateFile);
     try {
       server?.stop(true);
@@ -186,6 +205,7 @@ export function createDaemon(config: Config, options: CreateDaemonOptions = {}):
     shikiThemes: shikiThemeStore,
     mermaidThemes: mermaidThemeStore,
     emojis: emojiStore,
+    icons: iconStore,
     registry,
     token,
     heartbeatMs: options.heartbeatMs,

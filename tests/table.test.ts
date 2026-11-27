@@ -527,7 +527,7 @@ describe("simple table CSS", () => {
     expect(simple).not.toMatch(/html\.mdprv-simple-tables \.mdprv-table\s*\{/);
     const base = css.split(".mdprv-table {")[1]?.split("}")[0] ?? "";
     expect(base).toContain("border: 1px solid var(--mdprv-border)");
-    expect(base).toContain("border-radius: var(--mdprv-radius-md, 6px)");
+    expect(base).toContain("border-radius: var(--mdprv-radius-lg, 8px)");
   });
 
   it("still hides the spreadsheet gutters and column hairlines", () => {

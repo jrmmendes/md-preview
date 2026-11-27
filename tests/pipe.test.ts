@@ -140,6 +140,7 @@ beforeAll(() => {
     stateFile: join(dir, "state", "daemon.json"),
     theme: "auto",
     emoji: "github",
+    icons: "breeze",
     loader: "classic",
     loaderFrom: "default",
     zoomSensitivity: 1.1,

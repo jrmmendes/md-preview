@@ -80,6 +80,36 @@ terrosos e quentes, com tema de cores, Shiki e Mermaid nos seis arquivos
 `tropical-dark.shiki.json`, `tropical.mermaid.json` e
 `tropical-dark.mermaid.json`.
 
+### 2.2.1 Coleção Breeze
+
+`breeze-light` e `breeze-dark` portam o esquema de cores do KDE Plasma para o
+contrato v1; `breeze` é o par `auto` (`variants.light: "breeze-light"`,
+`variants.dark: "breeze-dark"`). A origem é verificável na máquina:
+
+| Dado | Origem |
+| --- | --- |
+| Cores | `/usr/share/color-schemes/BreezeDark.colors` e `BreezeLight.colors` (esquema ativo `BreezeDark` em `~/.config/kdeglobals`) |
+| Versão | KDE Plasma 6.7.5, Fedora 44 (`plasma-workspace` 6.7.5-1.fc44) |
+| Licença | LGPL-2.0-or-later (cabeçalhos SPDX dos arquivos `.colors`) |
+| Tipografia | Noto Sans 10pt / Noto Sans Mono 10pt (`kdeglobals`) |
+| Raio | 5px, medido em `button.svgz` (`rx="5"`) |
+
+Os tokens, o NOTICE de atribuição e a tabela de desvios de contraste ficam em
+[`themes/NOTICE.md`](../themes/NOTICE.md). Os desvios são só os necessários para
+fechar AA, sempre dentro do matiz do Breeze: `accent-fg` usa o ink do esquema (o
+branco do Breeze fica em 2,43:1 sobre `#3DAEE9`); `muted` e `link` claros
+escurecem um passo; em `danger`/`warning`/`success` o esquema claro usa os tons
+de seleção do próprio Breeze quando existem, e o `danger` escuro sobe o
+`ForegroundNegative` um passo (3,71 → 4,56).
+
+Os Breeze declaram `radii` completos (`none: 0, sm: 4, md: 5, lg: 8, xl: 12,
+pill: 999, circle: 9999`), por isso são a fixture de referência do teste
+[tests/theme-radii.test.ts](../tests/theme-radii.test.ts): o CSS gerado contém
+`--mdprv-radius-md:5px` e os componentes de UI (frame de tabela, badges,
+swatches, marcadores de navegação, grips e lightbox) referenciam o token em vez
+de um `px` literal. Temas que não declaram `radii` continuam no default do
+contrato (`md: 6`).
+
 ### 2.3 CLI real
 
 Não há alias no `package.json` para rodar a CLI em desenvolvimento. Use a entrada

@@ -5,6 +5,7 @@
  * regras para o documento.
  */
 import { LOADERS, type LoaderName } from "../../../core/loader";
+import type { IconKey } from "../../../core/icons/constants";
 
 type Child = Node | string | null | undefined | false | Child[];
 
@@ -87,49 +88,42 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * Modal icon names (camelCase API kept for callers/tests) mapped to the closed
+ * set of `data-icon` keys. The glyph itself comes from CSS.
+ */
 const ICONS = {
-  close: '<path d="M18 6 6 18M6 6l12 12"></path>',
-  chevronDown: '<path d="m6 9 6 6 6-6"></path>',
-  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h5"></path>',
-  palette:
-    '<path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6.5A3.5 3.5 0 0 0 22 8.5 9 9 0 0 0 12 3z"></path><circle cx="7.5" cy="10" r="1"></circle><circle cx="10" cy="6.5" r="1"></circle><circle cx="15" cy="6.5" r="1"></circle>',
-  terminal: '<rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m7 10 3 3-3 3M13 16h4"></path>',
-  activity: '<path d="M3 12h4l3-8 4 16 3-8h4"></path>',
-  smile:
-    '<circle cx="12" cy="12" r="9"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><path d="M9 9h.01M15 9h.01"></path>',
-  table: '<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 10h18M9 4v16M15 4v16"></path>',
-  code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"></path>',
-  diff: '<path d="M7 4v11a3 3 0 0 0 3 3h7"></path><path d="m14 15 3 3-3 3"></path><path d="M17 20V9a3 3 0 0 0-3-3H7"></path><path d="M10 3 7 6l3 3"></path>',
-  layers: '<path d="m12 2 9 5-9 5-9-5z"></path><path d="m3 12 9 5 9-5"></path><path d="m3 17 9 5 9-5"></path>',
-  check: '<path d="m20 6-11 11-5-5"></path>',
-  info: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path>',
-  reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path>',
-  copy: '<rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path>',
-  pencil:
-    '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>',
-  trash:
-    '<path d="M3 6h18"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M10 11v6M14 11v6"></path>',
-  import:
-    '<path d="M12 3v10"></path><path d="m8 9 4 4 4-4"></path><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>',
-  save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path>',
-} as const;
+  close: "close",
+  chevronDown: "chevron-down",
+  file: "file",
+  palette: "palette",
+  terminal: "terminal",
+  activity: "activity",
+  smile: "smile",
+  table: "table",
+  code: "code",
+  diff: "diff",
+  layers: "layers",
+  check: "check",
+  info: "info",
+  reset: "reset",
+  copy: "copy",
+  pencil: "pencil",
+  trash: "trash",
+  import: "import",
+  save: "save",
+} as const satisfies Record<string, IconKey>;
 
 export type IconName = keyof typeof ICONS;
 
-export function icon(name: IconName, size = 17): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("width", String(size));
-  svg.setAttribute("height", String(size));
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.8");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  svg.innerHTML = ICONS[name];
-  return svg;
+export function icon(name: IconName, size = 17): HTMLSpanElement {
+  const span = document.createElement("span");
+  span.className = "mdprv-icon";
+  span.setAttribute("data-icon", ICONS[name]);
+  span.setAttribute("aria-hidden", "true");
+  span.style.width = `${size}px`;
+  span.style.height = `${size}px`;
+  return span;
 }
 
 export function button(options: {

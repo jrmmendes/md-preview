@@ -29,7 +29,12 @@ const MANAGED_LOCAL_KEYS = [
   "mdprv_table_wrap",
 ] as const;
 
-const MANAGED_COOKIES = ["mdprv_theme", "mdprv_prefs", "mdprv_emoji"] as const;
+const MANAGED_COOKIES = [
+  "mdprv_theme",
+  "mdprv_prefs",
+  "mdprv_emoji",
+  "mdprv_icons",
+] as const;
 
 function removeLocal(key: string): void {
   try {
@@ -54,10 +59,12 @@ function clearManagedPreferences(): void {
   for (const cookie of MANAGED_COOKIES) {
     removeCookie(cookie);
   }
-  // Drop `?theme=`/`?emoji=` so the reload falls back to the configured defaults.
+  // Drop `?theme=`/`?emoji=`/`?icons=` so the reload falls back to the
+  // configured defaults.
   const url = new URL(location.href);
   url.searchParams.delete("theme");
   url.searchParams.delete("emoji");
+  url.searchParams.delete("icons");
   history.replaceState(
     history.state,
     "",
@@ -183,6 +190,7 @@ export function renderSistemaPage(config: PageConfigPayload | null): HTMLElement
         { label: "Arquivo de configuração", value: config.paths.config },
         { label: "Diretório de temas", value: config.paths.themes },
         { label: "Diretório de emojis", value: config.paths.emojis },
+        { label: "Diretório de ícones", value: config.paths.icons },
         { label: "Arquivo de estado", value: config.paths.state },
       ]
     : [];

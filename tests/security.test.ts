@@ -22,6 +22,7 @@ function config(stateFile: string): Config {
     stateFile,
     theme: "auto",
     emoji: "github",
+    icons: "breeze",
     loader: "classic",
     loaderFrom: "default",
     zoomSensitivity: 1.1,
@@ -123,6 +124,7 @@ describe("page content security policy", () => {
     expect(nonce).toBeDefined();
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("img-src 'self' data:");
 
     const html = await response.text();
     expect(html).toContain(`<script nonce="${nonce}"`);

@@ -21,7 +21,7 @@ type Media =
   | { kind: "image"; src: string; alt: string; element: HTMLImageElement };
 
 const FULLSCREEN_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+  '<span class="mdprv-icon mdprv-mermaid-fs-icon" data-icon="fullscreen" aria-hidden="true"></span>';
 
 function readPayload(): MermaidPayload | null {
   const element = document.getElementById("mdprv-data");
@@ -59,7 +59,8 @@ function effectiveScheme(): "light" | "dark" {
     return "light";
   }
   const name = root.getAttribute("data-theme") ?? "auto";
-  if (name !== "auto") {
+  const kind = root.getAttribute("data-theme-kind") ?? (name === "auto" ? "auto" : null);
+  if (kind !== "auto") {
     const scheme =
       typeof window.getComputedStyle === "function"
         ? window.getComputedStyle(document.documentElement).getPropertyValue("color-scheme")

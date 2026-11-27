@@ -27,6 +27,7 @@ describe("loadConfig", () => {
     expect(config.idleMs).toBe(DEFAULT_IDLE * 60 * 1000);
     expect(config.theme).toBe("auto");
     expect(config.emoji).toBe("github");
+    expect(config.icons).toBe("breeze");
     expect(config.loader).toBe(DEFAULT_LOADER);
     expect(config.loaderFrom).toBe("default");
     expect(config.zoomSensitivity).toBe(DEFAULT_ZOOM_SENSITIVITY);
@@ -43,6 +44,7 @@ describe("loadConfig", () => {
         MDPRV_STATE: "/tmp/mdprv/daemon.json",
         MDPRV_THEME: "nord",
         MDPRV_EMOJI: "custom",
+        MDPRV_ICONS: "custom",
         MDPRV_LOADER: "braille",
         MDPRV_ZOOM_SENSITIVITY: "1.5",
         MDPRV_SEED_THEMES: "0",
@@ -54,6 +56,7 @@ describe("loadConfig", () => {
     expect(config.stateFile).toBe("/tmp/mdprv/daemon.json");
     expect(config.theme).toBe("nord");
     expect(config.emoji).toBe("custom");
+    expect(config.icons).toBe("custom");
     expect(config.loader).toBe("braille");
     expect(config.loaderFrom).toBe("env");
     expect(config.zoomSensitivity).toBe(1.5);
@@ -167,6 +170,7 @@ describe("configToEnv", () => {
         MDPRV_STATE: "/tmp/mdprv/daemon.json",
         MDPRV_THEME: "nord",
         MDPRV_EMOJI: "custom",
+        MDPRV_ICONS: "custom",
         MDPRV_LOADER: "ring",
         MDPRV_ZOOM_SENSITIVITY: "1.4",
       },
@@ -179,6 +183,7 @@ describe("configToEnv", () => {
     expect(env.MDPRV_STATE).toBe("/tmp/mdprv/daemon.json");
     expect(env.MDPRV_THEME).toBe("nord");
     expect(env.MDPRV_EMOJI).toBe("custom");
+    expect(env.MDPRV_ICONS).toBe("custom");
     expect(env.MDPRV_LOADER).toBe("ring");
     expect(env.MDPRV_ZOOM_SENSITIVITY).toBe("1.4");
     expect(env.MDPRV_CONFIG_DIR).toBe(config.configDir);

@@ -28,13 +28,13 @@ describe("seedThemes", () => {
     expect(first.created).toContain("nord");
     expect(first.created).toContain("theme.schema.json");
     expect(first.created).toContain("shiki-theme.schema.json");
-    expect(first.created).toHaveLength(11);
+    expect(first.created).toHaveLength(14);
     expect(existsSync(join(dir, "theme.schema.json"))).toBe(true);
     expect(existsSync(join(dir, "shiki-theme.schema.json"))).toBe(true);
 
     const second = seedThemes({ dir });
     expect(second.created).toHaveLength(0);
-    expect(second.skipped.length).toBeGreaterThanOrEqual(11);
+    expect(second.skipped.length).toBeGreaterThanOrEqual(14);
   });
 
   it("seeds a schema that documents the loader field", () => {

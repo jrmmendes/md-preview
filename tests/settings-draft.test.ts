@@ -94,6 +94,7 @@ const APPLIED: SettingsSnapshot = {
   blocks: { fonte: false, loader: false, codigo: false, graficos: false },
   stored: { font: null, loader: null, shiki: null, mermaid: null },
   emojiName: "github",
+  iconName: "breeze",
   exampleId: "fluxo",
   zoom: 1.1,
   simpleTables: false,

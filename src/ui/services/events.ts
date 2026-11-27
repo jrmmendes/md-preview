@@ -1,6 +1,7 @@
 import type {
   ActivateEvent,
   EmojisEvent,
+  IconsEvent,
   MermaidThemesEvent,
   ShikiThemesEvent,
   SlugsEvent,
@@ -17,6 +18,7 @@ export interface EventMap {
   "shiki-themes": ShikiThemesEvent;
   "mermaid-themes": MermaidThemesEvent;
   emojis: EmojisEvent;
+  icons: IconsEvent;
   activate: ActivateEvent;
   ping: { ts: number };
 }
@@ -32,6 +34,7 @@ const TYPES: EventType[] = [
   "shiki-themes",
   "mermaid-themes",
   "emojis",
+  "icons",
   "activate",
   "ping",
 ];
@@ -44,6 +47,7 @@ const handlers: { [K in EventType]: Set<Handler<K>> } = {
   "shiki-themes": new Set(),
   "mermaid-themes": new Set(),
   emojis: new Set(),
+  icons: new Set(),
   activate: new Set(),
   ping: new Set(),
 };

@@ -60,24 +60,36 @@ function guardValue(declaration: string, radius: number): number {
 }
 
 describe("breeze radii tokens", () => {
-  it("emits the Plasma corner radius for breeze-dark", () => {
+  it("emits the near-square Plasma scale for breeze-dark", () => {
     const css = themeCss(getTheme("breeze-dark"));
-    expect(css).toContain("--mdprv-radius-md:5px");
-    expect(css).toContain("--mdprv-radius-sm:4px");
-    expect(css).toContain("--mdprv-radius-lg:8px");
-    expect(css).toContain("--mdprv-radius-xl:12px");
+    expect(css).toContain("--mdprv-radius-none:0px");
+    expect(css).toContain("--mdprv-radius-sm:0px");
+    expect(css).toContain("--mdprv-radius-md:2px");
+    expect(css).toContain("--mdprv-radius-lg:3px");
+    expect(css).toContain("--mdprv-radius-xl:4px");
   });
 
   it("emits the same scale for breeze-light and the auto pair", () => {
-    expect(themeCss(getTheme("breeze-light"))).toContain("--mdprv-radius-md:5px");
+    expect(themeCss(getTheme("breeze-light"))).toContain("--mdprv-radius-md:2px");
     const auto = themeCss(getTheme("breeze"));
-    expect(auto).toContain("--mdprv-radius-md:5px");
+    expect(auto).toContain("--mdprv-radius-md:2px");
     expect(auto).toContain('html[data-scheme="dark"]{');
+  });
+
+  it("keeps sm flat and md barely rounded in both fixed Breeze themes", () => {
+    for (const name of ["breeze-light", "breeze-dark"]) {
+      const theme = getTheme(name).light;
+      expect({ name, sm: theme.radii.sm, md: theme.radii.md }).toEqual({
+        name,
+        sm: 0,
+        md: 2,
+      });
+    }
   });
 
   it("keeps the default scale for themes that do not declare one", () => {
     expect(themeCss(getTheme("nord"))).toContain("--mdprv-radius-md:6px");
-    expect(themeCss(getTheme("nord"))).not.toContain("--mdprv-radius-md:5px");
+    expect(themeCss(getTheme("nord"))).not.toContain("--mdprv-radius-md:2px");
   });
 });
 
@@ -146,7 +158,7 @@ describe("radius consumers", () => {
     expect(tokenCss(narrow)).toContain("--mdprv-radius-md:0px");
     expect(tokenCss(narrow)).toContain("--mdprv-radius-xl:20px");
     expect(tokenCss(narrow)).not.toBe(tokenCss(theme));
-    expect(tokenCss(withRadii(theme, radii()))).toBe(tokenCss(theme));
+    expect(tokenCss(withRadii(theme, theme.radii))).toBe(tokenCss(theme));
   });
 
   it("guards the inset radius against md = 0", () => {

@@ -13,7 +13,12 @@ metrics, mapped onto the `theme.json` v1 contract.
 - License: LGPL-2.0-or-later (SPDX headers in the upstream `.colors` files)
 - Typography: Noto Sans 10pt / Noto Sans Mono 10pt (`kdeglobals`), Noto Sans
   shipped by `google-noto-sans-fonts` on Fedora 44
-- Corner radius: 5px, measured on Breeze's `button.svgz` (`rx="5"`)
+- Corner radius: near-square scale `none: 0, sm: 0, md: 2, lg: 3, xl: 4,
+  pill: 999, circle: 9999`. Breeze's `button.svgz` carries `rx="5"`, but Plasma
+  6 renders buttons, inputs, menus and frames as essentially square; the scale
+  keeps a maximum of 4px on the largest surface (table lightbox) and reserves
+  `pill`/`circle` for controls that are semantically round (switches, thumbs,
+  loaders, circular icon buttons).
 
 ## Token mapping
 

@@ -58,15 +58,15 @@ describe("builtin themes", () => {
       for (const key of ["background", "surface", "text", "muted", "border", "accent", "code-bg", "quote"]) {
         expect(fixed.colors[key as keyof typeof fixed.colors]).toMatch(COLOR);
       }
-      // Breeze ships the Plasma corner radius (5px); the other builtins keep
-      // the contract default (6px) until they declare their own scale.
+      // Breeze ships a near-square Plasma scale; the other builtins keep the
+      // contract default until they declare their own.
       const breeze = fileName === "breeze-light" || fileName === "breeze-dark";
       expect(fixed.radii).toEqual({
         none: 0,
-        sm: breeze ? 4 : 5,
-        md: breeze ? 5 : 6,
-        lg: 8,
-        xl: 12,
+        sm: breeze ? 0 : 5,
+        md: breeze ? 2 : 6,
+        lg: breeze ? 3 : 8,
+        xl: breeze ? 4 : 12,
         pill: 999,
         circle: 9999,
       });

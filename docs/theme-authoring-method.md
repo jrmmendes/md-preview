@@ -92,7 +92,7 @@ contrato v1; `breeze` é o par `auto` (`variants.light: "breeze-light"`,
 | Versão | KDE Plasma 6.7.5, Fedora 44 (`plasma-workspace` 6.7.5-1.fc44) |
 | Licença | LGPL-2.0-or-later (cabeçalhos SPDX dos arquivos `.colors`) |
 | Tipografia | Noto Sans 10pt / Noto Sans Mono 10pt (`kdeglobals`) |
-| Raio | 5px, medido em `button.svgz` (`rx="5"`) |
+| Raio | quase reto: `sm: 0, md: 2, lg: 3, xl: 4` (o `button.svgz` mede `rx="5"`, mas o Plasma 6 desenha superfícies praticamente quadradas) |
 
 Os tokens, o NOTICE de atribuição e a tabela de desvios de contraste ficam em
 [`themes/NOTICE.md`](../themes/NOTICE.md). Os desvios são só os necessários para
@@ -102,13 +102,14 @@ escurecem um passo; em `danger`/`warning`/`success` o esquema claro usa os tons
 de seleção do próprio Breeze quando existem, e o `danger` escuro sobe o
 `ForegroundNegative` um passo (3,71 → 4,56).
 
-Os Breeze declaram `radii` completos (`none: 0, sm: 4, md: 5, lg: 8, xl: 12,
+Os Breeze declaram `radii` completos (`none: 0, sm: 0, md: 2, lg: 3, xl: 4,
 pill: 999, circle: 9999`), por isso são a fixture de referência do teste
 [tests/theme-radii.test.ts](../tests/theme-radii.test.ts): o CSS gerado contém
-`--mdprv-radius-md:5px` e os componentes de UI (frame de tabela, badges,
+`--mdprv-radius-md:2px` e os componentes de UI (frame de tabela, badges,
 swatches, marcadores de navegação, grips e lightbox) referenciam o token em vez
-de um `px` literal. Temas que não declaram `radii` continuam no default do
-contrato (`md: 6`).
+de um `px` literal. `pill`/`circle` ficam reservados a controles
+semanticamente redondos (switches, thumbs, loaders e botões circulares). Temas
+que não declaram `radii` continuam no default do contrato (`md: 6`).
 
 ### 2.3 CLI real
 

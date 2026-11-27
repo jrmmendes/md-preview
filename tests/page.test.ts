@@ -87,15 +87,16 @@ describe("renderPage", () => {
     expect(html).toContain("--mdprv-bg:#2e3440");
     expect(html).toContain("--mdprv-radius-md:6px");
     expect(html).toContain("--mdprv-font-stack:");
-    // A theme that declares its own scale (Breeze = Plasma's 5px) wins over
-    // the default token block.
+    // A theme that declares its own scale (Breeze = near-square Plasma scale)
+    // wins over the default token block.
     const breeze = renderPage(input({ themeName: "breeze-dark" }), SHELL);
-    expect(breeze).toContain("--mdprv-radius-md:5px");
-    expect(breeze).toContain("--mdprv-radius-xl:12px");
+    expect(breeze).toContain("--mdprv-radius-sm:0px");
+    expect(breeze).toContain("--mdprv-radius-md:2px");
+    expect(breeze).toContain("--mdprv-radius-xl:4px");
     expect(breeze).toContain('data-theme-kind="dark"');
     const breezeAuto = renderPage(input({ themeName: "breeze" }), SHELL);
     expect(breezeAuto).toContain('data-theme-kind="auto"');
-    expect(breezeAuto).toContain("--mdprv-radius-md:5px");
+    expect(breezeAuto).toContain("--mdprv-radius-md:2px");
     expect(html).toContain('"mermaid"');
     expect(html).toContain('"light"');
     expect(html).toContain('"dark"');
